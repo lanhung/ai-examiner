@@ -1,0 +1,1 @@
+Fixed four-part source import for AI Examiner v0.4.0. Temporary directory is deleted by the import workflow.
