@@ -1,0 +1,1 @@
+Trigger the one-time clean-root rewrite for the verified v0.4.0 source tree.
