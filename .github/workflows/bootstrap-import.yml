@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.bootstrap/ai-examiner-v0.3.0.tar.gz.b64'
+      - '.bootstrap/READY'
   workflow_dispatch:
 
 permissions:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   import:
-    if: ${{ hashFiles('.bootstrap/ai-examiner-v0.3.0.tar.gz.b64') != '' }}
+    if: ${{ hashFiles('.bootstrap/READY') != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +22,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/ai-examiner-import
-          base64 --decode .bootstrap/ai-examiner-v0.3.0.tar.gz.b64 > /tmp/ai-examiner-v0.3.0.tar.gz
+          cat .bootstrap/ai-examiner-v0.3.0.tar.gz.b64.part-* > /tmp/ai-examiner-v0.3.0.tar.gz.b64
+          base64 --decode /tmp/ai-examiner-v0.3.0.tar.gz.b64 > /tmp/ai-examiner-v0.3.0.tar.gz
+          echo '94af49ab5a93602a4b887a1273d8cb467ec08d8fb303d70e35c4776b05be5d3f  /tmp/ai-examiner-v0.3.0.tar.gz' | sha256sum -c -
           tar -xzf /tmp/ai-examiner-v0.3.0.tar.gz -C /tmp/ai-examiner-import
           rsync -a --delete \
             --exclude='.git/' \
