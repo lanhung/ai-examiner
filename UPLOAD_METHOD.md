@@ -1,0 +1,1 @@
+The v0.4.0 source import uses a fixed four-chunk archive and a one-time cleanup workflow. No additional archive splitting should be used.
