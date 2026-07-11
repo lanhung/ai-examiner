@@ -1,1 +1,1 @@
-This temporary file triggers the one-time v0.4.0 source import workflow. It will not be merged into the final source tree.
+This temporary file triggers the one-time v0.4.0 source import workflow. Diagnostic retry 2.
