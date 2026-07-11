@@ -1,0 +1,1 @@
+A clean v0.4.0 source ZIP is available separately; the current connector session cannot perform a normal local-directory Git push.
