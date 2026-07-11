@@ -1,0 +1,1 @@
+No open-source license has been granted yet. Copyright remains with the repository owner unless a license is added later.
