@@ -19,11 +19,20 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Decode, verify, and extract source
+      - name: Diagnose and decode source archive
         shell: bash
         run: |
           set -euo pipefail
+          echo "encoded_bytes=$(wc -c < .release/v0.4.0-source.tar.xz.b64)"
+          echo "encoded_sha256=$(sha256sum .release/v0.4.0-source.tar.xz.b64 | cut -d' ' -f1)"
+          if grep -abo 'ELLIPSIZATION' .release/v0.4.0-source.tar.xz.b64; then
+            echo 'ellipsization marker found'
+          else
+            echo 'no ellipsization marker found'
+          fi
           base64 --decode .release/v0.4.0-source.tar.xz.b64 > /tmp/v0.4.0-source.tar.xz
+          echo "decoded_bytes=$(wc -c < /tmp/v0.4.0-source.tar.xz)"
+          echo "decoded_sha256=$(sha256sum /tmp/v0.4.0-source.tar.xz | cut -d' ' -f1)"
           echo '2d5850f309d707ee6f2692e61edacd2330e0ffa07e6981e051503a38911ef212  /tmp/v0.4.0-source.tar.xz' | sha256sum -c -
           mkdir -p /tmp/v040
           tar -xJf /tmp/v0.4.0-source.tar.xz -C /tmp/v040
@@ -32,9 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rsync -a --delete \
-            --exclude='.git/' \
-            /tmp/v040/ ./
+          rsync -a --delete --exclude='.git/' /tmp/v040/ ./
           rm -rf .release .bootstrap .bootstrap-v040
           rm -f .github/workflows/import-v040-single.yml
           rm -f .github/workflows/bootstrap-import.yml .github/workflows/import-v040.yml
