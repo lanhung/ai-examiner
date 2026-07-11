@@ -1,0 +1,71 @@
+name: Import AI Examiner v0.4.0 single archive
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.release/v0.4.0-source.tar.gz.b64'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decode, verify, and extract source
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode .release/v0.4.0-source.tar.gz.b64 > /tmp/v0.4.0-source.tar.gz
+          echo 'fe987f0cbebefdf65927237a32270378325e2fa947e5f5c0f6cddc363e6cce68  /tmp/v0.4.0-source.tar.gz' | sha256sum -c -
+          mkdir -p /tmp/v040
+          tar -xzf /tmp/v0.4.0-source.tar.gz -C /tmp/v040
+
+      - name: Replace repository with clean source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='.release/' \
+            --exclude='.github/workflows/import-v040-single.yml' \
+            /tmp/v040/ ./
+          rm -rf .release .bootstrap .bootstrap-v040
+          rm -f .github/workflows/import-v040-single.yml
+          rm -f .github/workflows/bootstrap-import.yml .github/workflows/import-v040.yml
+          rm -f UPLOAD_IN_PROGRESS.md
+
+      - name: Refuse obvious secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInE --exclude='.env.example' --exclude-dir='.git' '(sk-proj-|sk-ant-api|AIza[0-9A-Za-z_-]{20,})' .; then
+            echo 'Potential API secret detected; refusing to commit.' >&2
+            exit 1
+          fi
+
+      - name: Run checks
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - run: uv sync --extra dev
+      - run: uv run ruff check src tests
+      - run: uv run pytest
+
+      - name: Commit source and tag release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'release: AI Examiner v0.4.0 realtime voice beta'
+          git tag -f -a v0.4.0 -m 'AI Examiner v0.4.0 realtime voice beta'
+          git push origin main
+          git push --force origin v0.4.0
