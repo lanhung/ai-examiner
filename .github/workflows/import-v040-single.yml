@@ -1,11 +1,9 @@
 name: Import AI Examiner v0.4.0 single archive
 
 on:
-  push:
+  pull_request:
     branches: [main]
-    paths:
-      - '.release/v0.4.0-source.tar.xz.b64'
-      - '.github/workflows/import-v040-single.yml'
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 permissions:
@@ -13,10 +11,12 @@ permissions:
 
 jobs:
   import:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'agent/trigger-v040-import')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Decode, verify, and extract source
@@ -34,8 +34,6 @@ jobs:
           set -euo pipefail
           rsync -a --delete \
             --exclude='.git/' \
-            --exclude='.release/' \
-            --exclude='.github/workflows/import-v040-single.yml' \
             /tmp/v040/ ./
           rm -rf .release .bootstrap .bootstrap-v040
           rm -f .github/workflows/import-v040-single.yml
