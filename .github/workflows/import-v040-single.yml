@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - '.release/v0.4.0-source.tar.gz.b64'
+      - '.release/v0.4.0-source.tar.xz.b64'
+      - '.github/workflows/import-v040-single.yml'
   workflow_dispatch:
 
 permissions:
@@ -22,10 +23,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base64 --decode .release/v0.4.0-source.tar.gz.b64 > /tmp/v0.4.0-source.tar.gz
-          echo 'fe987f0cbebefdf65927237a32270378325e2fa947e5f5c0f6cddc363e6cce68  /tmp/v0.4.0-source.tar.gz' | sha256sum -c -
+          base64 --decode .release/v0.4.0-source.tar.xz.b64 > /tmp/v0.4.0-source.tar.xz
+          echo '2d5850f309d707ee6f2692e61edacd2330e0ffa07e6981e051503a38911ef212  /tmp/v0.4.0-source.tar.xz' | sha256sum -c -
           mkdir -p /tmp/v040
-          tar -xzf /tmp/v0.4.0-source.tar.gz -C /tmp/v040
+          tar -xJf /tmp/v0.4.0-source.tar.xz -C /tmp/v040
 
       - name: Replace repository with clean source
         shell: bash
