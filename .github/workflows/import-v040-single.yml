@@ -23,12 +23,10 @@ jobs:
           set -u
           {
             for part in .release-v040/part-*; do
-              printf '%s bytes=' "$part"
-              wc -c < "$part" | tr -d ' '\n              printf ' sha256='
-              sha256sum "$part" | cut -d' ' -f1
+              echo "$part bytes=$(stat -c%s "$part") sha256=$(sha256sum "$part" | cut -d' ' -f1)"
             done
             cat .release-v040/part-* > /tmp/v040.tar.xz.b64
-            echo "combined_encoded_bytes=$(wc -c < /tmp/v040.tar.xz.b64)"
+            echo "combined_encoded_bytes=$(stat -c%s /tmp/v040.tar.xz.b64)"
             echo "combined_encoded_sha256=$(sha256sum /tmp/v040.tar.xz.b64 | cut -d' ' -f1)"
             if base64 --decode /tmp/v040.tar.xz.b64 > /tmp/v040.tar.xz 2>/tmp/decode.err; then
               echo 'base64_status=ok'
@@ -36,7 +34,7 @@ jobs:
               echo 'base64_status=failed'
             fi
             echo "base64_error=$(tr '\n' ' ' < /tmp/decode.err)"
-            echo "decoded_bytes=$(wc -c < /tmp/v040.tar.xz)"
+            echo "decoded_bytes=$(stat -c%s /tmp/v040.tar.xz)"
             echo "decoded_sha256=$(sha256sum /tmp/v040.tar.xz | cut -d' ' -f1)"
           } > CHUNK_DIAGNOSTICS.txt
           cat CHUNK_DIAGNOSTICS.txt
