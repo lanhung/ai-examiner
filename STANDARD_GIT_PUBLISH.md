@@ -1,0 +1,1 @@
+Run `publish_v040_to_github.sh` from a trusted machine with GitHub SSH credentials. This performs one normal Git commit and tag, without archive-part commits.
