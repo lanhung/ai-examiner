@@ -1,4 +1,4 @@
-name: Import AI Examiner v0.4.0
+name: Diagnose AI Examiner v0.4.0 chunks
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  import:
+  diagnose:
     if: startsWith(github.head_ref, 'agent/trigger-v040-import')
     runs-on: ubuntu-latest
     steps:
@@ -17,53 +17,31 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-
-      - name: Assemble and verify source archive
+      - name: Record chunk diagnostics
         shell: bash
         run: |
-          set -euo pipefail
-          cat .release-v040/part-* > /tmp/v040.tar.xz.b64
-          base64 --decode /tmp/v040.tar.xz.b64 > /tmp/v040.tar.xz
-          echo '466cf0508f6c175d7df59a75991208b0805217a8e3447372d58fac7b6288699c  /tmp/v040.tar.xz' | sha256sum -c -
-          mkdir -p /tmp/v040
-          tar -xJf /tmp/v040.tar.xz -C /tmp/v040
-
-      - name: Replace repository with clean source
-        shell: bash
-        run: |
-          set -euo pipefail
-          rsync -a --delete --exclude='.git/' /tmp/v040/ ./
-          rm -rf .release-v040 .release .bootstrap .bootstrap-v040
-          rm -f .github/workflows/import-v040-single.yml
-          rm -f .github/workflows/bootstrap-import.yml .github/workflows/import-v040.yml
-          rm -f UPLOAD_IN_PROGRESS.md ARCHIVE_DIAGNOSTICS.txt TRIGGER_V040_IMPORT.md
-
-      - name: Refuse obvious secrets
-        shell: bash
-        run: |
-          set -euo pipefail
-          if grep -RInE --exclude='.env.example' --exclude-dir='.git' '(sk-proj-|sk-ant-api|AIza[0-9A-Za-z_-]{20,})' .; then
-            echo 'Potential API secret detected; refusing to commit.' >&2
-            exit 1
-          fi
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          python-version: '3.12'
-      - run: uv sync --extra dev
-      - run: uv run ruff check src tests
-      - run: uv run pytest
-      - run: node --check src/ai_examiner/static/app.js
-
-      - name: Commit source and tag release
-        shell: bash
-        run: |
-          set -euo pipefail
+          set -u
+          {
+            for part in .release-v040/part-*; do
+              printf '%s bytes=' "$part"
+              wc -c < "$part" | tr -d ' '\n              printf ' sha256='
+              sha256sum "$part" | cut -d' ' -f1
+            done
+            cat .release-v040/part-* > /tmp/v040.tar.xz.b64
+            echo "combined_encoded_bytes=$(wc -c < /tmp/v040.tar.xz.b64)"
+            echo "combined_encoded_sha256=$(sha256sum /tmp/v040.tar.xz.b64 | cut -d' ' -f1)"
+            if base64 --decode /tmp/v040.tar.xz.b64 > /tmp/v040.tar.xz 2>/tmp/decode.err; then
+              echo 'base64_status=ok'
+            else
+              echo 'base64_status=failed'
+            fi
+            echo "base64_error=$(tr '\n' ' ' < /tmp/decode.err)"
+            echo "decoded_bytes=$(wc -c < /tmp/v040.tar.xz)"
+            echo "decoded_sha256=$(sha256sum /tmp/v040.tar.xz | cut -d' ' -f1)"
+          } > CHUNK_DIAGNOSTICS.txt
+          cat CHUNK_DIAGNOSTICS.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit -m 'release: AI Examiner v0.4.0 realtime voice beta'
-          git tag -f -a v0.4.0 -m 'AI Examiner v0.4.0 realtime voice beta'
+          git add CHUNK_DIAGNOSTICS.txt
+          git commit -m 'chore: record v0.4.0 chunk diagnostics'
           git push origin main
-          git push --force origin v0.4.0
