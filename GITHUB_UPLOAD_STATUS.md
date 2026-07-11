@@ -1,0 +1,1 @@
+The repository connector does not support a local-directory push. Use the standard Git publish script from a machine with repository credentials to replace the incomplete bootstrap history with the clean v0.4.0 source tree.
