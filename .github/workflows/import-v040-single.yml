@@ -1,77 +1,43 @@
-name: Import AI Examiner v0.4.0 single archive
+name: Diagnose AI Examiner v0.4.0 archive
 
 on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened]
-  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  import:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'agent/trigger-v040-import')
+  diagnose:
+    if: startsWith(github.head_ref, 'agent/trigger-v040-import')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
-
-      - name: Diagnose and decode source archive
+      - name: Record archive diagnostics
         shell: bash
         run: |
-          set -euo pipefail
-          echo "encoded_bytes=$(wc -c < .release/v0.4.0-source.tar.xz.b64)"
-          echo "encoded_sha256=$(sha256sum .release/v0.4.0-source.tar.xz.b64 | cut -d' ' -f1)"
-          if grep -abo 'ELLIPSIZATION' .release/v0.4.0-source.tar.xz.b64; then
-            echo 'ellipsization marker found'
-          else
-            echo 'no ellipsization marker found'
-          fi
-          base64 --decode .release/v0.4.0-source.tar.xz.b64 > /tmp/v0.4.0-source.tar.xz
-          echo "decoded_bytes=$(wc -c < /tmp/v0.4.0-source.tar.xz)"
-          echo "decoded_sha256=$(sha256sum /tmp/v0.4.0-source.tar.xz | cut -d' ' -f1)"
-          echo '2d5850f309d707ee6f2692e61edacd2330e0ffa07e6981e051503a38911ef212  /tmp/v0.4.0-source.tar.xz' | sha256sum -c -
-          mkdir -p /tmp/v040
-          tar -xJf /tmp/v0.4.0-source.tar.xz -C /tmp/v040
-
-      - name: Replace repository with clean source
-        shell: bash
-        run: |
-          set -euo pipefail
-          rsync -a --delete --exclude='.git/' /tmp/v040/ ./
-          rm -rf .release .bootstrap .bootstrap-v040
-          rm -f .github/workflows/import-v040-single.yml
-          rm -f .github/workflows/bootstrap-import.yml .github/workflows/import-v040.yml
-          rm -f UPLOAD_IN_PROGRESS.md
-
-      - name: Refuse obvious secrets
-        shell: bash
-        run: |
-          set -euo pipefail
-          if grep -RInE --exclude='.env.example' --exclude-dir='.git' '(sk-proj-|sk-ant-api|AIza[0-9A-Za-z_-]{20,})' .; then
-            echo 'Potential API secret detected; refusing to commit.' >&2
-            exit 1
-          fi
-
-      - name: Run checks
-        uses: astral-sh/setup-uv@v6
-        with:
-          python-version: '3.12'
-      - run: uv sync --extra dev
-      - run: uv run ruff check src tests
-      - run: uv run pytest
-
-      - name: Commit source and tag release
-        shell: bash
-        run: |
-          set -euo pipefail
+          set -u
+          FILE=.release/v0.4.0-source.tar.xz.b64
+          {
+            echo "encoded_bytes=$(wc -c < "$FILE")"
+            echo "encoded_sha256=$(sha256sum "$FILE" | cut -d' ' -f1)"
+            echo "ellipsization_offsets=$(grep -abo 'ELLIPSIZATION' "$FILE" | cut -d: -f1 | paste -sd, - || true)"
+            if base64 --decode "$FILE" > /tmp/source.tar.xz 2>/tmp/base64.err; then
+              echo 'base64_status=ok'
+            else
+              echo 'base64_status=failed'
+            fi
+            echo "base64_error=$(tr '\n' ' ' < /tmp/base64.err)"
+            echo "decoded_bytes=$(wc -c < /tmp/source.tar.xz)"
+            echo "decoded_sha256=$(sha256sum /tmp/source.tar.xz | cut -d' ' -f1)"
+          } > ARCHIVE_DIAGNOSTICS.txt
+          cat ARCHIVE_DIAGNOSTICS.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit -m 'release: AI Examiner v0.4.0 realtime voice beta'
-          git tag -f -a v0.4.0 -m 'AI Examiner v0.4.0 realtime voice beta'
+          git add ARCHIVE_DIAGNOSTICS.txt
+          git commit -m 'chore: record archive transport diagnostics'
           git push origin main
-          git push --force origin v0.4.0
