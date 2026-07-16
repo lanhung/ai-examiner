@@ -1,8 +1,8 @@
-# AI Examiner v0.4.0 项目状态
+# AI Examiner v0.4.1 项目状态
 
 ## 发布状态
 
-- 版本：0.4.0
+- 版本：0.4.1
 - 阶段：Realtime Voice Beta
 - 部署：Vultr + Docker Compose
 - 主要运行模式：文本、多模态证据、实时语音
@@ -21,6 +21,9 @@
 - 首次响应延迟、中断、错误和会话时长指标；
 - Caddy HTTPS Compose；
 - Vultr GitHub 更新脚本；
+- Ollama 模型目录持久化；
+- 蓝图生成模型独立选择；
+- 文本答辩模型独立选择；
 - 14 项自动化测试；
 - 86% 总体代码覆盖率；
 - Ruff 与 JavaScript syntax check 通过。

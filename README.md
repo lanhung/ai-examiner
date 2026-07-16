@@ -1,8 +1,8 @@
-# AI Examiner v0.4.0
+# AI Examiner v0.4.1
 
 AI Examiner 是一个“主动提问型 AI”平台：围绕论文、PPT、DOCX 和技术材料主动提问、追问、纠偏和评估，并把问题与原始页面证据关联起来。
 
-v0.4.0 在 v0.3 多模态证据和数据集工程基础上加入了**低延迟实时语音答辩**。
+v0.4.1 是当前稳定评估版本，在 v0.4.0 的低延迟实时语音答辩基础上补充了本地 Ollama 模型持久化，以及蓝图生成和文本答辩的独立模型选择。
 
 ## v0.4 核心功能
 
@@ -18,6 +18,8 @@ v0.4.0 在 v0.3 多模态证据和数据集工程基础上加入了**低延迟�
 - 多模型 Golden Dataset、Benchmark 和成本看板；
 - Redis/Celery 后台任务；
 - Caddy 自动 HTTPS 和 Vultr 一键升级脚本。
+- 蓝图生成与文本答辩可分别选择 OpenAI、Anthropic、Gemini 或 Ollama 模型；
+- AutoDL/Vultr 重启后保留已下载的 Ollama 模型。
 
 ## 快速启动
 
@@ -132,6 +134,8 @@ node --check src/ai_examiner/static/app.js
 ## 文档
 
 - `RELEASE_NOTES_v0.4.md`
+- `RELEASE_NOTES_v0.4.1.md`
+- `CHANGELOG.md`
 - `docs/MIGRATION_v0.3_to_v0.4.md`
 - `docs/deployment/VULTR_VOICE_HTTPS.md`
 - `docs/deployment/VULTR_DOCKER_COMPOSE.md`
