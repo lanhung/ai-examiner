@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import stat
 import tarfile
@@ -30,7 +31,8 @@ def test_create_backup_uses_consistent_sqlite_snapshot(tmp_path, monkeypatch):
     destination = ops.create_backup(backup_dir / "snapshot.tar.gz")
     connection.close()
 
-    assert stat.S_IMODE(destination.stat().st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE(destination.stat().st_mode) == 0o600
     with tarfile.open(destination, "r:gz") as archive:
         names = archive.getnames()
         assert "uploads/sample.txt" in names

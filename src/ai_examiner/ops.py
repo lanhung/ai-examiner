@@ -4,6 +4,7 @@ import argparse
 import sqlite3
 import tarfile
 import tempfile
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -33,8 +34,8 @@ def create_backup(destination: Path | None = None) -> Path:
         if database_path and database_path.exists():
             snapshot_path = Path(temp_dir) / database_path.name
             with (
-                sqlite3.connect(database_path, timeout=30) as source,
-                sqlite3.connect(snapshot_path) as snapshot,
+                closing(sqlite3.connect(database_path, timeout=30)) as source,
+                closing(sqlite3.connect(snapshot_path)) as snapshot,
             ):
                 source.backup(snapshot)
 

@@ -1,14 +1,14 @@
-# AI Examiner v0.5.0 RC1 项目状态
+# AI Examiner v0.5.0 RC2 项目状态
 
 ## 发布状态
 
-- 版本：`0.5.0rc1`
+- 版本：`0.5.0rc2`
 - 分支：`develop/v0.5.0`
-- 候选标签：`v0.5.0-rc.1`
+- 候选标签：`v0.5.0-rc.2`
 - 稳定生产版本：`v0.4.1`
 - 阶段：Adaptive Cognitive Engine feature freeze / staging validation
 
-RC1 不会自动替换生产 `main`。通过真实材料、迁移备份和人工抽样验收后，才合并并发布 `v0.5.0`。
+RC2 不会自动替换生产 `main`。通过真实材料、迁移备份和人工抽样验收后，才合并并发布 `v0.5.0`。
 
 ## 已完成
 
@@ -43,14 +43,14 @@ v0.5 -> base downgrade         passed
 base -> v0.5 re-upgrade        passed
 ```
 
-Dockerfile 和 Compose 已更新，但当前测试机 Docker daemon 不可用，RC1 的实际镜像构建与 staging 启动仍是部署验收项。
+Dockerfile 和 Compose 已更新，但当前远程测试机 Docker daemon 不可用，RC2 的实际镜像构建仍是 Vultr 部署验收项。本机与远程独立 Uvicorn staging 均已通过健康检查。
 
 ## RC 限制
 
-- 实时语音中的提问仍由 Realtime 会话执行；RC1 在会后用最终转录形成权威认知状态。实时逐轮策略接管属于 v0.6。
+- 实时语音中的提问仍由 Realtime 会话执行；RC2 在会后用最终转录形成权威认知状态。实时逐轮策略接管属于 v0.6。
 - 内置策略基准是确定性合成评测，不替代 5 篇以上冻结 Golden Dataset 与人工盲评。
 - SQLite 适合单机评估；多用户并发仍计划迁移 PostgreSQL。
-- Learner Subject 在 RC1 中使用匿名外部键，不是正式账户系统。
+- Learner Subject 在 RC2 中使用匿名外部键，不是正式账户系统。
 
 ## 最终 v0.5.0 发布前
 

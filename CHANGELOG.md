@@ -4,6 +4,14 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ## [Unreleased]
 
+## [0.5.0-rc.2] - 2026-07-16
+
+### Fixed
+
+- Explicitly close SQLite backup connections so temporary snapshots can be removed on Windows.
+- Read exported JSONL as UTF-8 in cross-platform CLI tests.
+- Synchronize `uv.lock` with the Alembic dependency and release-candidate version.
+
 ## [0.5.0-rc.1] - 2026-07-16
 
 ### Added
@@ -43,6 +51,7 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 - Redis/Celery 后台任务、Caddy HTTPS 和 Docker Compose 部署。
 
 [Unreleased]: https://github.com/lanhung/ai-examiner/compare/v0.4.1...HEAD
+[0.5.0-rc.2]: https://github.com/lanhung/ai-examiner/compare/v0.5.0-rc.1...v0.5.0-rc.2
 [0.5.0-rc.1]: https://github.com/lanhung/ai-examiner/compare/v0.4.1...v0.5.0-rc.1
 [0.4.1]: https://github.com/lanhung/ai-examiner/compare/9327580...v0.4.1
 [0.4.0]: https://github.com/lanhung/ai-examiner/commit/9327580

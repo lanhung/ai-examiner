@@ -9,8 +9,8 @@ This file is the authoritative version and branch status for Codex and other cod
 | Line | Version | Branch or tag | Status | Deployment |
 |---|---|---|---|---|
 | Stable | 0.4.1 | `main`, `v0.4.1` | Released | Production evaluation |
-| Development | 0.5.0rc1 | `develop/v0.5.0` | Feature frozen | Separate worktree only |
-| Release candidate | 0.5.0rc1 | `v0.5.0-rc.1` | Ready for staging | Staging only |
+| Development | 0.5.0rc2 | `develop/v0.5.0` | Feature frozen | Separate worktree only |
+| Release candidate | 0.5.0rc2 | `v0.5.0-rc.2` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 
 ## 3. Branch policy
@@ -41,7 +41,7 @@ Do not point the production startup script to the development worktree.
 ## 5. Version lifecycle
 
 1. During development, package version is `0.5.0.dev0`.
-2. At feature freeze, set package version to `0.5.0rc1` and create annotated tag `v0.5.0-rc.1`.
+2. At feature freeze, publish sequential immutable candidates such as `0.5.0rc1` / `v0.5.0-rc.1`; candidate fixes increment the RC number without rewriting prior tags.
 3. Run migrations, regression tests, behavioral evals and a staging deployment from the release candidate.
 4. After acceptance, set version to `0.5.0`, update changelog and release notes, merge to `main`, and create annotated tag `v0.5.0`.
 5. Tags are immutable. Corrections after release use `v0.5.1`.

@@ -35,4 +35,11 @@ def test_batch_corpus_cli_with_mock(tmp_path, monkeypatch):
     assert summary["processed_count"] == 1
     assert summary["failed_count"] == 0
     assert (output_dir / "paper.golden.json").exists()
-    assert len((output_dir / "paper.golden.jsonl").read_text().splitlines()) == 4
+    assert (
+        len(
+            (output_dir / "paper.golden.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        )
+        == 4
+    )
