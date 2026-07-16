@@ -136,6 +136,14 @@ async function loadEnvironment() {
     }).join("");
     document.querySelectorAll("input[name='modelProfile']").forEach((node) => node.addEventListener("change", syncConsensus));
     syncConsensus();
+    const readyProviders = providers.filter((provider) => provider.ready);
+    $("blueprintProfile").innerHTML = readyProviders.map((provider) =>
+      `<option value="${escapeHtml(provider.id)}">${escapeHtml(provider.label)}</option>`
+    ).join("");
+    const preferredBlueprintProvider = readyProviders.find((provider) => provider.provider === "ollama")
+      || readyProviders.find((provider) => provider.provider !== "mock")
+      || readyProviders[0];
+    if (preferredBlueprintProvider) $("blueprintProfile").value = preferredBlueprintProvider.id;
     $("voiceProvider").innerHTML = voiceConfig.providers.map((provider) =>
       `<option value="${escapeHtml(provider.id)}" ${provider.ready ? "" : "disabled"}>${escapeHtml(provider.label)}${provider.ready ? "" : "（未配置）"}</option>`
     ).join("");
@@ -187,8 +195,8 @@ $("uploadDocument").onclick = async () => {
 };
 
 $("generateBlueprint").onclick = async () => {
-  const profiles = selectedProfiles();
-  const profile = profiles[0] || "mock:heuristic-v2";
+  const profile = $("blueprintProfile").value;
+  if (!profile) return setStatus("blueprintStatus", "请选择已就绪的蓝图模型", "error");
   setStatus("blueprintStatus", `各 Agent 正在使用 ${profile} 生成并检查蓝图…`);
   try {
     const blueprint = await api(`/api/projects/${state.projectId}/blueprints`, {
