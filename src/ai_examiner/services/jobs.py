@@ -16,6 +16,10 @@ TASKS = {
 }
 
 
+class JobQueueUnavailable(RuntimeError):
+    """Raised when a background job cannot be handed to the worker queue."""
+
+
 def enqueue_job(db: Session, *, kind: str, project_id: str | None, payload: dict) -> BackgroundJob:
     if kind not in TASKS:
         raise ValueError(f"Unsupported job kind: {kind}")
@@ -23,7 +27,16 @@ def enqueue_job(db: Session, *, kind: str, project_id: str | None, payload: dict
     db.add(job)
     db.commit()
     db.refresh(job)
-    result = TASKS[kind].delay(job.id)
+    try:
+        result = TASKS[kind].delay(job.id)
+    except Exception as exc:
+        job.status = "failed"
+        job.error = "Background queue unavailable"
+        db.commit()
+        raise JobQueueUnavailable(
+            "Background queue unavailable. Start Redis and the Celery worker, "
+            "or set CELERY_ALWAYS_EAGER=true for a single-process test deployment."
+        ) from exc
     job.celery_task_id = result.id
     db.commit()
     db.refresh(job)

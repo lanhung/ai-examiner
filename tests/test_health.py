@@ -17,3 +17,5 @@ def test_blueprint_has_independent_model_selector(client):
     assert 'const profile = $("blueprintProfile").value;' in script.text
     assert 'const profile = $("textProfile").value;' in script.text
     assert 'profiles[0] || "mock:heuristic-v2"' not in script.text
+    assert "const raw = await response.text();" in script.text
+    assert "await response.json()" not in script.text

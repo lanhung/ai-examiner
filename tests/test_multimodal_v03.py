@@ -90,6 +90,31 @@ def test_pdf_evidence_visual_and_highlight(client):
     assert payload["analyses"][0]["data"]["exam_questions"]
 
 
+def test_visual_queue_failure_returns_actionable_json(client, monkeypatch):
+    from ai_examiner.main import settings
+    from ai_examiner.services.jobs import TASKS
+
+    project_id = _project(client, "queue failure")
+    document = client.post(
+        f"/api/projects/{project_id}/documents",
+        files={"file": ("paper.pdf", _pdf_bytes(), "application/pdf")},
+    ).json()
+
+    def unavailable(_job_id):
+        raise ConnectionError("redis unavailable")
+
+    monkeypatch.setattr(settings, "celery_always_eager", False)
+    monkeypatch.setattr(TASKS["visual_document"], "delay", unavailable)
+    response = client.post(
+        f"/api/documents/{document['id']}/visual-analyses",
+        json={"profile": "mock:heuristic-v2", "max_pages": 1, "asynchronous": True},
+    )
+
+    assert response.status_code == 503
+    assert response.headers["content-type"].startswith("application/json")
+    assert "CELERY_ALWAYS_EAGER=true" in response.json()["detail"]
+
+
 def test_pptx_docx_and_joint_analysis(client):
     project_id = _project(client, "joint package")
     pptx = client.post(

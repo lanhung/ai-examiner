@@ -49,8 +49,11 @@ function setStatus(id, text, kind = "") {
 }
 async function api(path, options = {}) {
   const response = await fetch(path, options);
-  let body;
-  try { body = await response.json(); } catch { body = { detail: await response.text() }; }
+  const raw = await response.text();
+  let body = {};
+  if (raw) {
+    try { body = JSON.parse(raw); } catch { body = { detail: raw }; }
+  }
   if (!response.ok) throw new Error(body.detail || `HTTP ${response.status}`);
   return body;
 }

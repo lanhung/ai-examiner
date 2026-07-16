@@ -1,10 +1,10 @@
-# AI Examiner v0.5.0 RC2
+# AI Examiner v0.5.0 RC3
 
 AI Examiner 是一个“主动提问型 AI”平台：围绕论文、PPT、DOCX 和技术材料主动提问、追问、纠偏和评估，并把问题与原始页面证据关联起来。
 
-当前分支是 v0.5 Adaptive Cognitive Engine 的第二个候选版本。生产稳定版本仍是 `v0.4.1`；RC2 已加入证据事件、跨会话知识状态、难度控制、自适应选题、策略对照评测和语音最终转录认知更新，并补齐跨平台备份与锁文件一致性。
+当前分支是 v0.5 Adaptive Cognitive Engine 的第三个候选版本。生产稳定版本仍是 `v0.4.1`；RC3 修复视觉审查错误响应与单机队列诊断，同时保留 RC2 的自适应认知能力和跨平台修复。
 
-## v0.5 RC2 新增
+## v0.5 RC3 新增
 
 - `fixed` / `adaptive` 双策略，旧客户端默认保持固定顺序；
 - Knowledge Unit、题目映射和不可变 Knowledge Evidence Event；

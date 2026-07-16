@@ -22,7 +22,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -79,7 +79,7 @@ from .services.datasets import dataset_diff, set_dataset_status
 from .services.documents import parse_document, save_upload
 from .services.evidence import create_highlighted_crop, persist_evidence, serialize_asset
 from .services.golden import GoldenDatasetService
-from .services.jobs import enqueue_job, serialize_job
+from .services.jobs import JobQueueUnavailable, enqueue_job, serialize_job
 from .services.joint import JointAnalysisService
 from .services.policy_benchmark import PolicyBenchmarkService
 from .services.prompts import activate_prompt, create_prompt_version, prompt_manifest
@@ -107,6 +107,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_name, version=__version__, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.exception_handler(JobQueueUnavailable)
+async def job_queue_unavailable_handler(_request: Request, exc: JobQueueUnavailable):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
 def provider_or_503(profile: str | None = None):

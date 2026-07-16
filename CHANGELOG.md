@@ -4,6 +4,14 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ## [Unreleased]
 
+## [0.5.0-rc.3] - 2026-07-16
+
+### Fixed
+
+- Consume browser API response bodies exactly once so backend errors remain visible.
+- Return an actionable JSON 503 when Redis/Celery cannot accept a background job.
+- Support single-process visual-review testing with `CELERY_ALWAYS_EAGER=true`.
+
 ## [0.5.0-rc.2] - 2026-07-16
 
 ### Fixed
@@ -51,6 +59,7 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 - Redis/Celery 后台任务、Caddy HTTPS 和 Docker Compose 部署。
 
 [Unreleased]: https://github.com/lanhung/ai-examiner/compare/v0.4.1...HEAD
+[0.5.0-rc.3]: https://github.com/lanhung/ai-examiner/compare/v0.5.0-rc.2...v0.5.0-rc.3
 [0.5.0-rc.2]: https://github.com/lanhung/ai-examiner/compare/v0.5.0-rc.1...v0.5.0-rc.2
 [0.5.0-rc.1]: https://github.com/lanhung/ai-examiner/compare/v0.4.1...v0.5.0-rc.1
 [0.4.1]: https://github.com/lanhung/ai-examiner/compare/9327580...v0.4.1
