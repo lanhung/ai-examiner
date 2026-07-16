@@ -4,6 +4,19 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ## [Unreleased]
 
+## [0.5.0-rc.4] - 2026-07-16
+
+### Added
+
+- Add DashScope `qwen-plus` as a first-class text, structured-output and evaluation provider.
+- Add DashScope `qwen3-vl-plus` for page, chart, table and formula visual review.
+- Add an independent visual-model selector that only lists image-capable profiles.
+- Record the actual visual model in usage and analysis audit data.
+
+### Changed
+
+- Share the server-side `DASHSCOPE_API_KEY` across Qwen text, vision and realtime voice without exposing it to the browser.
+
 ## [0.5.0-rc.3] - 2026-07-16
 
 ### Fixed
@@ -59,6 +72,7 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 - Redis/Celery 后台任务、Caddy HTTPS 和 Docker Compose 部署。
 
 [Unreleased]: https://github.com/lanhung/ai-examiner/compare/v0.4.1...HEAD
+[0.5.0-rc.4]: https://github.com/lanhung/ai-examiner/compare/v0.5.0-rc.3...v0.5.0-rc.4
 [0.5.0-rc.3]: https://github.com/lanhung/ai-examiner/compare/v0.5.0-rc.2...v0.5.0-rc.3
 [0.5.0-rc.2]: https://github.com/lanhung/ai-examiner/compare/v0.5.0-rc.1...v0.5.0-rc.2
 [0.5.0-rc.1]: https://github.com/lanhung/ai-examiner/compare/v0.4.1...v0.5.0-rc.1

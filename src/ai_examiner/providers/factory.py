@@ -8,7 +8,7 @@ from ..config import Settings
 from .base import ModelProvider
 from .mock import MockProvider
 
-SUPPORTED_PROVIDERS = {"mock", "openai", "anthropic", "gemini", "ollama"}
+SUPPORTED_PROVIDERS = {"mock", "openai", "anthropic", "gemini", "ollama", "qwen"}
 
 
 def parse_profile(profile: str) -> tuple[str, str]:
@@ -79,4 +79,14 @@ def build_provider(settings: Settings, profile: str | None = None) -> ModelProvi
         from .gemini_provider import GeminiProvider
 
         return GeminiProvider(api_key, model)
+    if provider_name == "qwen":
+        from .qwen_provider import QwenProvider
+
+        return QwenProvider(
+            api_key,
+            model,
+            base_url=settings.dashscope_base_url,
+            visual_model=settings.qwen_visual_model,
+            timeout=settings.qwen_request_timeout_seconds,
+        )
     raise RuntimeError(f"Unsupported provider: {provider_name}")

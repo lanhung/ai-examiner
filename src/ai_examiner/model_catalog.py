@@ -11,6 +11,7 @@ class ModelCatalogEntry:
     input_usd_per_million: float
     output_usd_per_million: float
     recommended_for: str
+    supports_vision: bool = False
     pricing_as_of: str = "2026-07-10"
 
     @property
@@ -31,6 +32,7 @@ CATALOG: tuple[ModelCatalogEntry, ...] = (
         input_usd_per_million=0.0,
         output_usd_per_million=0.0,
         recommended_for="offline demos and tests",
+        supports_vision=True,
     ),
     ModelCatalogEntry(
         provider="openai",
@@ -39,6 +41,7 @@ CATALOG: tuple[ModelCatalogEntry, ...] = (
         input_usd_per_million=0.75,
         output_usd_per_million=4.50,
         recommended_for="balanced annotation and analysis",
+        supports_vision=True,
     ),
     ModelCatalogEntry(
         provider="anthropic",
@@ -47,6 +50,7 @@ CATALOG: tuple[ModelCatalogEntry, ...] = (
         input_usd_per_million=2.0,
         output_usd_per_million=10.0,
         recommended_for="deep paper review and consensus synthesis",
+        supports_vision=True,
     ),
     ModelCatalogEntry(
         provider="gemini",
@@ -55,6 +59,26 @@ CATALOG: tuple[ModelCatalogEntry, ...] = (
         input_usd_per_million=0.75,
         output_usd_per_million=4.50,
         recommended_for="fast multimodel annotation and benchmarking",
+        supports_vision=True,
+    ),
+    ModelCatalogEntry(
+        provider="qwen",
+        model="qwen-plus",
+        label="Alibaba Qwen Plus",
+        input_usd_per_million=0.111,
+        output_usd_per_million=0.278,
+        recommended_for="Chinese text examination and structured analysis",
+        pricing_as_of="2026-07-16",
+    ),
+    ModelCatalogEntry(
+        provider="qwen",
+        model="qwen3-vl-plus",
+        label="Alibaba Qwen3-VL Plus",
+        input_usd_per_million=0.139,
+        output_usd_per_million=1.389,
+        recommended_for="page, chart, table and formula review",
+        supports_vision=True,
+        pricing_as_of="2026-07-16",
     ),
     ModelCatalogEntry(
         provider="ollama",

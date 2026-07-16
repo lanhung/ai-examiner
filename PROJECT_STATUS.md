@@ -1,14 +1,14 @@
-# AI Examiner v0.5.0 RC3 项目状态
+# AI Examiner v0.5.0 RC4 项目状态
 
 ## 发布状态
 
-- 版本：`0.5.0rc3`
+- 版本：`0.5.0rc4`
 - 分支：`develop/v0.5.0`
-- 候选标签：`v0.5.0-rc.3`
+- 候选标签：`v0.5.0-rc.4`
 - 稳定生产版本：`v0.4.1`
 - 阶段：Adaptive Cognitive Engine feature freeze / staging validation
 
-RC3 不会自动替换生产 `main`。通过真实材料、迁移备份和人工抽样验收后，才合并并发布 `v0.5.0`。
+RC4 不会自动替换生产 `main`。通过真实材料、迁移备份和人工抽样验收后，才合并并发布 `v0.5.0`。
 
 ## 已完成
 
@@ -26,11 +26,15 @@ RC3 不会自动替换生产 `main`。通过真实材料、迁移备份和人工
 - 固定顺序与自适应策略成对基准 API；
 - 自适应语音最终转录进入统一认知更新管线；
 - 更新脚本先在线构建，再短暂停服迁移与切换。
+- DashScope `qwen-plus` 云端文本 Provider；
+- DashScope `qwen3-vl-plus` 页面、图表、表格和公式视觉 Provider；
+- 文本、视觉与 Realtime 语音三条千问链路共用服务端密钥；
+- 独立视觉模型选择器和实际视觉模型审计记录。
 
 ## 验证结果
 
 ```text
-pytest                         28 passed
+pytest                         29 passed
 coverage                       87%
 adaptive selector coverage     95%
 cognitive service coverage     93%
@@ -43,14 +47,14 @@ v0.5 -> base downgrade         passed
 base -> v0.5 re-upgrade        passed
 ```
 
-Dockerfile 和 Compose 已更新，但当前远程测试机 Docker daemon 不可用，RC3 的实际镜像构建仍是 Vultr 部署验收项。本机与远程独立 Uvicorn staging 均已通过健康检查。
+Dockerfile 和 Compose 已更新。RC4 需要在远程 staging 使用真实 DashScope 配置完成一页视觉审查，再进入最终 v0.5.0 验收。
 
 ## RC 限制
 
-- 实时语音中的提问仍由 Realtime 会话执行；RC3 在会后用最终转录形成权威认知状态。实时逐轮策略接管属于 v0.6。
+- 实时语音中的提问仍由 Realtime 会话执行；RC4 在会后用最终转录形成权威认知状态。实时逐轮策略接管属于 v0.6。
 - 内置策略基准是确定性合成评测，不替代 5 篇以上冻结 Golden Dataset 与人工盲评。
 - SQLite 适合单机评估；多用户并发仍计划迁移 PostgreSQL。
-- Learner Subject 在 RC3 中使用匿名外部键，不是正式账户系统。
+- Learner Subject 在 RC4 中使用匿名外部键，不是正式账户系统。
 
 ## 最终 v0.5.0 发布前
 

@@ -145,6 +145,10 @@ async function loadEnvironment() {
     ).join("");
     $("blueprintProfile").innerHTML = readyProviderOptions;
     $("textProfile").innerHTML = readyProviderOptions;
+    const visionProviders = readyProviders.filter((provider) => provider.supports_vision);
+    $("visualProfile").innerHTML = visionProviders.map((provider) =>
+      `<option value="${escapeHtml(provider.id)}">${escapeHtml(provider.label)}</option>`
+    ).join("");
     const preferredProvider = readyProviders.find((provider) => provider.provider === "ollama")
       || readyProviders.find((provider) => provider.provider !== "mock")
       || readyProviders[0];
@@ -152,6 +156,10 @@ async function loadEnvironment() {
       $("blueprintProfile").value = preferredProvider.id;
       $("textProfile").value = preferredProvider.id;
     }
+    const preferredVision = visionProviders.find((provider) => provider.id === "qwen:qwen3-vl-plus")
+      || visionProviders.find((provider) => provider.provider !== "mock")
+      || visionProviders[0];
+    if (preferredVision) $("visualProfile").value = preferredVision.id;
     $("voiceProvider").innerHTML = voiceConfig.providers.map((provider) =>
       `<option value="${escapeHtml(provider.id)}" ${provider.ready ? "" : "disabled"}>${escapeHtml(provider.label)}${provider.ready ? "" : "（未配置）"}</option>`
     ).join("");
@@ -410,7 +418,7 @@ $("loadEvidence").onclick = loadEvidence;
 
 $("analyzeVisual").onclick = async () => {
   if (!state.documentId) return;
-  const profile = $("consensusProfile").value || selectedProfiles()[0] || "mock:heuristic-v2";
+  const profile = $("visualProfile").value || "mock:heuristic-v2";
   $("analyzeVisual").disabled = true;
   setStatus("evidenceStatus", "正在提交视觉证据分析任务…");
   try {

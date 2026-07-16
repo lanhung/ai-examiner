@@ -63,7 +63,7 @@ class VisualEvidenceService:
             document_id=asset.document_id,
             evidence_asset_id=asset.id,
             provider=provider.name,
-            model=provider.model,
+            model=provider.image_model,
             prompt_version="visual_evidence:v1",
             data=data,
         )

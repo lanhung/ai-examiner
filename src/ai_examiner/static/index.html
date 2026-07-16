@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI Examiner v0.5.0 RC1</title>
+  <title>AI Examiner v0.5.0 RC4</title>
   <link rel="stylesheet" href="/static/styles.css?v=0.5.0" />
 </head>
 <body>
@@ -60,6 +60,7 @@
         <span id="evidenceState" class="badge secondary">尚无材料</span>
       </div>
       <p>显示 PDF 页面、PPT 幻灯片、图表、表格、公式上下文和 DOCX 图片。视觉 Agent 会区分“该证据支持什么”与“不能支持什么”。</p>
+      <label>视觉分析模型<select id="visualProfile"></select></label>
       <div class="lab-actions">
         <button id="loadEvidence" disabled>加载证据</button>
         <button id="analyzeVisual" disabled>运行视觉分析</button>

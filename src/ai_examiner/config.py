@@ -10,7 +10,9 @@ class Settings(BaseSettings):
 
     app_name: str = "AI Examiner"
     app_env: str = "development"
-    model_provider: str = Field(default="mock", pattern="^(mock|openai|anthropic|gemini|ollama)$")
+    model_provider: str = Field(
+        default="mock", pattern="^(mock|openai|anthropic|gemini|ollama|qwen)$"
+    )
 
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.4-mini"
@@ -33,6 +35,10 @@ class Settings(BaseSettings):
     realtime_max_instruction_chars: int = Field(default=24000, ge=4000, le=60000)
 
     dashscope_api_key: str | None = None
+    dashscope_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    qwen_text_model: str = "qwen-plus"
+    qwen_visual_model: str = "qwen3-vl-plus"
+    qwen_request_timeout_seconds: float = Field(default=120.0, ge=5.0, le=900.0)
     qwen_realtime_model: str = "qwen3-omni-flash-realtime"
     qwen_realtime_voice: str = "Cherry"
     qwen_realtime_ws_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
@@ -83,6 +89,7 @@ class Settings(BaseSettings):
             "openai": self.openai_api_key,
             "anthropic": self.anthropic_api_key,
             "gemini": self.gemini_api_key,
+            "qwen": self.dashscope_api_key,
             "ollama": self.ollama_base_url,
             "mock": "ready",
         }.get(provider)
@@ -92,6 +99,7 @@ class Settings(BaseSettings):
             "openai": self.openai_model,
             "anthropic": self.anthropic_model,
             "gemini": self.gemini_model,
+            "qwen": self.qwen_text_model,
             "ollama": self.ollama_model,
             "mock": "heuristic-v2",
         }[provider]

@@ -144,3 +144,27 @@ curl http://127.0.0.1:8000/api/provider-health
 ```
 
 Gemini Key 留空只会显示 `missing_key`，不会阻止 OpenAI/Claude。
+
+### 千问文本与视觉
+
+RC4 起，千问云端文本、视觉和 Realtime 语音共用阿里云百炼密钥：
+
+```env
+MODEL_PROVIDER=qwen
+DASHSCOPE_API_KEY=your-server-side-key
+DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+QWEN_TEXT_MODEL=qwen-plus
+QWEN_VISUAL_MODEL=qwen3-vl-plus
+QWEN_REQUEST_TIMEOUT_SECONDS=120
+VISUAL_DEFAULT_PROFILE=qwen:qwen3-vl-plus
+```
+
+应用重建后检查：
+
+```bash
+docker compose up -d --build --remove-orphans
+curl -fsS http://127.0.0.1:${APP_PORT:-8000}/health
+curl -fsS http://127.0.0.1:${APP_PORT:-8000}/api/providers
+```
+
+`qwen:qwen-plus` 和 `qwen:qwen3-vl-plus` 均应显示 `ready: true`。不要把 `.env`、API Key、上传材料或运行数据库提交到 Git。

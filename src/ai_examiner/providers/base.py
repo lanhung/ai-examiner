@@ -19,6 +19,10 @@ class ModelProvider(ABC):
     name: str
     model: str
 
+    @property
+    def image_model(self) -> str:
+        return self.model
+
     @abstractmethod
     def complete_json(
         self,
@@ -29,7 +33,6 @@ class ModelProvider(ABC):
         schema_hint: dict[str, Any],
     ) -> ProviderResult:
         raise NotImplementedError
-
 
     def complete_json_with_images(
         self,

@@ -99,6 +99,15 @@ GET /api/costs
 GET /api/costs?project_id=...
 ```
 
+`GET /api/providers` includes `supports_vision`. RC4 adds the profiles below:
+
+```text
+qwen:qwen-plus       DashScope text and structured output
+qwen:qwen3-vl-plus   DashScope page and chart visual review
+```
+
+The browser receives readiness and model metadata only. `DASHSCOPE_API_KEY` remains server-side.
+
 # v0.4 Realtime Voice API
 
 ## GET `/api/voice/config`

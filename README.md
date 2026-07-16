@@ -1,11 +1,15 @@
-# AI Examiner v0.5.0 RC3
+# AI Examiner v0.5.0 RC4
 
 AI Examiner 是一个“主动提问型 AI”平台：围绕论文、PPT、DOCX 和技术材料主动提问、追问、纠偏和评估，并把问题与原始页面证据关联起来。
 
-当前分支是 v0.5 Adaptive Cognitive Engine 的第三个候选版本。生产稳定版本仍是 `v0.4.1`；RC3 修复视觉审查错误响应与单机队列诊断，同时保留 RC2 的自适应认知能力和跨平台修复。
+当前分支是 v0.5 Adaptive Cognitive Engine 的第四个候选版本。生产稳定版本仍是 `v0.4.1`；RC4 将阿里云百炼千问正式接入统一文本与视觉模型网关，同时保留 RC3 的视觉错误诊断和自适应认知能力。
 
-## v0.5 RC3 新增
+## v0.5 RC4 新增
 
+- DashScope `qwen-plus` 文本答辩、蓝图、标注与评价；
+- DashScope `qwen3-vl-plus` PDF/PPT 页面、图表、表格和公式视觉审查；
+- 独立视觉模型选择器，不再借用 Golden Dataset 共识模型；
+- 千问文本、视觉和 Realtime 语音共用服务端 `DASHSCOPE_API_KEY`，密钥不下发浏览器；
 - `fixed` / `adaptive` 双策略，旧客户端默认保持固定顺序；
 - Knowledge Unit、题目映射和不可变 Knowledge Evidence Event；
 - 掌握度、置信度、误区状态和跨会话匿名学习者历史；
@@ -30,7 +34,7 @@ AI Examiner 是一个“主动提问型 AI”平台：围绕论文、PPT、DOCX 
 - 多模型 Golden Dataset、Benchmark 和成本看板；
 - Redis/Celery 后台任务；
 - Caddy 自动 HTTPS 和 Vultr 一键升级脚本。
-- 蓝图生成与文本答辩可分别选择 OpenAI、Anthropic、Gemini 或 Ollama 模型；
+- 蓝图生成与文本答辩可分别选择 OpenAI、Anthropic、Gemini、Qwen Cloud 或 Ollama 模型；
 - AutoDL/Vultr 重启后保留已下载的 Ollama 模型。
 
 ## 快速启动
@@ -126,11 +130,16 @@ API Key 只放在服务器 `.env`。不要提交 `.env`：
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 GEMINI_API_KEY=
+DASHSCOPE_API_KEY=
+QWEN_TEXT_MODEL=qwen-plus
+QWEN_VISUAL_MODEL=qwen3-vl-plus
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen2.5:14b
 ```
 
 浏览器不会收到标准 OpenAI API Key。建立语音连接时，浏览器只把 WebRTC SDP 发给本系统后端，后端再访问 OpenAI Realtime API。
+
+千问云端文本和视觉调用使用阿里云百炼 OpenAI 兼容接口；`qwen-plus` 负责文本任务，`qwen3-vl-plus` 负责页面证据和图表审查。两者与千问 Realtime 语音共用 `DASHSCOPE_API_KEY`。
 
 Ollama 模型走本机 HTTP API，不需要云端 API Key。先启动 `ollama serve`，并确保目标模型已存在，例如 `qwen2.5:14b`、`qwen2.5:7b` 或 `llama3.2:3b`。
 
@@ -151,6 +160,7 @@ node --check src/ai_examiner/static/app.js
 - `docs/evaluation/V0_5_EVALUATION_PLAN.md`
 - `RELEASE_NOTES_v0.4.md`
 - `RELEASE_NOTES_v0.4.1.md`
+- `RELEASE_NOTES_v0.5.0-rc.4.md`
 - `CHANGELOG.md`
 - `docs/MIGRATION_v0.3_to_v0.4.md`
 - `docs/deployment/VULTR_VOICE_HTTPS.md`
