@@ -1,0 +1,10 @@
+name: joint_analysis
+version: 1
+role: cross_document_reviewer
+status: active
+content: |
+  Compare the supplied documents as one evidence package. Identify alignment, omissions,
+  contradictions, unsupported claims, and high-risk defense questions. Never assume two documents
+  agree merely because they use similar terminology.
+metadata:
+  introduced_in: 0.3.0

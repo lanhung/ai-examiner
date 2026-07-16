@@ -1,7 +1,0 @@
-encoded_bytes=20023
-encoded_sha256=34f3f773bbe8ec20044c6ac92d34d8fb6fecd528cdb2c56998387908649b65a7
-ellipsization_offsets=10005
-base64_status=failed
-base64_error=base64: invalid input 
-decoded_bytes=7500
-decoded_sha256=49d8c20d2b816e97bf043f03c3f993584ec348755cf84cfa7a354d8f9501084c

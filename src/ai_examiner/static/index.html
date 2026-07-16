@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Examiner v0.4</title>
+  <link rel="stylesheet" href="/static/styles.css?v=0.4.1" />
+</head>
+<body>
+  <header>
+    <div>
+      <span class="eyebrow">Inquiry-first AI · Model panel</span>
+      <h1>AI 答辩官 v0.4</h1>
+      <p>多模态证据与低延迟实时语音一体化：可自然插话、实时字幕、连续追问并保留完整证据链。</p>
+    </div>
+    <div id="providerBadge" class="badge">检查模型状态…</div>
+  </header>
+
+  <main>
+    <section class="panel setup">
+      <div class="step"><span>1</span><div><h2>创建项目</h2><p>当前版本聚焦论文答辩与科研汇报训练。</p></div></div>
+      <label>项目名称<input id="projectName" value="我的论文答辩训练" /></label>
+      <button id="createProject">创建项目</button>
+      <div id="projectStatus" class="status"></div>
+
+      <div class="step"><span>2</span><div><h2>上传材料</h2><p>支持 PDF、PPTX、DOCX、TXT、Markdown；自动生成页面/幻灯片证据索引。</p></div></div>
+      <input id="documentFile" type="file" accept=".pdf,.pptx,.docx,.txt,.md,.markdown" disabled />
+      <button id="uploadDocument" disabled>上传并解析</button>
+      <div id="documentStatus" class="status"></div>
+      <div id="documentList" class="mini-list"></div>
+
+      <div class="step"><span>3</span><div><h2>生成答辩蓝图</h2><p>供实时答辩使用的贡献、假设、风险、主问题与追问。</p></div></div>
+      <button id="generateBlueprint" disabled>生成蓝图</button>
+      <div id="blueprintStatus" class="status"></div>
+      <div id="blueprintPreview" class="blueprint hidden"></div>
+
+      <div class="step"><span>4</span><div><h2>AI Golden Dataset</h2><p>模型独立标注、交叉批评、共识合成，并生成四档合成回答。</p></div></div>
+      <div id="modelProfiles" class="model-list"><div class="muted">正在读取模型列表…</div></div>
+      <div class="compact-grid">
+        <label>共识模型<select id="consensusProfile"></select></label>
+        <label>题目数量<input id="questionCount" type="number" min="4" max="20" value="8" /></label>
+      </div>
+      <button id="generateGolden" disabled>生成 Golden Dataset</button>
+      <div id="goldenStatus" class="status"></div>
+      <div id="goldenPreview" class="blueprint hidden"></div>
+
+      <div class="step"><span>5</span><div><h2>开始答辩</h2><p>默认 6 个主问题，每题最多追问 2 次。</p></div></div>
+      <div class="dual-actions"><button id="startSession" disabled>开始文本答辩</button><button id="startVoice" class="voice-primary" disabled>开始实时语音答辩</button></div>
+      <div id="voicePrereq" class="status">语音需要已配置的 Realtime 提供商，并建议通过 HTTPS 或 localhost 使用。</div>
+    </section>
+
+    <section class="panel evidence-lab">
+      <div class="conversation-head">
+        <div><span class="eyebrow">Multimodal evidence</span><h2>页面证据与视觉审查</h2></div>
+        <span id="evidenceState" class="badge secondary">尚无材料</span>
+      </div>
+      <p>显示 PDF 页面、PPT 幻灯片、图表、表格、公式上下文和 DOCX 图片。视觉 Agent 会区分“该证据支持什么”与“不能支持什么”。</p>
+      <div class="lab-actions">
+        <button id="loadEvidence" disabled>加载证据</button>
+        <button id="analyzeVisual" disabled>运行视觉分析</button>
+        <button id="runJoint" disabled>联合审查已上传材料</button>
+        <button id="showCosts">查看费用</button>
+      </div>
+      <div id="evidenceStatus" class="status"></div>
+      <div id="evidenceGallery" class="evidence-gallery"><div class="empty compact">上传材料后显示页面证据。</div></div>
+      <div id="visualResults" class="blueprint hidden"></div>
+      <div id="costResults" class="blueprint hidden"></div>
+    </section>
+
+    <section class="panel lab">
+      <div class="conversation-head">
+        <div><span class="eyebrow">Evaluation laboratory</span><h2>模型竞技场</h2></div>
+        <span id="datasetState" class="badge secondary">尚无数据集</span>
+      </div>
+      <p>同一 Golden Dataset 同时测试问题规划与回答分析。排名优先看质量，再看费用和延迟。</p>
+      <div id="qualityMetrics" class="metric-grid"><div class="empty compact">生成数据集后显示质量门禁。</div></div>
+      <div class="lab-actions">
+        <button id="runBenchmark" disabled>运行多模型基准</button>
+        <a id="exportGolden" class="button-link hidden" href="#">导出 JSONL</a>
+        <button id="freezeDataset" disabled>冻结基准版本</button>
+      </div>
+      <div id="benchmarkStatus" class="status"></div>
+      <div id="benchmarkResults" class="table-wrap hidden"></div>
+    </section>
+
+
+    <section class="panel voice-panel">
+      <div class="conversation-head">
+        <div><span class="eyebrow">Realtime voice · WebRTC</span><h2>自然语音答辩</h2></div>
+        <span id="voiceState" class="badge secondary">尚未连接</span>
+      </div>
+      <p>默认使用自动 VAD 判断轮次。您可以随时插话，模型会立即停止未播放的内容并自然响应。</p>
+      <div class="voice-settings compact-grid">
+        <label>语音模型<select id="voiceProvider"></select></label>
+        <label>声音<select id="voiceSelect"><option value="marin">Marin</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="sage">Sage</option><option value="verse">Verse</option></select></label>
+        <label>轮次敏感度<select id="vadSelect"><option value="low">耐心等待</option><option value="medium" selected>自然</option><option value="high">快速响应</option><option value="auto">自动</option></select></label>
+      </div>
+      <div class="voice-orb-wrap"><div id="voiceOrb" class="voice-orb"><span></span></div><div id="voiceLiveText" class="voice-live-text">连接后在这里显示实时状态与字幕。</div></div>
+      <div class="voice-controls">
+        <button id="muteVoice" disabled>静音麦克风</button>
+        <button id="togglePtt" disabled>切换按住说话</button>
+        <button id="pttButton" class="ptt hidden" disabled>按住说话</button>
+        <button id="endVoice" class="danger-button" disabled>结束语音</button>
+      </div>
+      <div id="voiceStatus" class="status"></div>
+      <div id="voiceTranscript" class="voice-transcript"><div class="empty compact">实时转录会显示在这里，并同步到后端会话记录。</div></div>
+    </section>
+
+    <section class="panel conversation">
+      <div class="conversation-head">
+        <div><span class="eyebrow">Live session</span><h2>对话</h2></div>
+        <span id="sessionState" class="badge secondary">尚未开始</span>
+      </div>
+      <div id="messages" class="messages">
+        <div class="empty">完成左侧步骤后，AI 考官会在这里开始提问。</div>
+      </div>
+      <form id="answerForm">
+        <textarea id="answerInput" rows="5" placeholder="请口语化回答。建议包含结论、原因、证据和边界。" disabled></textarea>
+        <div class="answer-actions">
+          <span id="answerHint">一次只回答当前问题。</span>
+          <button id="sendAnswer" type="submit" disabled>提交回答</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="reportPanel" class="panel report hidden">
+      <div class="conversation-head"><div><span class="eyebrow">Evidence report</span><h2>答辩报告</h2></div></div>
+      <div id="reportContent"></div>
+    </section>
+  </main>
+
+  <footer>v0.4 · WebRTC 实时语音、自然插话、实时字幕与多模态证据</footer>
+  <script src="/static/app.js?v=0.4.3"></script>
+</body>
+</html>

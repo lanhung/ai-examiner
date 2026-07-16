@@ -1,0 +1,17 @@
+task_id: EXAMPLE-001
+title: clear task title
+owner: backend-agent
+status: ready
+inputs:
+  - docs/architecture/SYSTEM_ARCHITECTURE.md
+allowed_paths:
+  - src/ai_examiner/example.py
+deliverables:
+  - implementation
+  - unit tests
+acceptance:
+  - measurable behavior
+commands:
+  - uv run pytest tests/test_example.py
+rollback:
+  - revert task branch

@@ -1,0 +1,25 @@
+services:
+  ai-examiner:
+    environment:
+      APP_ENV: production
+      REALTIME_MODEL: ${REALTIME_MODEL:-gpt-realtime-2.1}
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    security_opt:
+      - no-new-privileges:true
+
+  worker:
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+    security_opt:
+      - no-new-privileges:true
+
+  redis:
+    deploy:
+      resources:
+        limits:
+          memory: 512M

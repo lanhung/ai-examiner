@@ -1,0 +1,2 @@
+{"case_id":"G001","question":{"text":"为什么实验足以支持主要结论？","expected_points":["实验与结论对应","基线合理","证据边界"]},"answer":"因为结果更好。","expected_action":"ASK_FOLLOWUP","expected_score_range":[0.5,2.8],"required_missing_points":["基线合理","证据边界"]}
+{"case_id":"G002","question":{"text":"为什么实验足以支持主要结论？","expected_points":["实验与结论对应","基线合理","证据边界"]},"answer":"我们在相同数据划分和计算预算下比较了三类强基线，并用消融确认提升来自核心模块；但实验只覆盖当前数据分布，不能证明真实分布外泛化。","expected_action":"MOVE_ON","expected_score_range":[3.6,5.0],"required_missing_points":[]}

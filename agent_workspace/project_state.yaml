@@ -1,0 +1,32 @@
+project: ai-examiner-mvp
+version: 0.2.0
+status: runnable_advanced_poc
+current_milestone: ai_golden_dataset_and_model_benchmark
+completed:
+  - modular FastAPI application
+  - seven online examiner agents
+  - four offline Golden Dataset agents
+  - PDF/TXT/Markdown ingestion
+  - session state machine and evidence-based evaluation
+  - OpenAI, Anthropic, Gemini, and Mock provider adapters
+  - multi-model independent annotation and cross-critique
+  - consensus Golden Dataset synthesis
+  - excellent/partial/misconception/evasive answer generation
+  - deterministic dataset quality gates
+  - Planner and Analyzer benchmark leaderboard
+  - optional expert calibration and agreement summary
+  - JSONL export and 1-20 paper batch corpus CLI
+  - Docker, CI, smoke test, and automated tests
+next:
+  - PDF screenshot and bounding-box evidence
+  - PPTX/DOCX/image/table/formula understanding
+  - durable asynchronous batch jobs and progress UI
+  - dataset freezing and prompt/model version registry
+  - embedding plus LLM judge plus sampled expert calibration
+  - realtime voice only after evidence infrastructure is stable
+risks:
+  - real provider quality and cost require the user's API keys
+  - AI-curated references can share correlated model bias
+  - synchronous multi-paper jobs can exceed HTTP timeouts
+  - scanned PDFs require OCR
+  - no authentication, tenant isolation, or production security review
