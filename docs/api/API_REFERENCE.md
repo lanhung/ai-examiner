@@ -155,3 +155,60 @@ GET /api/costs?project_id=...
 ```
 
 结束 VoiceSession 和关联 ExamSession，并记录会话时长。
+
+# v0.5 Adaptive Cognitive API
+
+## POST `/api/sessions`
+
+新增可选字段：
+
+```json
+{
+  "question_strategy": "adaptive",
+  "learner_subject_key": "pseudonymous-learner-001"
+}
+```
+
+`question_strategy` 可为 `fixed` 或 `adaptive`。为保持兼容，API 默认 `fixed`。`learner_subject_key` 仅在同一项目内唯一，不应写入姓名、邮箱或其他直接身份信息。
+
+## GET `/api/sessions/{id}/knowledge-state`
+
+返回知识单元、题目映射、掌握度、置信度、误区、算法版本和每个知识点对应的 Evidence Event、原始回答片段及辅助等级。
+
+## POST `/api/sessions/{id}/knowledge-state/rebuild`
+
+从 append-only Evidence Event 确定性重建 aggregate state。该接口用于评测和修复；未来多用户版本必须限制为管理权限。
+
+## GET `/api/sessions/{id}/adaptive-decisions`
+
+返回每次策略动作、目标难度、候选分、选择原因、策略权重、策略版本和关联 Turn。
+
+## GET `/api/subjects/{id}/knowledge-state`
+
+按 Knowledge Unit code 聚合同一匿名学习者的跨会话状态。
+
+## GET `/api/subjects/{id}/learning-history`
+
+返回最多 500 个历史 Evidence Event，包括会话、问题、观察值、证据权重、辅助等级、误区和来源类型。
+
+## POST `/api/blueprints/{id}/policy-benchmark`
+
+```json
+{"question_limit": 2}
+```
+
+对同一蓝图运行固定顺序和 `adaptive-v1` 的确定性成对合成基准，返回 important-gap discovery、waste rate、misconception response、策略权重和逐 profile 题目序列。
+
+## v0.5 Voice fields
+
+创建语音会话可增加：
+
+```json
+{
+  "question_strategy": "adaptive",
+  "learner_subject_key": "pseudonymous-learner-001",
+  "analysis_profile": "openai:gpt-5.4-mini"
+}
+```
+
+`analysis_profile` 指定会后处理最终转录的文本模型。自适应语音完成时，最终用户转录会进入统一 Analyzer/Evaluator/Knowledge State 管线。部分转录和 Realtime 模型自身判断不会直接更新认知状态。

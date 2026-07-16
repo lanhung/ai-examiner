@@ -116,6 +116,51 @@ def test_voice_rejects_unsupported_voice(client):
     assert response.status_code == 400
 
 
+def test_adaptive_voice_finalizes_transcript_into_knowledge_events(client):
+    project, blueprint = create_project_and_blueprint(client)
+    created = client.post(
+        "/api/voice/sessions",
+        json={
+            "project_id": project["id"],
+            "blueprint_id": blueprint["id"],
+            "question_strategy": "adaptive",
+            "learner_subject_key": "voice-learner",
+        },
+    ).json()
+    voice_id = created["id"]
+    client.post(
+        f"/api/voice/sessions/{voice_id}/events",
+        json={
+            "event_type": "transcript",
+            "role": "assistant",
+            "text": blueprint["data"]["questions"][0]["text"],
+        },
+    )
+    client.post(
+        f"/api/voice/sessions/{voice_id}/events",
+        json={
+            "event_type": "transcript",
+            "role": "user",
+            "text": "该结论有实验比较作为证据，但只适用于当前样本，不能证明普遍因果。",
+        },
+    )
+    completed = client.post(
+        f"/api/voice/sessions/{voice_id}/complete",
+        json={"reason": "adaptive_voice_test"},
+    )
+    assert completed.status_code == 200
+    result = completed.json()
+    assert result["metrics"]["cognitive_finalized_turns"] == 1
+    knowledge = client.get(
+        f"/api/sessions/{result['exam_session_id']}/knowledge-state"
+    ).json()
+    assert knowledge["evidence_event_count"] >= 1
+    history = client.get(
+        f"/api/subjects/{result['learner_subject_id']}/learning-history"
+    ).json()
+    assert any(event["source_type"] == "voice" for event in history["events"])
+
+
 def test_qwen_realtime_session_includes_safe_client_config(client, monkeypatch):
     project, blueprint = create_project_and_blueprint(client)
     created = client.post(

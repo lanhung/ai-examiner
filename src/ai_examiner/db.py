@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from pathlib import Path
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -31,6 +32,14 @@ if is_sqlite:
 def init_db() -> None:
     from . import models  # noqa: F401
 
+    config_path = Path(__file__).resolve().parents[2] / "alembic.ini"
+    if config_path.exists():
+        from alembic import command
+        from alembic.config import Config
+
+        alembic_config = Config(str(config_path))
+        alembic_config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
+        command.upgrade(alembic_config, "head")
     Base.metadata.create_all(bind=engine)
     from .services.prompts import seed_prompt_registry
 

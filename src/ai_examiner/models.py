@@ -3,7 +3,17 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -82,6 +92,12 @@ class ExamSession(Base):
     current_question_index: Mapped[int] = mapped_column(Integer, default=0)
     current_question_attempts: Mapped[int] = mapped_column(Integer, default=0)
     mastery_state: Mapped[dict] = mapped_column(JSON, default=dict)
+    learner_subject_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learner_subjects.id", ondelete="SET NULL"), nullable=True
+    )
+    question_strategy: Mapped[str] = mapped_column(String(30), default="fixed")
+    policy_version: Mapped[str] = mapped_column(String(50), default="fixed-v1")
+    asked_question_ids: Mapped[list] = mapped_column(JSON, default=list)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -283,4 +299,132 @@ class VoiceEvent(Base):
     text: Mapped[str] = mapped_column(Text, default="")
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KnowledgeUnit(Base):
+    __tablename__ = "knowledge_units"
+    __table_args__ = (UniqueConstraint("blueprint_id", "code", name="uq_knowledge_unit_code"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    blueprint_id: Mapped[str] = mapped_column(ForeignKey("blueprints.id", ondelete="CASCADE"))
+    code: Mapped[str] = mapped_column(String(100))
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    importance: Mapped[float] = mapped_column(Float, default=0.7)
+    default_difficulty: Mapped[int] = mapped_column(Integer, default=3)
+    prerequisite_codes: Mapped[list] = mapped_column(JSON, default=list)
+    misconception_catalog: Mapped[list] = mapped_column(JSON, default=list)
+    source_evidence_asset_ids: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class QuestionKnowledgeUnit(Base):
+    __tablename__ = "question_knowledge_units"
+    __table_args__ = (
+        UniqueConstraint(
+            "blueprint_id", "question_id", "knowledge_unit_id", name="uq_question_knowledge_unit"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    blueprint_id: Mapped[str] = mapped_column(ForeignKey("blueprints.id", ondelete="CASCADE"))
+    question_id: Mapped[str] = mapped_column(String(80))
+    knowledge_unit_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_units.id", ondelete="CASCADE")
+    )
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class LearnerSubject(Base):
+    __tablename__ = "learner_subjects"
+    __table_args__ = (UniqueConstraint("project_id", "subject_key", name="uq_subject_key"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    subject_key: Mapped[str] = mapped_column(String(160))
+    display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KnowledgeState(Base):
+    __tablename__ = "knowledge_states"
+    __table_args__ = (
+        UniqueConstraint("session_id", "knowledge_unit_id", name="uq_session_knowledge_state"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("exam_sessions.id", ondelete="CASCADE")
+    )
+    learner_subject_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learner_subjects.id", ondelete="SET NULL"), nullable=True
+    )
+    knowledge_unit_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_units.id", ondelete="CASCADE")
+    )
+    mastery: Mapped[float] = mapped_column(Float, default=0.0)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    evidence_count: Mapped[int] = mapped_column(Integer, default=0)
+    correct_evidence_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_evidence_weight: Mapped[float] = mapped_column(Float, default=0.0)
+    misconceptions: Mapped[list] = mapped_column(JSON, default=list)
+    last_tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KnowledgeEvidenceEvent(Base):
+    __tablename__ = "knowledge_evidence_events"
+    __table_args__ = (
+        UniqueConstraint("turn_id", "knowledge_unit_id", name="uq_turn_knowledge_event"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("exam_sessions.id", ondelete="CASCADE")
+    )
+    turn_id: Mapped[str] = mapped_column(ForeignKey("turns.id", ondelete="CASCADE"))
+    question_id: Mapped[str] = mapped_column(String(80))
+    knowledge_unit_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_units.id", ondelete="CASCADE")
+    )
+    learner_subject_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learner_subjects.id", ondelete="SET NULL"), nullable=True
+    )
+    observation: Mapped[float] = mapped_column(Float)
+    evidence_weight: Mapped[float] = mapped_column(Float)
+    correctness: Mapped[float] = mapped_column(Float)
+    coverage: Mapped[float] = mapped_column(Float)
+    evidence_reasoning: Mapped[float] = mapped_column(Float)
+    analyzer_confidence: Mapped[float] = mapped_column(Float)
+    assistance_level: Mapped[str] = mapped_column(String(30), default="direct")
+    detected_misconceptions: Mapped[list] = mapped_column(JSON, default=list)
+    resolved_misconceptions: Mapped[list] = mapped_column(JSON, default=list)
+    source_type: Mapped[str] = mapped_column(String(30), default="text")
+    algorithm_version: Mapped[str] = mapped_column(String(50), default="knowledge-state-v1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AdaptiveDecision(Base):
+    __tablename__ = "adaptive_decisions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("exam_sessions.id", ondelete="CASCADE")
+    )
+    turn_id: Mapped[str | None] = mapped_column(
+        ForeignKey("turns.id", ondelete="SET NULL"), nullable=True
+    )
+    strategy: Mapped[str] = mapped_column(String(30), default="adaptive")
+    action: Mapped[str] = mapped_column(String(50))
+    selected_question_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    target_difficulty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reason_codes: Mapped[list] = mapped_column(JSON, default=list)
+    candidate_scores: Mapped[list] = mapped_column(JSON, default=list)
+    policy_config: Mapped[dict] = mapped_column(JSON, default=dict)
+    policy_version: Mapped[str] = mapped_column(String(50), default="adaptive-v1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

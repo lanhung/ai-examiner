@@ -1,8 +1,10 @@
 # v0.5 Adaptive Cognitive Engine Evaluation Plan
 
-Status: Required release gate  
-Control: v0.4.1 fixed question sequence  
+Status: Required release gate
+Control: v0.4.1 fixed question sequence
 Treatment: v0.5 adaptive-v1 policy
+
+RC1 status: engineering, migration, deterministic selector and voice-finalization tests passed. Frozen multi-document, paid-model and human-calibration gates remain pending; see `V0_5_RC1_RESULTS.md`.
 
 ## 1. Evaluation question
 

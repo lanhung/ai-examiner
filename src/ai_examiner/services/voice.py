@@ -131,6 +131,9 @@ def create_voice_session(
     vad_eagerness: str,
     question_limit: int,
     max_followups: int,
+    question_strategy: str = "fixed",
+    learner_subject_id: str | None = None,
+    analysis_profile: str | None = None,
 ) -> VoiceSession:
     provider_config = VOICE_PROVIDERS.get(provider)
     if not provider_config:
@@ -154,8 +157,14 @@ def create_voice_session(
             "question_limit": question_limit,
             "max_followups_per_question": max_followups,
             "channel": "realtime_voice",
+            "question_strategy": question_strategy,
+            "profile": analysis_profile
+            or f"{settings.model_provider}:{settings.default_model_for(settings.model_provider)}",
         },
         state="VOICE_READY",
+        learner_subject_id=learner_subject_id,
+        question_strategy=question_strategy,
+        policy_version="adaptive-v1" if question_strategy == "adaptive" else "fixed-v1",
     )
     db.add(exam)
     db.flush()
@@ -182,6 +191,7 @@ def create_voice_session(
             "vad_eagerness": vad_eagerness,
             "question_limit": question_limit,
             "max_followups": max_followups,
+            "question_strategy": question_strategy,
             "instructions": instructions,
         },
         metrics={

@@ -6,7 +6,14 @@ from collections import defaultdict
 class ReportGenerator:
     name = "report_generator"
 
-    def generate(self, *, blueprint: dict, turns: list[dict], mastery_state: dict) -> dict:
+    def generate(
+        self,
+        *,
+        blueprint: dict,
+        turns: list[dict],
+        mastery_state: dict,
+        knowledge_states: list[dict] | None = None,
+    ) -> dict:
         evaluations = [t for t in turns if t.get("role") == "user" and t.get("evaluation")]
         scores = [float(t["evaluation"].get("score", 0)) for t in evaluations]
         average = round(sum(scores) / len(scores), 2) if scores else 0.0
@@ -41,6 +48,47 @@ class ReportGenerator:
             key: round(sum(values) / len(values), 2) for key, values in by_type.items()
         }
         risk_level = "high" if average < 2.5 else ("medium" if average < 3.7 else "low")
+        knowledge_map = []
+        weakness_map = []
+        for item in knowledge_states or []:
+            unit = item.get("unit", {})
+            mastery = float(item.get("mastery", 0.0))
+            confidence = float(item.get("confidence", 0.0))
+            active_misconceptions = [
+                misconception
+                for misconception in item.get("misconceptions", [])
+                if misconception.get("status") == "active"
+            ]
+            knowledge_item = {
+                "knowledge_unit_id": item.get("knowledge_unit_id"),
+                "code": unit.get("code", item.get("knowledge_unit_id")),
+                "name": unit.get("name", item.get("knowledge_unit_id")),
+                "importance": unit.get("importance", 0.7),
+                "mastery": round(mastery, 3),
+                "confidence": round(confidence, 3),
+                "evidence_count": item.get("evidence_count", 0),
+                "status": "mastered"
+                if mastery >= 0.75 and confidence >= 0.6
+                else ("developing" if mastery >= 0.45 else "gap"),
+                "misconceptions": active_misconceptions,
+                "evidence": item.get("evidence", []),
+            }
+            knowledge_map.append(knowledge_item)
+            if mastery < 0.60 or active_misconceptions:
+                weakness_map.append(knowledge_item)
+        knowledge_map.sort(key=lambda item: (-float(item["importance"]), item["name"]))
+        weakness_map.sort(
+            key=lambda item: (
+                float(item["mastery"]),
+                -float(item["importance"]),
+                item["name"],
+            )
+        )
+        improvement_path = [
+            f"优先复测 {item['name']}：当前掌握度 {item['mastery']:.0%}，"
+            f"置信度 {item['confidence']:.0%}，建议使用高一级的应用或反例问题。"
+            for item in weakness_map[:5]
+        ]
         return {
             "title": blueprint.get("title", "AI 答辩报告"),
             "overall_score": average,
@@ -52,6 +100,9 @@ class ReportGenerator:
             "priority_weaknesses": list(dict.fromkeys(x for x in weaknesses if x))[:8],
             "evidence": evidence,
             "mastery_state": mastery_state,
+            "knowledge_map": knowledge_map,
+            "weakness_map": weakness_map,
+            "improvement_path": improvement_path,
             "recommended_actions": [
                 "针对优先薄弱点重新组织一段不超过两分钟的回答。",
                 "为每个主要结论补充一个直接证据、一个边界条件和一个反例。",

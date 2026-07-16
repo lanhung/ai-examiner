@@ -4,13 +4,22 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ## [Unreleased]
 
-### Planned for 0.5.0
+## [0.5.0-rc.1] - 2026-07-16
 
-- Evidence-backed Knowledge State。
-- Adaptive Question Selector 与 Difficulty Controller。
-- 可审计的 Adaptive Decision 记录。
-- `fixed` / `adaptive` 会话策略切换与对照评测。
-- Knowledge Map、Weakness Map 和 Improvement Path 报告。
+### Added
+
+- Alembic 迁移、Knowledge Unit、Question Mapping、Learner Subject、Knowledge State 和不可变 Evidence Event。
+- Difficulty Controller、Adaptive Question Selector、跨会话状态继承和已问题目新颖度控制。
+- 可审计的 Adaptive Decision，包含候选分、原因、策略权重和版本。
+- `fixed` / `adaptive` 会话策略切换与确定性成对策略基准。
+- Knowledge Map、Weakness Map、Improvement Path 以及知识点级回答证据。
+- 自适应语音最终转录进入统一 Analyzer/Evaluator/Knowledge State 管线。
+
+### Changed
+
+- Docker 镜像包含 Alembic 配置和迁移文件。
+- GitHub 更新脚本先拉取并构建，再短暂停服迁移和切换版本。
+- UI 默认新评估会话使用自适应策略，旧 API 请求仍默认 `fixed`。
 
 ## [0.4.1] - 2026-07-16
 
@@ -34,5 +43,6 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 - Redis/Celery 后台任务、Caddy HTTPS 和 Docker Compose 部署。
 
 [Unreleased]: https://github.com/lanhung/ai-examiner/compare/v0.4.1...HEAD
+[0.5.0-rc.1]: https://github.com/lanhung/ai-examiner/compare/v0.4.1...v0.5.0-rc.1
 [0.4.1]: https://github.com/lanhung/ai-examiner/compare/9327580...v0.4.1
 [0.4.0]: https://github.com/lanhung/ai-examiner/commit/9327580

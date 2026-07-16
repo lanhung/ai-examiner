@@ -11,6 +11,8 @@ RUN apt-get update \
 COPY pyproject.toml README.md /app/
 COPY src /app/src
 COPY prompts /app/prompts
+COPY alembic.ini /app/alembic.ini
+COPY migrations /app/migrations
 RUN pip install --upgrade pip && pip install ".[providers]"
 RUN mkdir -p /app/data/uploads /app/data/evidence /app/data/exports /app/data/backups
 

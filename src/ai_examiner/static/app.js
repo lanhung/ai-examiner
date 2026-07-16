@@ -302,7 +302,15 @@ $("startSession").onclick = async () => {
     const session = await api("/api/sessions", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({project_id: state.projectId, blueprint_id: state.blueprintId, profile, question_limit: 6, max_followups_per_question: 2}),
+      body: JSON.stringify({
+        project_id: state.projectId,
+        blueprint_id: state.blueprintId,
+        profile,
+        question_limit: 6,
+        max_followups_per_question: 2,
+        question_strategy: $("questionStrategy").value,
+        learner_subject_key: `browser-${state.projectId}`,
+      }),
     });
     state.sessionId = session.id;
     const started = await api(`/api/sessions/${session.id}/start`, {method: "POST"});
@@ -336,7 +344,10 @@ $("answerForm").onsubmit = async (event) => {
       $("sendAnswer").disabled = false;
       $("answerInput").disabled = false;
       $("answerInput").focus();
-      $("answerHint").textContent = result.decision.action === "ASK_FOLLOWUP" ? "当前为追问，请直接回应追问。" : "一次只回答当前问题。";
+      const reasons = result.decision.selection?.reason_codes || [];
+      $("answerHint").textContent = result.decision.action === "ASK_FOLLOWUP"
+        ? "当前为追问，请直接回应追问。"
+        : (reasons.length ? `选题依据：${reasons.join(" · ")}` : "一次只回答当前问题。");
     }
   } catch (error) {
     window.alert(error.message);
@@ -355,6 +366,8 @@ async function showReport() {
       <div class="report-block"><h3>建议动作</h3><ul>${list(report.recommended_actions)}</ul></div>
       <div class="report-block"><h3>高分证据</h3><ul>${list(report.strengths, "尚无达到高分阈值的回答")}</ul></div>
       <div class="report-block"><h3>分类型表现</h3><ul>${Object.entries(report.dimension_summary).map(([key, value]) => `<li>${escapeHtml(key)}：${value}/5</li>`).join("") || "<li>暂无</li>"}</ul></div>
+      <div class="report-block"><h3>知识地图</h3><ul>${(report.knowledge_map || []).map((item) => `<li><strong>${escapeHtml(item.name)}</strong>：掌握度 ${Math.round(item.mastery * 100)}% · 置信度 ${Math.round(item.confidence * 100)}% · ${escapeHtml(item.status)}</li>`).join("") || "<li>尚未形成概念证据</li>"}</ul></div>
+      <div class="report-block"><h3>改进路径</h3><ul>${list(report.improvement_path, "完成更多回答后生成改进路径")}</ul></div>
     </div>
     <div class="report-block"><h3>问题与原始证据</h3><div class="evidence-report-grid">${(report.evidence || []).map((item) => `<article>
       ${item.page_preview_url ? `<a href="${item.page_preview_url}" target="_blank"><img src="${item.page_preview_url}" alt="第 ${item.source_page || "?"} 页证据" /></a>` : ""}
@@ -706,6 +719,9 @@ async function connectVoice() {
       vad_eagerness: $("vadSelect").value,
       question_limit: 6,
       max_followups: 2,
+      question_strategy: $("questionStrategy").value,
+      learner_subject_key: `browser-${state.projectId}`,
+      analysis_profile: $("textProfile").value || null,
     }),
   });
   state.voiceSessionId = voiceSession.id;

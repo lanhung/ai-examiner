@@ -27,11 +27,13 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from . import __version__
 from .agents.orchestrator import ExamOrchestrator
 from .config import get_settings
 from .db import SessionLocal, get_db, init_db
 from .model_catalog import CATALOG
 from .models import (
+    AdaptiveDecision,
     BackgroundJob,
     BenchmarkRun,
     Blueprint,
@@ -41,6 +43,9 @@ from .models import (
     ExpertRating,
     GoldenDataset,
     JointAnalysis,
+    KnowledgeEvidenceEvent,
+    KnowledgeUnit,
+    LearnerSubject,
     Project,
     PromptVersion,
     Turn,
@@ -58,6 +63,7 @@ from .schemas import (
     ExpertRatingCreate,
     GoldenDatasetCreate,
     JointAnalysisCreate,
+    PolicyBenchmarkCreate,
     ProjectCreate,
     PromptVersionCreate,
     SessionCreate,
@@ -68,12 +74,14 @@ from .schemas import (
 )
 from .services.agreement import agreement_summary
 from .services.benchmark import BenchmarkService
+from .services.cognitive import CognitiveStateService
 from .services.datasets import dataset_diff, set_dataset_status
 from .services.documents import parse_document, save_upload
 from .services.evidence import create_highlighted_crop, persist_evidence, serialize_asset
 from .services.golden import GoldenDatasetService
 from .services.jobs import enqueue_job, serialize_job
 from .services.joint import JointAnalysisService
+from .services.policy_benchmark import PolicyBenchmarkService
 from .services.prompts import activate_prompt, create_prompt_version, prompt_manifest
 from .services.visual import VisualEvidenceService
 from .services.voice import (
@@ -97,7 +105,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title=settings.app_name, version="0.4.0", lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version=__version__, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -500,7 +508,18 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
         f"{settings.model_provider}:{settings.default_model_for(settings.model_provider)}"
     )
     _profiles([profile], profile)
-    config = payload.model_dump(exclude={"project_id", "blueprint_id", "mode"})
+    cognitive = CognitiveStateService(db)
+    cognitive.ensure_blueprint_graph(blueprint)
+    subject = cognitive.get_or_create_subject(project.id, payload.learner_subject_key)
+    config = payload.model_dump(
+        exclude={
+            "project_id",
+            "blueprint_id",
+            "mode",
+            "question_strategy",
+            "learner_subject_key",
+        }
+    )
     config["profile"] = profile
     session = ExamSession(
         project_id=project.id,
@@ -508,11 +527,44 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
         mode=payload.mode,
         config=config,
         status="created",
+        learner_subject_id=subject.id if subject else None,
+        question_strategy=payload.question_strategy,
+        policy_version="adaptive-v1" if payload.question_strategy == "adaptive" else "fixed-v1",
     )
     db.add(session)
     db.commit()
     db.refresh(session)
-    return {"id": session.id, "status": session.status, "config": session.config}
+    return {
+        "id": session.id,
+        "status": session.status,
+        "config": session.config,
+        "question_strategy": session.question_strategy,
+        "policy_version": session.policy_version,
+        "learner_subject_id": session.learner_subject_id,
+    }
+
+
+@app.post("/api/blueprints/{blueprint_id}/policy-benchmark")
+def run_policy_benchmark(
+    blueprint_id: str,
+    payload: PolicyBenchmarkCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    blueprint = db.get(Blueprint, blueprint_id)
+    if not blueprint:
+        raise HTTPException(404, "Blueprint not found")
+    cognitive = CognitiveStateService(db)
+    cognitive.ensure_blueprint_graph(blueprint)
+    units, question_units = cognitive.graph(blueprint.id)
+    try:
+        return PolicyBenchmarkService().run(
+            questions=blueprint.data.get("questions", []),
+            units=units,
+            question_units=question_units,
+            question_limit=payload.question_limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/api/sessions/{session_id}/start")
@@ -569,6 +621,10 @@ def get_session(session_id: str, db: Annotated[Session, Depends(get_db)]):
         "status": session.status,
         "state": session.state,
         "current_question_index": session.current_question_index,
+        "asked_question_ids": session.asked_question_ids,
+        "question_strategy": session.question_strategy,
+        "policy_version": session.policy_version,
+        "learner_subject_id": session.learner_subject_id,
         "mastery_state": session.mastery_state,
         "turns": [serialize_turn(turn) for turn in session.turns],
     }
@@ -581,11 +637,153 @@ def get_report(session_id: str, db: Annotated[Session, Depends(get_db)]):
         raise HTTPException(404, "Session not found")
     blueprint = db.get(Blueprint, session.blueprint_id)
     turns = [serialize_turn(turn) for turn in session.turns]
+    cognitive = CognitiveStateService(db)
+    units, _ = cognitive.graph(blueprint.id)
+    evidence_by_unit = cognitive.evidence_for_session(session.id)
+    knowledge_states = [
+        {
+            **state,
+            "unit": units.get(unit_id, {}),
+            "evidence": evidence_by_unit.get(unit_id, []),
+        }
+        for unit_id, state in cognitive.states(session.id).items()
+    ]
     report = ExamOrchestrator(db, provider_or_503()).reporter.generate(
-        blueprint=blueprint.data, turns=turns, mastery_state=session.mastery_state
+        blueprint=blueprint.data,
+        turns=turns,
+        mastery_state=session.mastery_state,
+        knowledge_states=knowledge_states,
     )
     report["session_status"] = session.status
     return report
+
+
+@app.get("/api/sessions/{session_id}/knowledge-state")
+def get_session_knowledge_state(
+    session_id: str, db: Annotated[Session, Depends(get_db)]
+):
+    session = db.get(ExamSession, session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+    cognitive = CognitiveStateService(db)
+    units, question_units = cognitive.graph(session.blueprint_id)
+    states = cognitive.states(session.id)
+    evidence_by_unit = cognitive.evidence_for_session(session.id)
+    evidence_count = db.scalar(
+        select(func.count(KnowledgeEvidenceEvent.id)).where(
+            KnowledgeEvidenceEvent.session_id == session.id
+        )
+    )
+    return {
+        "session_id": session.id,
+        "question_strategy": session.question_strategy,
+        "policy_version": session.policy_version,
+        "learner_subject_id": session.learner_subject_id,
+        "units": list(units.values()),
+        "question_units": question_units,
+        "states": [
+            {
+                **state,
+                "unit": units.get(unit_id, {}),
+                "evidence": evidence_by_unit.get(unit_id, []),
+            }
+            for unit_id, state in states.items()
+        ],
+        "evidence_event_count": evidence_count or 0,
+        "algorithm_version": CognitiveStateService.algorithm_version,
+    }
+
+
+@app.post("/api/sessions/{session_id}/knowledge-state/rebuild")
+def rebuild_session_knowledge_state(
+    session_id: str, db: Annotated[Session, Depends(get_db)]
+):
+    session = db.get(ExamSession, session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+    states = CognitiveStateService(db).rebuild(session)
+    db.commit()
+    return {"session_id": session.id, "states": states, "rebuilt": True}
+
+
+@app.get("/api/sessions/{session_id}/adaptive-decisions")
+def get_adaptive_decisions(session_id: str, db: Annotated[Session, Depends(get_db)]):
+    session = db.get(ExamSession, session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+    decisions = db.scalars(
+        select(AdaptiveDecision)
+        .where(AdaptiveDecision.session_id == session.id)
+        .order_by(AdaptiveDecision.created_at, AdaptiveDecision.id)
+    ).all()
+    return [
+        {
+            "id": decision.id,
+            "strategy": decision.strategy,
+            "action": decision.action,
+            "selected_question_id": decision.selected_question_id,
+            "target_difficulty": decision.target_difficulty,
+            "reason_codes": decision.reason_codes,
+            "candidate_scores": decision.candidate_scores,
+            "policy_config": decision.policy_config,
+            "policy_version": decision.policy_version,
+            "turn_id": decision.turn_id,
+            "created_at": decision.created_at.isoformat(),
+        }
+        for decision in decisions
+    ]
+
+
+@app.get("/api/subjects/{subject_id}/knowledge-state")
+def get_subject_knowledge_state(subject_id: str, db: Annotated[Session, Depends(get_db)]):
+    subject = db.get(LearnerSubject, subject_id)
+    if not subject:
+        raise HTTPException(404, "Learner subject not found")
+    return {
+        "subject_id": subject.id,
+        "subject_key": subject.subject_key,
+        "states": CognitiveStateService(db).subject_summary(subject.id),
+    }
+
+
+@app.get("/api/subjects/{subject_id}/learning-history")
+def get_subject_learning_history(subject_id: str, db: Annotated[Session, Depends(get_db)]):
+    subject = db.get(LearnerSubject, subject_id)
+    if not subject:
+        raise HTTPException(404, "Learner subject not found")
+    units = {
+        unit.id: unit
+        for unit in db.scalars(select(KnowledgeUnit)).all()
+    }
+    events = db.scalars(
+        select(KnowledgeEvidenceEvent)
+        .where(KnowledgeEvidenceEvent.learner_subject_id == subject.id)
+        .order_by(KnowledgeEvidenceEvent.created_at.desc())
+        .limit(500)
+    ).all()
+    return {
+        "subject_id": subject.id,
+        "events": [
+            {
+                "id": event.id,
+                "session_id": event.session_id,
+                "turn_id": event.turn_id,
+                "question_id": event.question_id,
+                "knowledge_unit_id": event.knowledge_unit_id,
+                "knowledge_unit_code": units.get(event.knowledge_unit_id).code
+                if units.get(event.knowledge_unit_id)
+                else None,
+                "observation": event.observation,
+                "evidence_weight": event.evidence_weight,
+                "assistance_level": event.assistance_level,
+                "detected_misconceptions": event.detected_misconceptions,
+                "source_type": event.source_type,
+                "algorithm_version": event.algorithm_version,
+                "created_at": event.created_at.isoformat(),
+            }
+            for event in events
+        ],
+    }
 
 
 @app.get("/api/metrics")
@@ -1048,6 +1246,7 @@ def cost_dashboard(
 
 
 def serialize_voice_session(voice: VoiceSession, db: Session, *, include_events: bool = False) -> dict:
+    exam = db.get(ExamSession, voice.exam_session_id)
     payload = {
         "id": voice.id,
         "project_id": voice.project_id,
@@ -1057,6 +1256,8 @@ def serialize_voice_session(voice: VoiceSession, db: Session, *, include_events:
         "model": voice.model,
         "voice": voice.voice,
         "status": voice.status,
+        "question_strategy": exam.question_strategy if exam else "fixed",
+        "learner_subject_id": exam.learner_subject_id if exam else None,
         "config": {key: value for key, value in (voice.config or {}).items() if key != "instructions"},
         "metrics": voice.metrics,
         "started_at": voice.started_at.isoformat() if voice.started_at else None,
@@ -1123,6 +1324,11 @@ def start_voice_session(
     blueprint = db.get(Blueprint, payload.blueprint_id)
     if not project or not blueprint or blueprint.project_id != project.id:
         raise HTTPException(404, "Project or blueprint not found")
+    cognitive = CognitiveStateService(db)
+    cognitive.ensure_blueprint_graph(blueprint)
+    subject = cognitive.get_or_create_subject(project.id, payload.learner_subject_key)
+    if payload.analysis_profile:
+        _profiles([payload.analysis_profile], payload.analysis_profile)
     try:
         voice = create_voice_session(
             db,
@@ -1136,6 +1342,9 @@ def start_voice_session(
             vad_eagerness=payload.vad_eagerness,
             question_limit=payload.question_limit,
             max_followups=payload.max_followups,
+            question_strategy=payload.question_strategy,
+            learner_subject_id=subject.id if subject else None,
+            analysis_profile=payload.analysis_profile,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -1307,11 +1516,22 @@ def complete_voice_session(
         if started_at.tzinfo is None:
             started_at = started_at.replace(tzinfo=UTC)
         metrics["duration_seconds"] = max(0, int((now - started_at).total_seconds()))
-    voice.metrics = metrics
     exam = db.get(ExamSession, voice.exam_session_id)
     if exam:
+        if exam.question_strategy == "adaptive":
+            blueprint = db.get(Blueprint, exam.blueprint_id)
+            finalized = ExamOrchestrator(
+                db,
+                provider_or_503(exam.config.get("profile")),
+                project_id=exam.project_id,
+                session_id=exam.id,
+            ).finalize_voice_transcripts(exam, blueprint)
+            metrics["cognitive_finalized_turns"] = max(
+                int(metrics.get("cognitive_finalized_turns", 0)), len(finalized)
+            )
         exam.status = "completed"
         exam.state = "VOICE_COMPLETED"
         exam.completed_at = now
+    voice.metrics = metrics
     db.commit()
     return serialize_voice_session(voice, db, include_events=True)

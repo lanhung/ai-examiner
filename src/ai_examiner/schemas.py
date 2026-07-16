@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +20,12 @@ class SessionCreate(BaseModel):
     allow_interruptions: bool = False
     max_followups_per_question: int = Field(default=2, ge=0, le=5)
     question_limit: int = Field(default=6, ge=1, le=20)
+    question_strategy: Literal["fixed", "adaptive"] = "fixed"
+    learner_subject_key: str | None = Field(default=None, min_length=1, max_length=160)
+
+
+class PolicyBenchmarkCreate(BaseModel):
+    question_limit: int = Field(default=2, ge=1, le=20)
 
 
 class AnswerSubmit(BaseModel):
@@ -109,6 +115,9 @@ class VoiceSessionCreate(BaseModel):
     vad_eagerness: str = Field(default="medium", pattern="^(low|medium|high|auto)$")
     question_limit: int = Field(default=6, ge=1, le=20)
     max_followups: int = Field(default=2, ge=0, le=5)
+    question_strategy: Literal["fixed", "adaptive"] = "fixed"
+    learner_subject_key: str | None = Field(default=None, max_length=160)
+    analysis_profile: str | None = Field(default=None, max_length=160)
 
 
 class VoiceEventCreate(BaseModel):

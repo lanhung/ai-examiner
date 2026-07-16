@@ -1,7 +1,7 @@
 # v0.5 Adaptive Cognitive Engine
 
-Status: Approved for implementation  
-Target release: v0.5.0  
+Status: Implemented in v0.5.0 RC1
+Target release: v0.5.0
 Stable base: v0.4.1
 
 ## 1. Objective

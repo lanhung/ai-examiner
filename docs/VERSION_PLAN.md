@@ -9,8 +9,8 @@ This file is the authoritative version and branch status for Codex and other cod
 | Line | Version | Branch or tag | Status | Deployment |
 |---|---|---|---|---|
 | Stable | 0.4.1 | `main`, `v0.4.1` | Released | Production evaluation |
-| Development | 0.5.0.dev0 | `develop/v0.5.0` | Active | Separate worktree only |
-| Release candidate | 0.5.0rc1 | `v0.5.0-rc.1` | Not created | Staging only |
+| Development | 0.5.0rc1 | `develop/v0.5.0` | Feature frozen | Separate worktree only |
+| Release candidate | 0.5.0rc1 | `v0.5.0-rc.1` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 
 ## 3. Branch policy
