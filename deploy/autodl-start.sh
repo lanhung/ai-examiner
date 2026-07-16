@@ -3,6 +3,8 @@ set -uo pipefail
 
 umask 077
 ROOT="/root/autodl-tmp/ai-examiner-mvp/ai-examiner-mvp-v0.4.0"
+OLLAMA_MODELS="${OLLAMA_MODELS:-/root/autodl-tmp/ollama-models}"
+export OLLAMA_MODELS
 
 for _ in $(seq 1 60); do
   [[ -d "$ROOT" ]] && break
@@ -17,11 +19,36 @@ fi
 cd "$ROOT"
 mkdir -p logs
 
-if ! curl -fsS --max-time 3 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+ollama_api_ready() {
+  curl -fsS --max-time 3 http://127.0.0.1:11434/api/tags >/dev/null 2>&1
+}
+
+ollama_has_models() {
+  curl -fsS --max-time 3 http://127.0.0.1:11434/api/tags 2>/dev/null \
+    | grep -Eq '"(name|model)":"'
+}
+
+start_ollama=false
+if ! ollama_api_ready; then
+  start_ollama=true
+elif ! ollama_has_models && find "$OLLAMA_MODELS/manifests" -type f -print -quit \
+  2>/dev/null | grep -q .; then
+  existing_ollama_pid=$(pgrep -xo ollama || true)
+  if [[ -n "$existing_ollama_pid" ]]; then
+    kill "$existing_ollama_pid"
+    for _ in $(seq 1 30); do
+      kill -0 "$existing_ollama_pid" 2>/dev/null || break
+      sleep 1
+    done
+  fi
+  start_ollama=true
+fi
+
+if [[ "$start_ollama" == true ]]; then
   nohup ollama serve >logs/ollama.log 2>&1 &
   echo $! >logs/ollama.pid
   for _ in $(seq 1 60); do
-    curl -fsS --max-time 3 http://127.0.0.1:11434/api/tags >/dev/null 2>&1 && break
+    ollama_has_models && break
     sleep 1
   done
 fi
