@@ -4,7 +4,13 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ## [Unreleased]
 
-暂无。
+### Planned for 0.5.0
+
+- Evidence-backed Knowledge State。
+- Adaptive Question Selector 与 Difficulty Controller。
+- 可审计的 Adaptive Decision 记录。
+- `fixed` / `adaptive` 会话策略切换与对照评测。
+- Knowledge Map、Weakness Map 和 Improvement Path 报告。
 
 ## [0.4.1] - 2026-07-16
 

@@ -1,8 +1,8 @@
-# AI Examiner v0.4.1
+# AI Examiner v0.5.0.dev0
 
 AI Examiner 是一个“主动提问型 AI”平台：围绕论文、PPT、DOCX 和技术材料主动提问、追问、纠偏和评估，并把问题与原始页面证据关联起来。
 
-v0.4.1 是当前稳定评估版本，在 v0.4.0 的低延迟实时语音答辩基础上补充了本地 Ollama 模型持久化，以及蓝图生成和文本答辩的独立模型选择。
+当前分支用于开发 v0.5 Adaptive Cognitive Engine。生产稳定版本是 `v0.4.1`；v0.5 将在不破坏现有文本、语音和证据流程的前提下加入知识状态、难度控制和自适应选题。
 
 ## v0.4 核心功能
 
@@ -133,6 +133,10 @@ node --check src/ai_examiner/static/app.js
 
 ## 文档
 
+- `docs/AI_EXAMINER_ENGINEERING_ROADMAP.md`
+- `docs/VERSION_PLAN.md`
+- `docs/architecture/V0_5_ADAPTIVE_COGNITIVE_ENGINE.md`
+- `docs/evaluation/V0_5_EVALUATION_PLAN.md`
 - `RELEASE_NOTES_v0.4.md`
 - `RELEASE_NOTES_v0.4.1.md`
 - `CHANGELOG.md`
