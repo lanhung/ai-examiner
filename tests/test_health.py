@@ -12,6 +12,8 @@ def test_blueprint_has_independent_model_selector(client):
 
     assert page.status_code == 200
     assert 'id="blueprintProfile"' in page.text
+    assert 'id="textProfile"' in page.text
     assert script.status_code == 200
     assert 'const profile = $("blueprintProfile").value;' in script.text
+    assert 'const profile = $("textProfile").value;' in script.text
     assert 'profiles[0] || "mock:heuristic-v2"' not in script.text

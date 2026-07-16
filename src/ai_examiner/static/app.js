@@ -137,13 +137,18 @@ async function loadEnvironment() {
     document.querySelectorAll("input[name='modelProfile']").forEach((node) => node.addEventListener("change", syncConsensus));
     syncConsensus();
     const readyProviders = providers.filter((provider) => provider.ready);
-    $("blueprintProfile").innerHTML = readyProviders.map((provider) =>
+    const readyProviderOptions = readyProviders.map((provider) =>
       `<option value="${escapeHtml(provider.id)}">${escapeHtml(provider.label)}</option>`
     ).join("");
-    const preferredBlueprintProvider = readyProviders.find((provider) => provider.provider === "ollama")
+    $("blueprintProfile").innerHTML = readyProviderOptions;
+    $("textProfile").innerHTML = readyProviderOptions;
+    const preferredProvider = readyProviders.find((provider) => provider.provider === "ollama")
       || readyProviders.find((provider) => provider.provider !== "mock")
       || readyProviders[0];
-    if (preferredBlueprintProvider) $("blueprintProfile").value = preferredBlueprintProvider.id;
+    if (preferredProvider) {
+      $("blueprintProfile").value = preferredProvider.id;
+      $("textProfile").value = preferredProvider.id;
+    }
     $("voiceProvider").innerHTML = voiceConfig.providers.map((provider) =>
       `<option value="${escapeHtml(provider.id)}" ${provider.ready ? "" : "disabled"}>${escapeHtml(provider.label)}${provider.ready ? "" : "（未配置）"}</option>`
     ).join("");
@@ -205,6 +210,9 @@ $("generateBlueprint").onclick = async () => {
       body: JSON.stringify({document_id: state.documentId, profile}),
     });
     state.blueprintId = blueprint.id;
+    if ([...$("textProfile").options].some((option) => option.value === profile)) {
+      $("textProfile").value = profile;
+    }
     $("startSession").disabled = false;
     const voiceProvider = selectedVoiceProvider();
     $("startVoice").disabled = !(voiceProvider && voiceProvider.ready);
@@ -288,11 +296,13 @@ $("runBenchmark").onclick = async () => {
 };
 
 $("startSession").onclick = async () => {
+  const profile = $("textProfile").value;
+  if (!profile) return window.alert("请选择已就绪的文本答辩模型");
   try {
     const session = await api("/api/sessions", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({project_id: state.projectId, blueprint_id: state.blueprintId, question_limit: 6, max_followups_per_question: 2}),
+      body: JSON.stringify({project_id: state.projectId, blueprint_id: state.blueprintId, profile, question_limit: 6, max_followups_per_question: 2}),
     });
     state.sessionId = session.id;
     const started = await api(`/api/sessions/${session.id}/start`, {method: "POST"});

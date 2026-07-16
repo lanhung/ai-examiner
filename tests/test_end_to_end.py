@@ -35,11 +35,13 @@ def test_complete_text_exam_flow(client):
         json={
             "project_id": project_id,
             "blueprint_id": blueprint["id"],
+            "profile": "mock:heuristic-v2",
             "question_limit": 2,
             "max_followups_per_question": 0,
         },
     )
     assert created.status_code == 201
+    assert created.json()["config"]["profile"] == "mock:heuristic-v2"
     session_id = created.json()["id"]
 
     started = client.post(f"/api/sessions/{session_id}/start")

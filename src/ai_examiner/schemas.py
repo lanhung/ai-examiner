@@ -12,6 +12,7 @@ class ProjectCreate(BaseModel):
 class SessionCreate(BaseModel):
     project_id: str
     blueprint_id: str
+    profile: str | None = None
     mode: str = "defense"
     difficulty: str = "adaptive"
     allow_hints: bool = True

@@ -496,7 +496,12 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
     blueprint = db.get(Blueprint, payload.blueprint_id)
     if not project or not blueprint or blueprint.project_id != project.id:
         raise HTTPException(404, "Project or blueprint not found")
+    profile = payload.profile or (
+        f"{settings.model_provider}:{settings.default_model_for(settings.model_provider)}"
+    )
+    _profiles([profile], profile)
     config = payload.model_dump(exclude={"project_id", "blueprint_id", "mode"})
+    config["profile"] = profile
     session = ExamSession(
         project_id=project.id,
         blueprint_id=blueprint.id,
@@ -516,7 +521,7 @@ def start_session(session_id: str, db: Annotated[Session, Depends(get_db)]):
     if not session:
         raise HTTPException(404, "Session not found")
     blueprint = db.get(Blueprint, session.blueprint_id)
-    provider = provider_or_503()
+    provider = provider_or_503(session.config.get("profile"))
     orchestrator = ExamOrchestrator(
         db, provider, project_id=session.project_id, session_id=session.id
     )
@@ -537,7 +542,7 @@ def submit_answer(
     if not session:
         raise HTTPException(404, "Session not found")
     blueprint = db.get(Blueprint, session.blueprint_id)
-    provider = provider_or_503()
+    provider = provider_or_503(session.config.get("profile"))
     orchestrator = ExamOrchestrator(
         db, provider, project_id=session.project_id, session_id=session.id
     )
