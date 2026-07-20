@@ -136,6 +136,23 @@ Requirements:
 - assessment uses transcript content, not accent, voice or personality inference;
 - text mode continues to work without voice services.
 
+Accepted implementation order after architecture review:
+
+```text
+normalized provider events and shadow state machine
+-> reliable user barge-in and recovery
+-> observe-only active interruption
+-> controlled low/normal rollout
+-> release hardening
+```
+
+Detailed specifications:
+
+- `docs/decisions/ADR-003-REALTIME-CONVERSATION-CONTROL.md`;
+- `docs/architecture/V0_6_ADVANCED_CONVERSATION_TIMING.md`;
+- `docs/evaluation/V0_6_VOICE_EVALUATION_PLAN.md`;
+- `docs/product/V0_6_IMPLEMENTATION_BACKLOG.md`.
+
 ## 6. v0.7.0: Long-term learner intelligence
 
 Objective: understand change across sessions without turning uncertain estimates into permanent labels.

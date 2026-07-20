@@ -10,6 +10,8 @@ This file is the authoritative version and branch status for Codex and other cod
 |---|---|---|---|---|
 | Stable | 0.4.1 | `main`, `v0.4.1` | Released | Production evaluation |
 | Development | 0.5.0rc4 | `develop/v0.5.0` | Feature frozen | Separate worktree only |
+| Release snapshot | 0.5.0rc4 | `release/v0.5.0`, `v0.5.0-rc.4` | Awaiting final acceptance | Staging evaluation |
+| Research | 0.6.0 | `research/v0.6.0` | Architecture and evaluation design | Not deployable |
 | Release candidate | 0.5.0rc4 | `v0.5.0-rc.4` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 
@@ -17,6 +19,13 @@ This file is the authoritative version and branch status for Codex and other cod
 
 - `main` must always be deployable with the documented Docker Compose commands.
 - `develop/v0.5.0` is the v0.5 integration branch.
+- `release/v0.5.0` is the immutable-source release snapshot while v0.5 final
+  acceptance is pending. Corrections require a new RC commit and tag.
+- `research/v0.6.0` contains design documents and experiments only. It must not be
+  deployed and must not change the package version.
+- After ADR-003 and the v0.6 evaluation plan are accepted, create
+  `develop/v0.6.0` from the accepted v0.5 release base and cherry-pick the approved
+  research documents.
 - Feature branches use `feature/v0.5-<short-name>` and branch from `develop/v0.5.0`.
 - Bug fixes for the stable release use `fix/v0.4-<short-name>` and merge into `main`; required fixes are then forward-merged into development.
 - Do not develop unreleased features in the production worktree.
@@ -103,3 +112,27 @@ docker compose up -d --build --remove-orphans
 ```
 
 Never use `docker compose down -v` during a normal update.
+
+## 9. v0.6 research gate
+
+Do not begin broad v0.6 implementation until all of the following are reviewed:
+
+- `docs/decisions/ADR-003-REALTIME-CONVERSATION-CONTROL.md`;
+- `docs/architecture/V0_6_ADVANCED_CONVERSATION_TIMING.md`;
+- `docs/evaluation/V0_6_VOICE_EVALUATION_PLAN.md`;
+- provider capability matrix for OpenAI and Qwen;
+- migration strategy for append-only conversation and interruption events;
+- feature-flag and rollback strategy.
+
+v0.6 implementation order is fixed:
+
+```text
+normalized events and shadow FSM
+-> user barge-in and recovery
+-> observe-only active interruption
+-> controlled low/normal rollout
+-> release hardening
+```
+
+No v0.6 tag is created during research. The first implementation version is
+`0.6.0.dev0`; release candidates begin only after all behavioral gates pass.
