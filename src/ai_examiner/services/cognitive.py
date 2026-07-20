@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from ..assessment import assessment_quality, correctness_value
 from ..models import (
     AdaptiveDecision,
     Blueprint,
@@ -33,14 +34,6 @@ IMPORTANCE_BY_TYPE = {
     "motivation": 0.70,
 }
 ASSISTANCE_PENALTY = {"direct": 0.0, "followup": 0.10, "hint": 0.20, "correction": 0.30}
-CORRECTNESS = {
-    "supported": 1.0,
-    "partially_supported": 0.65,
-    "unsupported": 0.25,
-    "insufficient": 0.10,
-}
-
-
 def utcnow() -> datetime:
     return datetime.now(UTC)
 
@@ -59,7 +52,7 @@ def misconception_code(value: str) -> str:
 
 
 class CognitiveStateService:
-    algorithm_version = "knowledge-state-v1"
+    algorithm_version = "knowledge-state-v2"
 
     def __init__(self, db: Session):
         self.db = db
@@ -272,13 +265,18 @@ class CognitiveStateService:
         self.ensure_blueprint_graph(blueprint)
         units, question_units = self.graph(blueprint.id)
         mappings = question_units.get(str(question.get("id")), [])
-        correctness = CORRECTNESS.get(str(analysis.get("correctness")), 0.10)
+        correctness = correctness_value(analysis.get("correctness"))
         coverage = clamp(float(analysis.get("coverage", 0.0)))
+        dimensions = evaluation.get("dimensions") or {}
         evidence_reasoning = clamp(
-            float((evaluation.get("dimensions") or {}).get("evidence_reasoning", 0.0)) / 5.0
+            (
+                float(dimensions.get("source_grounding", 0.0))
+                + float(dimensions.get("reasoning_quality", 0.0))
+            )
+            / 10.0
         )
         analyzer_confidence = clamp(float(analysis.get("confidence", 0.5)))
-        quality = 0.45 * correctness + 0.35 * coverage + 0.20 * evidence_reasoning
+        quality = assessment_quality(analysis)
         observation = clamp(quality - ASSISTANCE_PENALTY.get(assistance_level, 0.10))
         errors = [str(item).strip() for item in analysis.get("errors", []) if str(item).strip()]
         events: list[KnowledgeEvidenceEvent] = []

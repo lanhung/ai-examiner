@@ -300,7 +300,9 @@ class MockProvider(ModelProvider):
     @staticmethod
     def _answer_analyzer(payload: dict[str, Any]) -> dict[str, Any]:
         answer = str(payload.get("answer", "")).strip()
-        expected = payload.get("question", {}).get("expected_points", [])
+        question = payload.get("question", {})
+        expected = question.get("expected_points", [])
+        point_records = list(question.get("expected_point_records") or [])
         lower = answer.lower()
         weak = len(answer) < 35 or any(x in lower for x in ["不知道", "不清楚", "no idea"])
         evasive = any(x in lower for x in ["很重要的问题", "大量工作", "令人鼓舞"])
@@ -337,16 +339,42 @@ class MockProvider(ModelProvider):
             errors.append("回答信息不足，尚不能支持结论")
         if misconception:
             errors.append("把局部性能证据错误外推为普遍因果结论")
+        target = coverage * max(1, len(point_records))
+        full_points = int(target)
+        partial_point = target - full_points >= 0.25
+        point_assessments = []
+        for index, point in enumerate(point_records):
+            if misconception and index == 0:
+                status = "contradicted"
+            elif index < full_points:
+                status = "covered"
+            elif index == full_points and partial_point:
+                status = "partial"
+            else:
+                status = "missing"
+            point_assessments.append(
+                {
+                    "point_id": point.get("id", f"P{index + 1}"),
+                    "status": status,
+                    "answer_quote": answer[:180] if status in {"covered", "partial"} else "",
+                    "source_evidence_id": "mock-source" if evidence else "",
+                    "reason": "Deterministic mock point assessment.",
+                }
+            )
         return {
             "answered": not weak and not evasive,
             "correctness": correctness,
-            "coverage": round(coverage, 2),
             "claims": [answer[:180]] if answer else [],
             "errors": errors,
             "missing_points": expected[1:] if coverage < 0.65 else [],
-            "evidence_present": evidence,
+            "point_assessments": point_assessments,
+            "source_grounding": 0.9 if evidence else 0.2,
+            "reasoning_quality": 0.85 if evidence else 0.3,
+            "boundary_awareness": 0.75 if any(
+                term in lower for term in ["but", "limited", "however"]
+            ) else 0.4,
             "confidence": 0.68,
-            "followup_candidates": payload.get("question", {}).get("followups", []),
+            "followup_candidates": question.get("followups", []),
         }
 
     def complete_json(

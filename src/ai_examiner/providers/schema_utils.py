@@ -30,6 +30,10 @@ def hint_to_json_schema(value: Any) -> dict[str, Any]:
         return {"type": "integer"}
     if isinstance(value, float):
         return {"type": "number"}
+    if isinstance(value, str) and "|" in value:
+        choices = [item.strip() for item in value.split("|") if item.strip()]
+        if len(choices) > 1 and all(re.fullmatch(r"[a-zA-Z0-9_-]+", item) for item in choices):
+            return {"type": "string", "enum": choices}
     return {"type": "string"}
 
 
