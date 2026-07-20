@@ -114,6 +114,38 @@ def test_selector_prioritizes_important_active_misconception():
     assert result.candidate_scores[0]["question_id"] == "Q3"
 
 
+def test_selector_does_not_block_on_prerequisites_missing_from_blueprint():
+    selector = AdaptiveQuestionSelector()
+    questions = _blueprint_data()["questions"][:2]
+    units = {
+        "motivation": {
+            "id": "motivation",
+            "code": "ku_motivation",
+            "importance": 0.7,
+            "prerequisite_codes": [],
+        },
+        "evidence": {
+            "id": "evidence",
+            "code": "ku_evidence",
+            "importance": 0.95,
+            "prerequisite_codes": ["ku_not_in_this_blueprint"],
+        },
+    }
+    result = selector.select(
+        questions=questions,
+        question_units={
+            "Q1": [{"knowledge_unit_id": "motivation", "weight": 1.0}],
+            "Q2": [{"knowledge_unit_id": "evidence", "weight": 1.0}],
+        },
+        states={},
+        units=units,
+        asked_question_ids=["Q1"],
+        current_question_id="Q1",
+    )
+    assert result.question is not None
+    assert result.question["id"] == "Q2"
+
+
 def test_knowledge_state_events_are_idempotent_and_rebuildable():
     with SessionLocal() as db:
         project = Project(name="Adaptive state")

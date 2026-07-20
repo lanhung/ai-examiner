@@ -103,7 +103,8 @@ class AdaptiveQuestionSelector:
             unmet = [
                 code
                 for code in prerequisites
-                if states.get(code_to_id.get(code, ""), {}).get("mastery", 0.0) < 0.35
+                if code in code_to_id
+                and states.get(code_to_id[code], {}).get("mastery", 0.0) < 0.35
             ]
             if unmet:
                 continue

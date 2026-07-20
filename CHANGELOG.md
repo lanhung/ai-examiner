@@ -17,6 +17,15 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 - Start the v0.6 development line as `0.6.0.dev0` without changing active voice
   behavior.
+- Label the browser application consistently as the v0.6 development line.
+
+### Fixed
+
+- Evaluate follow-up answers against the active follow-up text instead of the
+  parent main question.
+- Continue adaptive sessions after the follow-up limit when remaining questions
+  reference prerequisites that are outside the current blueprint graph.
+- Isolate automated tests from real provider defaults in a developer `.env`.
 
 ## [0.5.0-rc.4] - 2026-07-16
 

@@ -146,13 +146,22 @@ class ExamOrchestrator:
         limit = self._question_limit(session, blueprint.data)
         index = session.current_question_index
         question = questions[index]
+        analysis_question = self._analysis_question(session, question)
         history = [
             {"role": t.role, "content": t.content, "question_id": t.question_id}
             for t in session.turns[-6:]
         ]
         session.state = "ANALYZING"
-        analysis = self.analyzer.analyze(question=question, answer=answer, history=history)
-        evaluation = self.evaluator.evaluate(question=question, answer=answer, analysis=analysis)
+        analysis = self.analyzer.analyze(
+            question=analysis_question, answer=answer, history=history
+        )
+        analysis["active_question_text"] = str(analysis_question.get("text", ""))
+        analysis["question_context"] = str(
+            analysis_question.get("question_context", "main")
+        )
+        evaluation = self.evaluator.evaluate(
+            question=analysis_question, answer=answer, analysis=analysis
+        )
         user_turn = Turn(
             session_id=session.id,
             role="user",
@@ -280,6 +289,29 @@ class ExamOrchestrator:
             "decision": decision,
             "completed": session.status == "completed",
         }
+
+    @staticmethod
+    def _analysis_question(session: ExamSession, question: dict[str, Any]) -> dict[str, Any]:
+        """Return the exact question the learner is currently answering."""
+        if session.current_question_attempts <= 0:
+            return question
+        for turn in reversed(session.turns):
+            if turn.role != "assistant":
+                continue
+            decision = (turn.analysis or {}).get("policy_decision", {})
+            followup = decision.get("followup")
+            if decision.get("action") == "ASK_FOLLOWUP" and followup:
+                return {
+                    **question,
+                    "text": str(followup),
+                    "expected_points": [],
+                    "followups": [],
+                    "question_context": "followup",
+                    "parent_question": question.get("text", ""),
+                    "parent_expected_points": list(question.get("expected_points") or []),
+                }
+            break
+        return question
 
     def finalize_voice_transcripts(
         self, session: ExamSession, blueprint: Blueprint

@@ -21,7 +21,9 @@ class AnswerAnalyzer(BaseAgent):
         data = self._json(
             """You analyze an examinee answer. Judge only against the question, expected points,
 and supplied source context. Do not reward verbosity. Identify unsupported claims, missing answer points,
-and whether evidence or reasoning is present. Do not invent facts. Return calibrated confidence.""",
+and whether evidence or reasoning is present. When question_context is followup, judge whether the answer
+directly addresses the follow-up text; the parent question is context only and must not replace the active
+question. Do not invent facts. Return calibrated confidence.""",
             {"question": question, "answer": answer, "recent_history": history[-4:]},
             schema,
         )

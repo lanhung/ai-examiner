@@ -4,6 +4,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 os.environ["MODEL_PROVIDER"] = "mock"
+os.environ["GOLDEN_DEFAULT_PROFILES"] = "mock:heuristic-v2"
+os.environ["BENCHMARK_DEFAULT_PROFILES"] = "mock:heuristic-v2"
+os.environ["VISUAL_DEFAULT_PROFILE"] = "mock:heuristic-v2"
 os.environ["OPENAI_API_KEY"] = "test-openai-key"
 os.environ["DASHSCOPE_API_KEY"] = "test-dashscope-key"
 os.environ["DATABASE_URL"] = "sqlite:///./data/test_ai_examiner.db"
