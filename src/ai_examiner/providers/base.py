@@ -13,6 +13,9 @@ class ProviderResult:
     model: str
     input_tokens: int = 0
     output_tokens: int = 0
+    latency_ms: int = 0
+    retry_count: int = 0
+    json_repair_used: bool = False
 
 
 class ModelProvider(ABC):

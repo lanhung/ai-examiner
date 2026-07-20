@@ -658,6 +658,7 @@ def get_report(session_id: str, db: Annotated[Session, Depends(get_db)]):
         turns=turns,
         mastery_state=session.mastery_state,
         knowledge_states=knowledge_states,
+        mode=session.mode,
     )
     report["session_status"] = session.status
     return report
@@ -794,11 +795,17 @@ def get_subject_learning_history(subject_id: str, db: Annotated[Session, Depends
 @app.get("/api/metrics")
 def metrics(db: Annotated[Session, Depends(get_db)]):
     events = db.scalars(select(UsageEvent).order_by(UsageEvent.created_at.desc()).limit(1000)).all()
+    latencies = sorted(event.latency_ms for event in events if event.latency_ms > 0)
+    p50 = latencies[(len(latencies) - 1) // 2] if latencies else None
+    p95 = latencies[min(len(latencies) - 1, int(len(latencies) * 0.95))] if latencies else None
     return {
         "calls": len(events),
         "input_tokens": sum(event.input_tokens for event in events),
         "output_tokens": sum(event.output_tokens for event in events),
         "estimated_cost_usd": round(sum(event.estimated_cost_usd for event in events), 6),
+        "latency_ms": {"samples": len(latencies), "p50": p50, "p95": p95},
+        "retries": sum(event.retry_count for event in events),
+        "json_repairs": sum(1 for event in events if event.json_repair_used),
         "by_agent": {
             agent: sum(1 for event in events if event.agent == agent)
             for agent in sorted({event.agent for event in events})
@@ -1232,13 +1239,36 @@ def cost_dashboard(
     by_model: dict[str, dict] = {}
     for event in events:
         key = f"{event.provider}:{event.model}"
-        item = by_model.setdefault(key, {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0})
+        item = by_model.setdefault(
+            key,
+            {
+                "calls": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost_usd": 0.0,
+                "latencies": [],
+                "retries": 0,
+                "json_repairs": 0,
+            },
+        )
         item["calls"] += 1
         item["input_tokens"] += event.input_tokens
         item["output_tokens"] += event.output_tokens
         item["cost_usd"] += event.estimated_cost_usd
+        if event.latency_ms > 0:
+            item["latencies"].append(event.latency_ms)
+        item["retries"] += event.retry_count
+        item["json_repairs"] += int(event.json_repair_used)
     for item in by_model.values():
         item["cost_usd"] = round(item["cost_usd"], 6)
+        latencies = sorted(item.pop("latencies"))
+        item["latency_ms"] = {
+            "samples": len(latencies),
+            "p50": latencies[(len(latencies) - 1) // 2] if latencies else None,
+            "p95": latencies[min(len(latencies) - 1, int(len(latencies) * 0.95))]
+            if latencies
+            else None,
+        }
     budget = settings.project_model_budget_usd if project_id else settings.daily_model_budget_usd
     return {
         "project_id": project_id,

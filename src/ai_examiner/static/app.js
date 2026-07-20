@@ -350,6 +350,7 @@ $("answerForm").onsubmit = async (event) => {
     $("answerInput").value = "";
     if (result.completed) {
       $("sessionState").textContent = "已完成";
+      $("answerHint").textContent = "答辩已完成，报告已经生成。";
       await showReport();
     } else {
       $("sendAnswer").disabled = false;
@@ -369,9 +370,12 @@ $("answerForm").onsubmit = async (event) => {
 
 async function showReport() {
   const report = await api(`/api/sessions/${state.sessionId}/report`);
+  const assessmentSummary = report.assessment_summary || {};
+  const trajectories = report.question_trajectories || [];
   $("reportPanel").classList.remove("hidden");
   $("reportContent").innerHTML = `
     <div class="score-card"><div class="score">${report.overall_score}<small>/5</small></div><div><strong>风险等级：${escapeHtml(report.risk_level)}</strong><p>已评估 ${report.questions_answered} 次回答</p></div></div>
+    <div class="report-block"><h3>回答轨迹</h3><p>独立回答均分 ${escapeHtml(assessmentSummary.independent_average ?? "—")} · 追问后均分 ${escapeHtml(assessmentSummary.assisted_average ?? "—")} · 平均提升 ${escapeHtml(assessmentSummary.average_learning_gain ?? "—")}</p><ul>${trajectories.map((item) => `<li><strong>${escapeHtml(item.question_id)}</strong>：${escapeHtml(item.independent_score)} → ${escapeHtml(item.final_assisted_score)}，追问 ${escapeHtml(item.followup_count)} 次，提升 ${escapeHtml(item.learning_gain)}</li>`).join("") || "<li>暂无回答轨迹</li>"}</ul></div>
     <div class="report-grid">
       <div class="report-block"><h3>优先薄弱点</h3><ul>${list(report.priority_weaknesses, "暂未识别明显薄弱点")}</ul></div>
       <div class="report-block"><h3>建议动作</h3><ul>${list(report.recommended_actions)}</ul></div>

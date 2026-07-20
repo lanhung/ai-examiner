@@ -69,6 +69,9 @@ class ExamOrchestrator:
                 estimated_cost_usd=estimate_cost(
                     result.provider, result.model, result.input_tokens, result.output_tokens
                 ),
+                latency_ms=result.latency_ms,
+                retry_count=result.retry_count,
+                json_repair_used=result.json_repair_used,
             )
         )
 

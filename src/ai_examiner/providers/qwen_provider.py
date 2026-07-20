@@ -97,7 +97,7 @@ class QwenProvider(ModelProvider):
         *,
         model: str,
         messages: list[dict[str, Any]],
-    ) -> tuple[dict[str, Any], int, int]:
+    ) -> tuple[dict[str, Any], int, int, int, bool]:
         content, input_tokens, output_tokens = self._chat(
             model=model,
             messages=messages,
@@ -105,7 +105,7 @@ class QwenProvider(ModelProvider):
             max_tokens=8000,
         )
         try:
-            return parse_json_object(content), input_tokens, output_tokens
+            return parse_json_object(content), input_tokens, output_tokens, 0, False
         except ValueError as first_error:
             retry_content, retry_input, retry_output = self._chat(
                 model=model,
@@ -129,7 +129,7 @@ class QwenProvider(ModelProvider):
                 raise ValueError(
                     f"DashScope Qwen returned malformed JSON after one retry: {retry_error}"
                 ) from first_error
-            return data, input_tokens + retry_input, output_tokens + retry_output
+            return data, input_tokens + retry_input, output_tokens + retry_output, 1, True
 
     def complete_json(
         self,
@@ -139,7 +139,8 @@ class QwenProvider(ModelProvider):
         payload: dict[str, Any],
         schema_hint: dict[str, Any],
     ) -> ProviderResult:
-        data, input_tokens, output_tokens = self._complete_json_messages(
+        data, input_tokens, output_tokens, retry_count, json_repair_used = (
+            self._complete_json_messages(
             model=self.model,
             messages=[
                 {"role": "system", "content": self._system(instructions, schema_hint)},
@@ -150,6 +151,7 @@ class QwenProvider(ModelProvider):
                     ),
                 },
             ],
+            )
         )
         return ProviderResult(
             data=data,
@@ -157,6 +159,8 @@ class QwenProvider(ModelProvider):
             model=self.model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            retry_count=retry_count,
+            json_repair_used=json_repair_used,
         )
 
     def complete_json_with_images(
@@ -186,12 +190,14 @@ class QwenProvider(ModelProvider):
                 }
             )
         model = self.image_model
-        data, input_tokens, output_tokens = self._complete_json_messages(
+        data, input_tokens, output_tokens, retry_count, json_repair_used = (
+            self._complete_json_messages(
             model=model,
             messages=[
                 {"role": "system", "content": self._system(instructions, schema_hint)},
                 {"role": "user", "content": content},
             ],
+            )
         )
         return ProviderResult(
             data=data,
@@ -199,6 +205,8 @@ class QwenProvider(ModelProvider):
             model=model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            retry_count=retry_count,
+            json_repair_used=json_repair_used,
         )
 
     def complete_text(

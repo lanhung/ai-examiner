@@ -73,3 +73,12 @@ def test_complete_text_exam_flow(client):
     assert report_data["questions_answered"] == 2
     assert 0 <= report_data["overall_score"] <= 5
     assert report_data["evidence"]
+    assert report_data["report_version"] == "assessment-report-v2"
+    assert report_data["questions_answered"] == 2
+    assert report_data["evaluated_turns"] == 2
+
+    metrics = client.get("/api/metrics").json()
+    assert metrics["latency_ms"]["samples"] >= 3
+    assert metrics["latency_ms"]["p50"] >= 1
+    costs = client.get(f"/api/costs?project_id={project_id}").json()
+    assert costs["by_model"]["mock:heuristic-v2"]["latency_ms"]["samples"] >= 3

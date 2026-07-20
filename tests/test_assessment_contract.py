@@ -8,6 +8,8 @@ import pytest
 from ai_examiner.agents.analyzer import AnswerAnalyzer
 from ai_examiner.agents.base import AgentContext
 from ai_examiner.agents.evaluator import Evaluator
+from ai_examiner.agents.planner import SessionPlanner
+from ai_examiner.agents.reporter import ReportGenerator
 from ai_examiner.assessment import Correctness, correctness_value, normalize_correctness
 from ai_examiner.providers.base import ModelProvider, ProviderResult
 from ai_examiner.providers.schema_utils import hint_to_json_schema
@@ -145,3 +147,96 @@ def test_invalid_label_fails_after_one_correction_attempt():
             history=[],
         )
     assert provider.calls == 2
+
+
+def test_report_aggregates_question_trajectories_not_attempts():
+    turns = [
+        {
+            "id": "T1",
+            "role": "user",
+            "question_id": "Q1",
+            "analysis": {"question_context": "main"},
+            "evaluation": {
+                "score": 2.0,
+                "question_type": "method",
+                "missing_points": ["Point B"],
+                "errors": [],
+                "supporting_quote": "Initial answer",
+                "confidence": 0.8,
+            },
+        },
+        {
+            "id": "T2",
+            "role": "user",
+            "question_id": "Q1",
+            "analysis": {"question_context": "followup"},
+            "evaluation": {
+                "score": 4.5,
+                "question_type": "method",
+                "missing_points": [],
+                "errors": [],
+                "supporting_quote": "Recovered answer",
+                "confidence": 0.9,
+            },
+        },
+        {
+            "id": "T3",
+            "role": "user",
+            "question_id": "Q2",
+            "analysis": {"question_context": "main"},
+            "evaluation": {
+                "score": 4.0,
+                "question_type": "evidence",
+                "missing_points": [],
+                "errors": [],
+                "supporting_quote": "Independent answer",
+                "confidence": 0.9,
+            },
+        },
+    ]
+    report = ReportGenerator().generate(
+        blueprint={
+            "title": "Test",
+            "questions": [
+                {"id": "Q1", "source_excerpt": "Source one"},
+                {"id": "Q2", "source_excerpt": "Source two"},
+            ],
+        },
+        turns=turns,
+        mastery_state={},
+        mode="defense",
+    )
+    assert report["questions_answered"] == 2
+    assert report["evaluated_turns"] == 3
+    assert report["overall_score"] == 3.0
+    assert report["assessment_summary"] == {
+        "independent_average": 3.0,
+        "assisted_average": 4.25,
+        "average_learning_gain": 1.25,
+    }
+    assert report["question_trajectories"][0]["learning_gain"] == 2.5
+    assert "Point B" not in report["priority_weaknesses"]
+
+
+def test_planner_retries_when_qwen_uses_wrong_language():
+    english = {
+        "title": "English title",
+        "summary": "English summary",
+        "core_contributions": [],
+        "assumptions": [],
+        "risks": [],
+        "questions": [{"id": "Q1", "text": "Why?", "expected_points": ["Reason"]}],
+    }
+    chinese = {
+        **english,
+        "title": "中文标题",
+        "summary": "中文摘要",
+        "questions": [{"id": "Q1", "text": "为什么？", "expected_points": ["说明原因"]}],
+    }
+    provider = RecordedAssessmentProvider([english, chinese])
+    result = SessionPlanner(AgentContext(provider=provider)).plan(
+        document_text="English source material.", filename="paper.md", language="zh-CN"
+    )
+    assert provider.calls == 2
+    assert result["title"] == "中文标题"
+    assert result["response_language"] == "zh-CN"
