@@ -4,6 +4,20 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ## [Unreleased]
 
+### Added
+
+- Add frozen provider-neutral realtime signal and capability schemas for v0.6.
+- Add deterministic OpenAI and Qwen event normalizers with provider-event
+  idempotency.
+- Add sanitized unknown-event signals instead of silently dropping new provider
+  events.
+- Add recorded OpenAI and Qwen event traces and replay contract tests.
+
+### Changed
+
+- Start the v0.6 development line as `0.6.0.dev0` without changing active voice
+  behavior.
+
 ## [0.5.0-rc.4] - 2026-07-16
 
 ### Added

@@ -1,0 +1,73 @@
+{
+  "provider": "openai",
+  "model": "gpt-realtime-2.1",
+  "voice_session_id": "voice-openai-replay",
+  "events": [
+    {
+      "at_ms": 0,
+      "event": {"event_id": "oa-001", "type": "session.created", "session": {"id": "sess-1"}}
+    },
+    {
+      "at_ms": 100,
+      "event": {"event_id": "oa-002", "type": "input_audio_buffer.speech_started", "audio_start_ms": 80}
+    },
+    {
+      "at_ms": 900,
+      "event": {"event_id": "oa-003", "type": "conversation.item.input_audio_transcription.delta", "item_id": "user-1", "delta": "The method"}
+    },
+    {
+      "at_ms": 1400,
+      "event": {"event_id": "oa-004", "type": "input_audio_buffer.speech_stopped", "audio_end_ms": 1380}
+    },
+    {
+      "at_ms": 1510,
+      "event": {"event_id": "oa-005", "type": "conversation.item.input_audio_transcription.completed", "item_id": "user-1", "transcript": "The method needs stronger evidence."}
+    },
+    {
+      "at_ms": 1600,
+      "event": {"event_id": "oa-006", "type": "response.created", "response": {"id": "resp-1", "status": "in_progress"}}
+    },
+    {
+      "at_ms": 1700,
+      "event": {"event_id": "oa-007", "type": "response.output_audio.delta", "response_id": "resp-1", "item_id": "assistant-1", "delta": "AAEC"}
+    },
+    {
+      "at_ms": 1710,
+      "event": {"event_id": "oa-008", "type": "response.output_audio.delta", "response_id": "resp-1", "item_id": "assistant-1", "delta": "AwQF"}
+    },
+    {
+      "at_ms": 1730,
+      "event": {"event_id": "oa-009", "type": "response.output_audio_transcript.delta", "response_id": "resp-1", "item_id": "assistant-1", "delta": "Which evidence"}
+    },
+    {
+      "at_ms": 2250,
+      "event": {"event_id": "oa-010", "type": "response.output_audio_transcript.done", "response_id": "resp-1", "item_id": "assistant-1", "transcript": "Which evidence would most directly test that claim?"}
+    },
+    {
+      "at_ms": 2300,
+      "event": {"event_id": "oa-011", "type": "response.output_audio.done", "response_id": "resp-1", "item_id": "assistant-1"}
+    },
+    {
+      "at_ms": 2320,
+      "event": {"event_id": "oa-012", "type": "response.done", "response": {"id": "resp-1", "status": "completed"}}
+    },
+    {
+      "at_ms": 2400,
+      "event": {"event_id": "oa-013", "type": "rate_limits.updated", "rate_limits": []}
+    }
+  ],
+  "expected_signal_types": [
+    "connection_ready",
+    "speech_started",
+    "transcript_partial",
+    "speech_stopped",
+    "transcript_final",
+    "response_started",
+    "audio_started",
+    "transcript_partial",
+    "transcript_final",
+    "audio_completed",
+    "response_completed",
+    "unknown"
+  ]
+}

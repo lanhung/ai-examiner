@@ -1,0 +1,64 @@
+{
+  "provider": "qwen",
+  "model": "qwen3-omni-flash-realtime",
+  "voice_session_id": "voice-qwen-replay",
+  "events": [
+    {
+      "at_ms": 0,
+      "event": {"event_id": "qw-001", "type": "session.created", "session": {"id": "sess-q1"}}
+    },
+    {
+      "at_ms": 120,
+      "event": {"event_id": "qw-002", "type": "input_audio_buffer.speech_started", "audio_start_ms": 100}
+    },
+    {
+      "at_ms": 700,
+      "event": {"event_id": "qw-003", "type": "conversation.item.input_audio_transcription.delta", "item_id": "user-q1", "text": "这个结论", "stash": "需要证据"}
+    },
+    {
+      "at_ms": 1150,
+      "event": {"event_id": "qw-004", "type": "input_audio_buffer.speech_stopped", "audio_end_ms": 1120}
+    },
+    {
+      "at_ms": 1220,
+      "event": {"event_id": "qw-005", "type": "conversation.item.input_audio_transcription.completed", "item_id": "user-q1", "transcript": "这个结论需要更多证据。"}
+    },
+    {
+      "at_ms": 1300,
+      "event": {"event_id": "qw-006", "type": "response.created", "response": {"id": "resp-q1", "status": "in_progress"}}
+    },
+    {
+      "at_ms": 1410,
+      "event": {"event_id": "qw-007", "type": "response.audio.delta", "response_id": "resp-q1", "item_id": "assistant-q1", "delta": "AAEC"}
+    },
+    {
+      "at_ms": 1440,
+      "event": {"event_id": "qw-008", "type": "response.audio_transcript.delta", "response_id": "resp-q1", "item_id": "assistant-q1", "delta": "请说明"}
+    },
+    {
+      "at_ms": 1600,
+      "event": {"event_id": "qw-009", "type": "response.audio_transcript.done", "response_id": "resp-q1", "item_id": "assistant-q1", "transcript": "请说明最需要补充的实验。"}
+    },
+    {
+      "at_ms": 1650,
+      "event": {"event_id": "qw-010", "type": "response.done", "response": {"id": "resp-q1", "status": "cancelled", "status_details": {"type": "cancelled", "reason": "turn_detected"}}}
+    },
+    {
+      "at_ms": 1700,
+      "event": {"event_id": "qw-011", "type": "error", "error": {"code": "test_error", "message": "Synthetic provider error"}}
+    }
+  ],
+  "expected_signal_types": [
+    "connection_ready",
+    "speech_started",
+    "transcript_partial",
+    "speech_stopped",
+    "transcript_final",
+    "response_started",
+    "audio_started",
+    "transcript_partial",
+    "transcript_final",
+    "response_cancelled",
+    "provider_error"
+  ]
+}

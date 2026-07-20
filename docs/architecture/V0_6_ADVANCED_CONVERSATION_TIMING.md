@@ -153,6 +153,7 @@ idempotent.
   "provider_event_id": "event-id",
   "response_id": null,
   "item_id": null,
+  "role": "user",
   "occurred_at_ms": 0,
   "audio_offset_ms": null,
   "text": null,
@@ -179,7 +180,12 @@ playback_stopped
 provider_error
 connection_lost
 connection_restored
+unknown
 ```
+
+`unknown` preserves the event type and a size-limited, secret-filtered metadata
+preview so provider changes are auditable without copying audio or instructions
+into logs.
 
 ### 5.2 RealtimeProviderAdapter
 
