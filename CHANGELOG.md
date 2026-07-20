@@ -12,12 +12,22 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 - Add sanitized unknown-event signals instead of silently dropping new provider
   events.
 - Add recorded OpenAI and Qwen event traces and replay contract tests.
+- Add a provider-neutral assessment contract with correctness aliases, strict
+  unknown-label rejection and point-level expected-answer decisions.
+- Add assessment report v2 with independent, assisted and learning-gain
+  trajectories per main question.
+- Add persisted provider latency, retry and JSON-repair telemetry with p50/p95
+  metrics and a reversible Alembic migration.
 
 ### Changed
 
 - Start the v0.6 development line as `0.6.0.dev0` without changing active voice
   behavior.
 - Label the browser application consistently as the v0.6 development line.
+- Compute answer coverage deterministically from point assessments and score
+  correctness, grounding, reasoning and boundary awareness separately.
+- Use independent main-question performance for defense-mode totals while
+  preserving assisted performance as a separate diagnostic signal.
 
 ### Fixed
 
@@ -26,6 +36,12 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 - Continue adaptive sessions after the follow-up limit when remaining questions
   reference prerequisites that are outside the current blueprint graph.
 - Isolate automated tests from real provider defaults in a developer `.env`.
+- Normalize real Qwen labels such as `correct` and `partially_correct` instead of
+  silently under-scoring them as unknown values.
+- Enforce configured output language for generated blueprints with one bounded
+  correction attempt.
+- Clear the active-analysis hint after completion and version the browser script
+  URL so deployments do not retain stale report rendering code.
 
 ## [0.5.0-rc.4] - 2026-07-16
 

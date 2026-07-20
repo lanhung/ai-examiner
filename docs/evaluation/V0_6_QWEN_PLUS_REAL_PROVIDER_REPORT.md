@@ -703,3 +703,101 @@ of the final report for real Qwen sessions. WP-Q1 is a blocking fix.
 After WP-Q1, the same browser run should be repeated before broader v0.6 voice implementation is
 used as evidence of assessment quality. Voice work may continue at the media/FSM layer, but no
 release claim about cognitive accuracy should rely on the affected scoring pipeline.
+
+## 10. Implementation and verification update
+
+Date: 2026-07-20
+
+Branch: `feature/v0.6-qwen-assessment-calibration`
+
+Application version: `0.6.0.dev0`
+
+The blocking assessment contract and the associated report and observability work packages have
+now been implemented:
+
+- one shared correctness enum and alias normalizer is used by Analyzer, Evaluator and Cognitive
+  State;
+- known Qwen labels such as `correct` normalize to `supported` while the raw label remains
+  auditable;
+- unknown labels receive one bounded correction attempt and then fail closed;
+- compact schema pipe values become real JSON Schema enums;
+- Analyzer v2 evaluates every required point and the application computes coverage;
+- assessment dimensions now separate correctness, point coverage, source grounding, reasoning
+  quality and boundary awareness;
+- report v2 groups all attempts under the main question and separates independent from assisted
+  performance;
+- resolved gaps do not remain in priority weaknesses for that trajectory;
+- normal provider calls persist latency, retry count and JSON repair metadata;
+- Chinese blueprint output is enforced with one bounded language correction attempt;
+- the completed-state hint and static JavaScript cache key are updated.
+
+### 10.1 Automated and migration verification
+
+```text
+pytest: 46 passed
+ruff: passed
+JavaScript syntax: passed
+git diff check: passed
+```
+
+A copy of the existing SQLite development database was migrated through:
+
+```text
+20260716_0001
+-> 20260720_0002
+-> 20260716_0001
+-> 20260720_0002
+```
+
+Upgrade, downgrade and re-upgrade all completed successfully. The source database was not modified
+by the rehearsal.
+
+### 10.2 Real Qwen Plus browser regression
+
+The post-fix browser run used `qwen:qwen-plus` for blueprint generation and all answer analysis.
+Mock was not selected for either path.
+
+| Metric | Result |
+|---|---:|
+| Main questions | 6 |
+| Follow-up turns | 4 |
+| Evaluated turns | 10 |
+| Excellent first answer | 5.0 / 5 |
+| Independent average | 3.53 / 5 |
+| Final assisted average | 4.97 / 5 |
+| Average learning gain | 1.43 |
+| Overall defense score | 3.53 / 5 |
+| Provider calls | 11 |
+| Input tokens | 17,235 |
+| Output tokens | 10,012 |
+| Estimated cost | USD 0.004696 |
+| Provider latency p50 | 13,475 ms |
+| Provider latency p95 | 50,372 ms |
+| JSON repair retries | 0 |
+
+The original 3.4 score ceiling is removed: a detailed answer that the provider classified with its
+`correct` alias received `5.0/5`. A deliberately incomplete response received `0.6/5`, its targeted
+follow-up received `5.0/5`, and report v2 preserved both values as a `4.4` learning gain while the
+defense total retained the independent `0.6` score.
+
+The generated blueprint contained seven Chinese questions for a `zh-CN` project. The browser
+completed the session and generated an evidence-linked report. Persisted telemetry showed no
+provider fallback, retry or JSON repair in this run.
+
+### 10.3 Updated release decision
+
+WP-Q1, WP-Q2, WP-Q3, the core WP-Q4 instrumentation and the language/completion portion of WP-Q5
+are complete. The P0 scoring-contract blocker is closed.
+
+The development line is still **not a v0.6 release candidate**. Remaining release work is now:
+
+1. freeze and adjudicate the 80-case calibration set, including misconceptions and evasive
+   responses;
+2. reduce Analyzer p50/p95 latency toward the documented 5/10 second text targets;
+3. expose latency in the browser cost panel and split planner from analyzer percentiles;
+4. add a browser retry action for report retrieval failure;
+5. run the full v0.5 regression and v0.6 realtime voice behavioral gates.
+
+The next optimization should address latency and frozen behavioral calibration rather than change
+the visible score thresholds. The revised weights remain a candidate policy until the frozen set
+and an independent judge confirm them.

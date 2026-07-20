@@ -7,6 +7,7 @@ htmlcov/
 .env
 data/*.db
 data/*.db-*
+data/*.log
 data/test_*/
 data/uploads/*
 !data/uploads/.gitkeep

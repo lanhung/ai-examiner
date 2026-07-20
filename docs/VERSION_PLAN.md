@@ -12,7 +12,7 @@ This file is the authoritative version and branch status for Codex and other cod
 | Development | 0.5.0rc4 | `develop/v0.5.0` | Feature frozen | Separate worktree only |
 | Release snapshot | 0.5.0rc4 | `release/v0.5.0`, `v0.5.0-rc.4` | Awaiting final acceptance | Staging evaluation |
 | Research | 0.6.0 | `research/v0.6.0` | Architecture and evaluation design | Not deployable |
-| Next development | 0.6.0.dev0 | `develop/v0.6.0` | WP-01 complete; browser regression fixes verified | Local evaluation only |
+| Next development | 0.6.0.dev0 | `develop/v0.6.0` | Assessment stabilization complete; real Qwen regression verified | Local evaluation only |
 | Release candidate | 0.5.0rc4 | `v0.5.0-rc.4` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 
