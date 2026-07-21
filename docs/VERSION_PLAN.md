@@ -14,8 +14,8 @@ This file is the authoritative version and branch status for Codex and other cod
 | Research | 0.6.0 | `research/v0.6.0` | Architecture and evaluation design | Not deployable |
 | Next development | 0.6.0.dev0 | `develop/v0.6.0` | Assessment stabilization complete; real Qwen regression verified | Local evaluation only |
 | Next research | 0.7.0 | `research/v0.7.0` | Long-term learner intelligence architecture and evaluation design | Not deployable |
-| Next implementation | 0.7.0rc1 | `develop/v0.7.0` | WP-01 to WP-12 feature complete; release-candidate verification | Staging only |
-| v0.7 candidate | 0.7.0rc1 | `v0.7.0-rc.1` | Created only after Compose smoke and secret scan | Staging only |
+| Next implementation | 0.7.0rc1 | `develop/v0.7.0` | WP-01 to WP-12 complete; real Qwen and browser acceptance passed | Staging only |
+| v0.7 candidate | 0.7.0rc1 | `v0.7.0-rc.1` | Candidate release; Vultr Compose promotion gate remains | Staging only |
 | Release candidate | 0.5.0rc4 | `v0.5.0-rc.4` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 

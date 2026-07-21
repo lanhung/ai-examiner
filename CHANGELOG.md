@@ -36,6 +36,8 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ### Changed
 
+- Complete the v0.7 release hardening pass with dynamic API `no-store` headers,
+  versioned browser assets and a real `qwen-plus` adaptive-session acceptance run.
 - Start the v0.6 development line as `0.6.0.dev0` without changing active voice
   behavior.
 - Label the browser application consistently as the v0.6 development line.

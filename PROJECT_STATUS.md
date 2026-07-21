@@ -1,95 +1,90 @@
-# AI Examiner v0.7.0 Development Project Status
+# AI Examiner v0.7.0 Release Candidate Status
 
-## Current development status
+## Current state
 
 - Version: `0.7.0rc1`
 - Branch: `develop/v0.7.0`
-- Work package: `WP-01 to WP-12 feature complete`
-- Deployment: staging release-candidate verification only; stable line unchanged
-- Release tag: `v0.7.0-rc.1` after Compose smoke and secret scan
+- Candidate tag: `v0.7.0-rc.1`
+- Work packages: `WP-01` through `WP-12` complete
+- Alembic head: `20260721_0005`
+- Stable production line: unchanged
 
-This candidate completes the optional long-term intelligence lifecycle: opaque
+v0.7 completes the optional long-term learner intelligence lifecycle: opaque
 identity, reviewed concepts, replayable retention, user-started retests, confirmed
 preferences, memory center, correction, export, deletion, offline evaluation and
-PostgreSQL readiness. It does not change the OpenAI or Qwen media path when memory
-is disabled. Automatic retest injection remains disabled.
+PostgreSQL readiness. Memory remains opt-in and does not alter text or realtime
+examination behavior while disabled.
 
-## v0.7 increment verification
-
-```text
-WP-01 to WP-05 memory/state/shadow planning      implemented
-WP-06 user-controlled retest lifecycle           implemented
-WP-07 confirmed preference registry              implemented
-WP-08 responsive memory center                   implemented
-WP-09 correction/export/scoped deletion          implemented
-WP-10 deterministic longitudinal evaluation     implemented
-WP-11 PostgreSQL readiness and CI                implemented
-WP-12 release hardening                          verification in progress
-Alembic head                                     20260721_0005
-Automatic retest injection                       disabled
-Concept mapping auto-activation                  held
-```
-
-## 发布状态
-
-- 版本：`0.5.0rc4`
-- 分支：`develop/v0.5.0`
-- 候选标签：`v0.5.0-rc.4`
-- 稳定生产版本：`v0.4.1`
-- 阶段：Adaptive Cognitive Engine feature freeze / staging validation
-
-RC4 不会自动替换生产 `main`。通过真实材料、迁移备份和人工抽样验收后，才合并并发布 `v0.5.0`。
-
-## 已完成
-
-- 6 张认知引擎数据表及 4 个兼容会话字段；
-- Alembic 全新建库、v0.4.1 升级、降级和再次升级；
-- Knowledge Unit 与 Question Mapping；
-- append-only Knowledge Evidence Event；
-- 掌握度、置信度、误区状态、辅助惩罚和确定性重建；
-- 匿名 Learner Subject 与跨会话知识点聚合；
-- Difficulty Controller 与 Adaptive Question Selector；
-- 已问题目排除、历史题目新颖度、前置知识和确定性排序；
-- 每次决策保存候选分、原因、权重和策略版本；
-- `fixed` 模式完整兼容；
-- Knowledge Map、Weakness Map、Improvement Path 和原始证据；
-- 固定顺序与自适应策略成对基准 API；
-- 自适应语音最终转录进入统一认知更新管线；
-- 更新脚本先在线构建，再短暂停服迁移与切换。
-- DashScope `qwen-plus` 云端文本 Provider；
-- DashScope `qwen3-vl-plus` 页面、图表、表格和公式视觉 Provider；
-- 文本、视觉与 Realtime 语音三条千问链路共用服务端密钥；
-- 独立视觉模型选择器和实际视觉模型审计记录。
-
-## 验证结果
+## Delivered capabilities
 
 ```text
-pytest                         29 passed
-coverage                       87%
-adaptive selector coverage     95%
-cognitive service coverage     93%
-policy benchmark coverage      98%
-ruff                           passed
-JavaScript syntax              passed
-git diff --check               passed
-v0.4 -> v0.5 migration         passed
-v0.5 -> base downgrade         passed
-base -> v0.5 re-upgrade        passed
+WP-01  memory policy and opaque identity              complete
+WP-02  reviewed canonical concept mapping             complete
+WP-03  evidence-bound longitudinal event ledger       complete
+WP-04  retention baselines and growth state           complete
+WP-05  recommendation-only shadow retest planner      complete
+WP-06  user-controlled retest lifecycle               complete
+WP-07  confirmed preference registry                  complete
+WP-08  responsive memory center                       complete
+WP-09  correction, export and scoped deletion         complete
+WP-10  deterministic longitudinal evaluation          complete
+WP-11  PostgreSQL readiness and CI                    complete
+WP-12  release hardening                              complete
 ```
 
-Dockerfile 和 Compose 已更新。RC4 需要在远程 staging 使用真实 DashScope 配置完成一页视觉审查，再进入最终 v0.5.0 验收。
+The 300-pair concept-mapping activation gate remains held. Automatic retest
+injection remains disabled. These held gates do not block this candidate because
+neither behavior is active.
 
-## RC 限制
+## Verification
 
-- 实时语音中的提问仍由 Realtime 会话执行；RC4 在会后用最终转录形成权威认知状态。实时逐轮策略接管属于 v0.6。
-- 内置策略基准是确定性合成评测，不替代 5 篇以上冻结 Golden Dataset 与人工盲评。
-- SQLite 适合单机评估；多用户并发仍计划迁移 PostgreSQL。
-- Learner Subject 在 RC4 中使用匿名外部键，不是正式账户系统。
+```text
+pytest                                      57 passed
+ruff                                        passed
+JavaScript syntax                           passed
+git diff --check                            passed
+SQLite upgrade -> downgrade -> re-upgrade   passed
+PostgreSQL migration/domain CI              configured
+Browser initialization                      passed
+Dynamic API cache control                    no-store
+Provider badge                              qwen / qwen-plus / 0.7.0rc1
+Text model selector                         ready
+Visual model selector                       qwen3-vl-plus ready
+Memory center                               rendered and responsive
+```
 
-## 最终 v0.5.0 发布前
+## Real-model acceptance
 
-1. 在 staging 从 v0.4.1 数据副本升级并启动 Docker Compose；
-2. 使用至少 5 篇冻结数据集运行 fixed/adaptive 成对评测；
-3. 抽样检查至少 20 个自适应决策；
-4. 验证备份、恢复和固定策略回退；
-5. 修复 RC 问题后合并 `main` 并创建不可变 `v0.5.0` 标签。
+A non-Mock acceptance flow used `qwen:qwen-plus` through the running application:
+
+```text
+create project
+-> upload 4,276-character Markdown material
+-> generate seven-question blueprint with qwen-plus
+-> create adaptive session
+-> start first question
+-> submit answer
+-> analyze answer
+-> choose GIVE_HINT for an insufficient answer
+```
+
+The recorded blueprint provider and model were `qwen` and `qwen-plus`. No API key
+is stored in source control or release artifacts.
+
+## Deployment verification
+
+The candidate is running on the evaluation host at port `8016` from an isolated
+Python 3.12 virtual environment. The host health endpoint reports
+`0.7.0rc1`, `qwen-plus` and `provider_ready=true`.
+
+The SeetaCloud evaluation host does not permit nested Docker image construction
+(`unshare: operation not permitted`). Compose configuration is retained for a
+normal Vultr host, but a full Docker build must be repeated on that target before
+promoting this candidate to the stable production line.
+
+## Release posture
+
+- The candidate is suitable for staging and user acceptance testing.
+- Do not merge it to `main` or create final tag `v0.7.0` until Vultr Compose,
+  backup/restore and a small frozen-corpus longitudinal review pass.
+- Tags are immutable. Candidate corrections use `v0.7.0-rc.2` or later.

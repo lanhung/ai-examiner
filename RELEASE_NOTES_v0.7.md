@@ -37,3 +37,6 @@ deployment.
 - Offline fixtures prove determinism and regression safety, not population validity.
 - SQLite remains the supported single-server default; PostgreSQL is CI-ready but
   live data migration is a separate operation.
+- The release candidate passed a real `qwen-plus` blueprint and adaptive-answer
+  smoke test. A full Docker Compose build remains required on a standard Vultr
+  host because the SeetaCloud evaluation container blocks nested image builds.
