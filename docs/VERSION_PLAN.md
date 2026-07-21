@@ -13,6 +13,7 @@ This file is the authoritative version and branch status for Codex and other cod
 | Release snapshot | 0.5.0rc4 | `release/v0.5.0`, `v0.5.0-rc.4` | Awaiting final acceptance | Staging evaluation |
 | Research | 0.6.0 | `research/v0.6.0` | Architecture and evaluation design | Not deployable |
 | Next development | 0.6.0.dev0 | `develop/v0.6.0` | Assessment stabilization complete; real Qwen regression verified | Local evaluation only |
+| Next research | 0.7.0 | `research/v0.7.0` | Long-term learner intelligence architecture and evaluation design | Not deployable |
 | Release candidate | 0.5.0rc4 | `v0.5.0-rc.4` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 
@@ -29,6 +30,12 @@ This file is the authoritative version and branch status for Codex and other cod
   documents.
 - v0.6 feature branches use `feature/v0.6-<short-name>` and branch from
   `develop/v0.6.0`.
+- `research/v0.7.0` contains design documents and disposable experiments only. It
+  must not be deployed and must not change the package version.
+- Create `develop/v0.7.0` only after ADR-004, the v0.7 architecture and evaluation
+  plan are accepted. Base it on the accepted v0.6 integration or release commit.
+- v0.7 feature branches use `feature/v0.7-<short-name>` and branch from
+  `develop/v0.7.0`.
 - Feature branches use `feature/v0.5-<short-name>` and branch from `develop/v0.5.0`.
 - Bug fixes for the stable release use `fix/v0.4-<short-name>` and merge into `main`; required fixes are then forward-merged into development.
 - Do not develop unreleased features in the production worktree.
@@ -139,3 +146,33 @@ normalized events and shadow FSM
 
 No v0.6 tag is created during research. The first implementation version is
 `0.6.0.dev0`; release candidates begin only after all behavioral gates pass.
+
+## 10. v0.7 research gate
+
+Do not begin broad v0.7 implementation until all of the following are reviewed:
+
+- `docs/decisions/ADR-004-LONG-TERM-LEARNER-MEMORY.md`;
+- `docs/architecture/V0_7_LONG_TERM_LEARNER_INTELLIGENCE.md`;
+- `docs/api/V0_7_LONG_TERM_MEMORY_API.md`;
+- `docs/evaluation/V0_7_LONG_TERM_MEMORY_EVALUATION_PLAN.md`;
+- `docs/product/V0_7_IMPLEMENTATION_BACKLOG.md`;
+- concept identity and cross-project mapping policy;
+- export, correction and deletion semantics;
+- feature flags for shadow retention and retest planning.
+
+v0.7 implementation order is fixed:
+
+```text
+memory policy and opaque identity
+-> canonical concept mapping in shadow mode
+-> longitudinal event ledger and replay
+-> retention baselines and growth state
+-> retest planner in shadow mode
+-> user-confirmed preferences
+-> memory center, export and deletion
+-> longitudinal evaluation and release hardening
+```
+
+No v0.7 tag is created during research. The research branch remains on the v0.6
+package version. The first implementation branch uses `0.7.0.dev0` only after the
+research gate is accepted.

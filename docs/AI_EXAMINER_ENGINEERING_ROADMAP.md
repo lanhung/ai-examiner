@@ -2,7 +2,7 @@
 
 Document version: 2.0  
 Audience: Codex and other coding agents  
-Current development target: v0.5.0
+Current development target: v0.6.0 implementation and v0.7.0 research
 
 ## 0. How to use this document
 
@@ -168,6 +168,26 @@ Planned capabilities:
 - PostgreSQL migration preparation or completion.
 
 Long-term memory must store useful evidence and preferences, not unrestricted summaries of everything the user says.
+
+Accepted research direction:
+
+- preserve append-only assessment evidence as the source of observed performance;
+- introduce an optional opaque cross-project identity without pulling full account
+  and organization scope into v0.7;
+- map project knowledge units to versioned canonical concepts conservatively;
+- keep observed mastery separate from predicted retention;
+- run retention and retest decisions in shadow mode before active use;
+- persist only explicit or user-confirmed preferences from an allowed registry;
+- provide memory inspection, correction, export, disable and deletion;
+- keep calculations deterministic, versioned and rebuildable.
+
+Detailed research specifications:
+
+- `docs/decisions/ADR-004-LONG-TERM-LEARNER-MEMORY.md`;
+- `docs/architecture/V0_7_LONG_TERM_LEARNER_INTELLIGENCE.md`;
+- `docs/api/V0_7_LONG_TERM_MEMORY_API.md`;
+- `docs/evaluation/V0_7_LONG_TERM_MEMORY_EVALUATION_PLAN.md`;
+- `docs/product/V0_7_IMPLEMENTATION_BACKLOG.md`.
 
 ## 7. v0.8.0: Industry template platform
 
