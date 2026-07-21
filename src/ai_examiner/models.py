@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -352,6 +353,132 @@ class LearnerSubject(Base):
     display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class LearnerIdentity(Base):
+    __tablename__ = "learner_identities"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    opaque_key_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    memory_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    memory_scope: Mapped[str] = mapped_column(String(30), default="project_only")
+    preference_inference_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    retest_planning_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    retention_days: Mapped[int] = mapped_column(Integer, default=365)
+    policy_version: Mapped[str] = mapped_column(String(50), default="memory-policy-v1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    disabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class LearnerIdentityLink(Base):
+    __tablename__ = "learner_identity_links"
+    __table_args__ = (
+        UniqueConstraint("learner_subject_id", name="uq_identity_link_subject"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learner_identity_id: Mapped[str] = mapped_column(
+        ForeignKey("learner_identities.id", ondelete="CASCADE")
+    )
+    learner_subject_id: Mapped[str] = mapped_column(
+        ForeignKey("learner_subjects.id", ondelete="CASCADE")
+    )
+    status: Mapped[str] = mapped_column(String(30), default="confirmed")
+    provenance: Mapped[str] = mapped_column(String(30), default="explicit")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class Concept(Base):
+    __tablename__ = "concepts"
+    __table_args__ = (
+        UniqueConstraint("namespace", "canonical_key", name="uq_concept_namespace_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    namespace: Mapped[str] = mapped_column(String(100))
+    canonical_key: Mapped[str] = mapped_column(String(160))
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    language: Mapped[str] = mapped_column(String(20), default="zh-CN")
+    status: Mapped[str] = mapped_column(String(30), default="active")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KnowledgeUnitConceptMap(Base):
+    __tablename__ = "knowledge_unit_concept_maps"
+    __table_args__ = (
+        UniqueConstraint(
+            "knowledge_unit_id", "concept_id", name="uq_knowledge_unit_concept_map"
+        ),
+        Index("ix_concept_map_status", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    knowledge_unit_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_units.id", ondelete="CASCADE")
+    )
+    concept_id: Mapped[str] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE")
+    )
+    relation: Mapped[str] = mapped_column(String(30), default="exact")
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    status: Mapped[str] = mapped_column(String(30), default="proposed")
+    source: Mapped[str] = mapped_column(String(30), default="model")
+    evidence_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    model_profile: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class LearnerMemoryEvent(Base):
+    __tablename__ = "learner_memory_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_evidence_event_id",
+            "concept_id",
+            "event_type",
+            name="uq_memory_source_concept_type",
+        ),
+        Index("ix_memory_identity_time", "learner_identity_id", "occurred_at"),
+        Index("ix_memory_subject_time", "learner_subject_id", "occurred_at"),
+        Index("ix_memory_concept_time", "concept_id", "occurred_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learner_identity_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learner_identities.id", ondelete="CASCADE"), nullable=True
+    )
+    learner_subject_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learner_subjects.id", ondelete="CASCADE"), nullable=True
+    )
+    concept_id: Mapped[str | None] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE"), nullable=True
+    )
+    source_evidence_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("knowledge_evidence_events.id", ondelete="CASCADE"), nullable=True
+    )
+    event_type: Mapped[str] = mapped_column(String(40))
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    policy_version: Mapped[str] = mapped_column(String(50), default="memory-policy-v1")
+    algorithm_version: Mapped[str] = mapped_column(String(50), default="memory-ledger-v1")
+    supersedes_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learner_memory_events.id", ondelete="SET NULL"), nullable=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class KnowledgeState(Base):

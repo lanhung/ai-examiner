@@ -1,5 +1,29 @@
 # v0.3 API Reference
 
+## v0.7 long-term learner memory foundation
+
+The optional v0.7 development API adds:
+
+```text
+POST   /api/learner-identities
+GET    /api/learner-identities/{identity_id}
+PATCH  /api/learner-identities/{identity_id}/memory-settings
+POST   /api/learner-identities/{identity_id}/links
+DELETE /api/learner-identities/{identity_id}/links/{link_id}
+POST   /api/concepts
+GET    /api/concepts
+POST   /api/knowledge-units/{knowledge_unit_id}/concept-mappings
+PATCH  /api/concept-mappings/{mapping_id}
+POST   /api/learner-identities/{identity_id}/memory/import
+GET    /api/learner-identities/{identity_id}/memory
+```
+
+These endpoints require `MEMORY_IDENTITY_SECRET`. Memory is opt-in, mappings are
+proposed before review, and only accepted `exact`/`narrower` mappings can import
+assessment evidence. The API never accepts unrestricted conversation summaries.
+
+Detailed contracts: `docs/api/V0_7_LONG_TERM_MEMORY_API.md`.
+
 交互式文档：`/docs`。
 
 ## Documents

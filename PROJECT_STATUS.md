@@ -1,16 +1,16 @@
-# AI Examiner v0.6.0 Development Project Status
+# AI Examiner v0.7.0 Development Project Status
 
 ## Current development status
 
-- Version: `0.6.0.dev0`
-- Branch: `develop/v0.6.0`
-- Work package: `WP-01 Normalized event schema`
-- Deployment: not approved; use the v0.5 release snapshot for staging
+- Version: `0.7.0.dev0`
+- Branch: `develop/v0.7.0`
+- Work package: `WP-01 to WP-03 long-term memory foundation`
+- Deployment: development evaluation only; stable/RC lines remain unchanged
 - Release tag: not created
 
-WP-01 introduces provider-neutral realtime signals and replay tests without
-changing the live OpenAI or Qwen media path. The v0.5 RC4 details below describe
-the inherited baseline.
+This increment adds opaque identity linking, memory controls, canonical concept
+mappings and an idempotent evidence ledger without changing the live OpenAI or Qwen
+media path. The inherited v0.5/v0.6 details below remain historical context.
 
 ## 发布状态
 

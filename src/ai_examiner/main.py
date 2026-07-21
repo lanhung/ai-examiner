@@ -37,6 +37,7 @@ from .models import (
     BackgroundJob,
     BenchmarkRun,
     Blueprint,
+    Concept,
     Document,
     EvidenceAsset,
     ExamSession,
@@ -45,6 +46,10 @@ from .models import (
     JointAnalysis,
     KnowledgeEvidenceEvent,
     KnowledgeUnit,
+    KnowledgeUnitConceptMap,
+    LearnerIdentity,
+    LearnerIdentityLink,
+    LearnerMemoryEvent,
     LearnerSubject,
     Project,
     PromptVersion,
@@ -59,10 +64,17 @@ from .schemas import (
     AnswerSubmit,
     BenchmarkCreate,
     BlueprintCreate,
+    ConceptCreate,
+    ConceptMappingCreate,
+    ConceptMappingReview,
     DatasetStatusUpdate,
     ExpertRatingCreate,
     GoldenDatasetCreate,
     JointAnalysisCreate,
+    LearnerIdentityCreate,
+    LearnerIdentityLinkCreate,
+    MemoryImportCreate,
+    MemorySettingsUpdate,
     PolicyBenchmarkCreate,
     ProjectCreate,
     PromptVersionCreate,
@@ -81,6 +93,12 @@ from .services.evidence import create_highlighted_crop, persist_evidence, serial
 from .services.golden import GoldenDatasetService
 from .services.jobs import JobQueueUnavailable, enqueue_job, serialize_job
 from .services.joint import JointAnalysisService
+from .services.memory import (
+    LearnerMemoryService,
+    MemoryConflictError,
+    MemoryPolicyError,
+    canonical_token,
+)
 from .services.policy_benchmark import PolicyBenchmarkService
 from .services.prompts import activate_prompt, create_prompt_version, prompt_manifest
 from .services.visual import VisualEvidenceService
@@ -786,6 +804,317 @@ def get_subject_learning_history(subject_id: str, db: Annotated[Session, Depends
                 "source_type": event.source_type,
                 "algorithm_version": event.algorithm_version,
                 "created_at": event.created_at.isoformat(),
+            }
+            for event in events
+        ],
+    }
+
+
+def memory_service(db: Session) -> LearnerMemoryService:
+    if not settings.memory_identity_secret:
+        raise HTTPException(
+            503,
+            "Long-term memory is not configured; set MEMORY_IDENTITY_SECRET",
+        )
+    return LearnerMemoryService(db, settings.memory_identity_secret)
+
+
+def learner_identity_or_404(db: Session, identity_id: str) -> LearnerIdentity:
+    identity = db.get(LearnerIdentity, identity_id)
+    if not identity:
+        raise HTTPException(404, "Learner identity not found")
+    return identity
+
+
+def serialize_identity(identity: LearnerIdentity, db: Session) -> dict:
+    links = db.scalars(
+        select(LearnerIdentityLink)
+        .where(LearnerIdentityLink.learner_identity_id == identity.id)
+        .order_by(LearnerIdentityLink.created_at, LearnerIdentityLink.id)
+    ).all()
+    return {
+        "id": identity.id,
+        "display_name": identity.display_name,
+        "memory_enabled": identity.memory_enabled,
+        "memory_scope": identity.memory_scope,
+        "preference_inference_enabled": identity.preference_inference_enabled,
+        "retest_planning_enabled": identity.retest_planning_enabled,
+        "retention_days": identity.retention_days,
+        "policy_version": identity.policy_version,
+        "created_at": identity.created_at.isoformat(),
+        "disabled_at": identity.disabled_at.isoformat() if identity.disabled_at else None,
+        "links": [
+            {
+                "id": link.id,
+                "learner_subject_id": link.learner_subject_id,
+                "status": link.status,
+                "provenance": link.provenance,
+                "created_at": link.created_at.isoformat(),
+                "revoked_at": link.revoked_at.isoformat() if link.revoked_at else None,
+            }
+            for link in links
+        ],
+    }
+
+
+@app.post("/api/learner-identities", status_code=201)
+def create_learner_identity(
+    payload: LearnerIdentityCreate, db: Annotated[Session, Depends(get_db)]
+):
+    service = memory_service(db)
+    try:
+        identity, created = service.create_identity(
+            external_subject_ref=payload.external_subject_ref,
+            display_name=payload.display_name,
+            memory_enabled=payload.memory_enabled,
+            memory_scope=payload.memory_scope,
+        )
+    except MemoryPolicyError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    db.commit()
+    db.refresh(identity)
+    return {**serialize_identity(identity, db), "created": created}
+
+
+@app.get("/api/learner-identities/{identity_id}")
+def get_learner_identity(identity_id: str, db: Annotated[Session, Depends(get_db)]):
+    return serialize_identity(learner_identity_or_404(db, identity_id), db)
+
+
+@app.patch("/api/learner-identities/{identity_id}/memory-settings")
+def update_memory_settings(
+    identity_id: str,
+    payload: MemorySettingsUpdate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    identity = learner_identity_or_404(db, identity_id)
+    values = payload.model_dump(exclude_none=True)
+    if not values:
+        raise HTTPException(400, "At least one memory setting is required")
+    service = memory_service(db)
+    service.update_settings(identity, values)
+    db.commit()
+    db.refresh(identity)
+    return serialize_identity(identity, db)
+
+
+@app.post("/api/learner-identities/{identity_id}/links", status_code=201)
+def create_identity_link(
+    identity_id: str,
+    payload: LearnerIdentityLinkCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    identity = learner_identity_or_404(db, identity_id)
+    subject = db.get(LearnerSubject, payload.learner_subject_id)
+    if not subject:
+        raise HTTPException(404, "Learner subject not found")
+    try:
+        link, created = memory_service(db).link_subject(
+            identity, subject, provenance=payload.provenance
+        )
+    except MemoryConflictError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    db.commit()
+    db.refresh(link)
+    return {
+        "id": link.id,
+        "learner_identity_id": link.learner_identity_id,
+        "learner_subject_id": link.learner_subject_id,
+        "status": link.status,
+        "provenance": link.provenance,
+        "created": created,
+    }
+
+
+@app.delete("/api/learner-identities/{identity_id}/links/{link_id}")
+def revoke_identity_link(
+    identity_id: str, link_id: str, db: Annotated[Session, Depends(get_db)]
+):
+    identity = learner_identity_or_404(db, identity_id)
+    link = db.get(LearnerIdentityLink, link_id)
+    if not link:
+        raise HTTPException(404, "Learner identity link not found")
+    try:
+        memory_service(db).revoke_link(identity, link)
+    except MemoryConflictError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    db.commit()
+    return {"id": link.id, "status": link.status, "revoked": True}
+
+
+@app.post("/api/concepts", status_code=201)
+def create_concept(payload: ConceptCreate, db: Annotated[Session, Depends(get_db)]):
+    try:
+        concept, created = memory_service(db).create_concept(
+            namespace=payload.namespace,
+            canonical_key=payload.canonical_key,
+            title=payload.title,
+            description=payload.description,
+            language=payload.language,
+        )
+    except MemoryPolicyError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    db.commit()
+    db.refresh(concept)
+    return {
+        "id": concept.id,
+        "namespace": concept.namespace,
+        "canonical_key": concept.canonical_key,
+        "title": concept.title,
+        "description": concept.description,
+        "language": concept.language,
+        "status": concept.status,
+        "version": concept.version,
+        "created": created,
+    }
+
+
+@app.get("/api/concepts")
+def list_concepts(
+    db: Annotated[Session, Depends(get_db)],
+    namespace: str | None = None,
+    q: str | None = Query(default=None, max_length=200),
+):
+    query = select(Concept).where(Concept.status == "active")
+    if namespace:
+        try:
+            query = query.where(Concept.namespace == canonical_token(namespace))
+        except MemoryPolicyError as exc:
+            raise HTTPException(400, str(exc)) from exc
+    if q:
+        query = query.where(Concept.title.ilike(f"%{q.strip()}%"))
+    concepts = db.scalars(query.order_by(Concept.namespace, Concept.canonical_key)).all()
+    return [
+        {
+            "id": concept.id,
+            "namespace": concept.namespace,
+            "canonical_key": concept.canonical_key,
+            "title": concept.title,
+            "description": concept.description,
+            "language": concept.language,
+            "version": concept.version,
+        }
+        for concept in concepts
+    ]
+
+
+@app.post("/api/knowledge-units/{knowledge_unit_id}/concept-mappings", status_code=201)
+def create_concept_mapping(
+    knowledge_unit_id: str,
+    payload: ConceptMappingCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    unit = db.get(KnowledgeUnit, knowledge_unit_id)
+    concept = db.get(Concept, payload.concept_id)
+    if not unit or not concept:
+        raise HTTPException(404, "Knowledge unit or concept not found")
+    mapping, created = memory_service(db).create_mapping(
+        knowledge_unit_id=unit.id,
+        concept_id=concept.id,
+        relation=payload.relation,
+        confidence=payload.confidence,
+        source=payload.source,
+        evidence=payload.evidence,
+        model_profile=payload.model_profile,
+        prompt_version=payload.prompt_version,
+    )
+    db.commit()
+    db.refresh(mapping)
+    return {
+        "id": mapping.id,
+        "knowledge_unit_id": mapping.knowledge_unit_id,
+        "concept_id": mapping.concept_id,
+        "relation": mapping.relation,
+        "confidence": mapping.confidence,
+        "status": mapping.status,
+        "source": mapping.source,
+        "created": created,
+    }
+
+
+@app.patch("/api/concept-mappings/{mapping_id}")
+def review_concept_mapping(
+    mapping_id: str,
+    payload: ConceptMappingReview,
+    db: Annotated[Session, Depends(get_db)],
+):
+    mapping = db.get(KnowledgeUnitConceptMap, mapping_id)
+    if not mapping:
+        raise HTTPException(404, "Concept mapping not found")
+    memory_service(db).review_mapping(mapping, payload.status)
+    db.commit()
+    db.refresh(mapping)
+    return {
+        "id": mapping.id,
+        "status": mapping.status,
+        "reviewed_at": mapping.reviewed_at.isoformat() if mapping.reviewed_at else None,
+    }
+
+
+@app.post("/api/learner-identities/{identity_id}/memory/import")
+def import_learner_memory(
+    identity_id: str,
+    payload: MemoryImportCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    identity = learner_identity_or_404(db, identity_id)
+    try:
+        result = memory_service(db).import_evidence(identity, dry_run=payload.dry_run)
+    except MemoryConflictError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if not payload.dry_run:
+        db.commit()
+    return {"learner_identity_id": identity.id, **result}
+
+
+@app.get("/api/learner-identities/{identity_id}/memory")
+def get_learner_memory(
+    identity_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    category: str | None = None,
+    concept_id: str | None = None,
+    limit: int = Query(default=200, ge=1, le=1000),
+):
+    learner_identity_or_404(db, identity_id)
+    query = select(LearnerMemoryEvent).where(
+        LearnerMemoryEvent.learner_identity_id == identity_id,
+        LearnerMemoryEvent.deleted_at.is_(None),
+    )
+    if category:
+        query = query.where(LearnerMemoryEvent.event_type == category)
+    if concept_id:
+        query = query.where(LearnerMemoryEvent.concept_id == concept_id)
+    events = db.scalars(
+        query.order_by(LearnerMemoryEvent.occurred_at.desc(), LearnerMemoryEvent.id).limit(
+            limit
+        )
+    ).all()
+    concepts = {
+        concept.id: concept
+        for concept in db.scalars(
+            select(Concept).where(
+                Concept.id.in_({event.concept_id for event in events if event.concept_id})
+            )
+        ).all()
+    }
+    return {
+        "learner_identity_id": identity_id,
+        "events": [
+            {
+                "id": event.id,
+                "event_type": event.event_type,
+                "learner_subject_id": event.learner_subject_id,
+                "concept_id": event.concept_id,
+                "concept_title": concepts[event.concept_id].title
+                if event.concept_id in concepts
+                else None,
+                "source_evidence_event_id": event.source_evidence_event_id,
+                "payload": event.payload_json,
+                "occurred_at": event.occurred_at.isoformat(),
+                "recorded_at": event.recorded_at.isoformat(),
+                "policy_version": event.policy_version,
+                "algorithm_version": event.algorithm_version,
+                "supersedes_event_id": event.supersedes_event_id,
             }
             for event in events
         ],

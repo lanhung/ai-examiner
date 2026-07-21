@@ -1,12 +1,13 @@
-# AI Examiner v0.6.0 Development
+# AI Examiner v0.7.0 Development
 
-Current development branch: `develop/v0.6.0` (`0.6.0.dev0`). The stable production
+Current development branch: `develop/v0.7.0` (`0.7.0.dev0`). The stable production
 line remains v0.4.1 and the preserved v0.5 release snapshot remains
 `release/v0.5.0` / `v0.5.0-rc.4` until final acceptance.
 
-The first v0.6 work package adds a frozen, provider-neutral `VoiceSignal` contract,
-OpenAI/Qwen event normalization, capability declarations and deterministic replay
-fixtures. It runs beside the current voice path and does not change live timing yet.
+The first v0.7 increment adds an optional opaque learner identity, explicit memory
+settings, reviewed canonical concept mappings and an evidence-bound long-term memory
+ledger. Memory remains disabled unless explicitly enabled and does not change the
+current text or realtime examination path.
 
 AI Examiner 是一个“主动提问型 AI”平台：围绕论文、PPT、DOCX 和技术材料主动提问、追问、纠偏和评估，并把问题与原始页面证据关联起来。
 

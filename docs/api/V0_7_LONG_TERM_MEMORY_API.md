@@ -78,6 +78,12 @@ Changing scope creates a `memory_control` event and queues an aggregate rebuild.
 
 ## 4. Memory inspection
 
+### `POST /api/learner-identities/{identity_id}/memory/import`
+
+Imports eligible existing assessment evidence through accepted `exact` or `narrower`
+concept mappings. `dry_run=true` reports eligible rows without writing. Repeating an
+import is idempotent.
+
 ### `GET /api/learner-identities/{identity_id}/memory`
 
 Filters:

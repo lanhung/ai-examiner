@@ -135,7 +135,7 @@ secret. Email, phone and provider tokens are not required.
 ```text
 LearnerIdentityLink
   learner_identity_id
-  learner_subject_id
+  learner_subject_id: optional for identity-level control events
   status: proposed | confirmed | revoked
   provenance: explicit | imported | admin_test
   created_at

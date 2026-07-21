@@ -130,3 +130,49 @@ class VoiceEventCreate(BaseModel):
 
 class VoiceSessionComplete(BaseModel):
     reason: str = Field(default="user_ended", max_length=120)
+
+
+class LearnerIdentityCreate(BaseModel):
+    external_subject_ref: str = Field(min_length=1, max_length=512)
+    display_name: str | None = Field(default=None, max_length=200)
+    memory_enabled: bool = False
+    memory_scope: Literal["project_only", "linked_projects"] = "project_only"
+
+
+class LearnerIdentityLinkCreate(BaseModel):
+    learner_subject_id: str
+    provenance: Literal["explicit", "imported", "admin_test"] = "explicit"
+
+
+class MemorySettingsUpdate(BaseModel):
+    memory_enabled: bool | None = None
+    memory_scope: Literal["project_only", "linked_projects"] | None = None
+    preference_inference_enabled: bool | None = None
+    retest_planning_enabled: bool | None = None
+    retention_days: int | None = Field(default=None, ge=1, le=3650)
+
+
+class ConceptCreate(BaseModel):
+    namespace: str = Field(min_length=1, max_length=100)
+    canonical_key: str = Field(min_length=1, max_length=160)
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=10_000)
+    language: str = Field(default="zh-CN", max_length=20)
+
+
+class ConceptMappingCreate(BaseModel):
+    concept_id: str
+    relation: Literal["exact", "narrower", "broader", "related"] = "exact"
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    source: Literal["rule", "model", "human"] = "model"
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    model_profile: str | None = Field(default=None, max_length=160)
+    prompt_version: str | None = Field(default=None, max_length=80)
+
+
+class ConceptMappingReview(BaseModel):
+    status: Literal["accepted", "rejected"]
+
+
+class MemoryImportCreate(BaseModel):
+    dry_run: bool = False

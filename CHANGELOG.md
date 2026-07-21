@@ -6,6 +6,9 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ### Added
 
+- Add the first v0.7 implementation foundation: HMAC-derived opaque learner
+  identities, explicit memory controls, confirmed subject links, canonical concepts,
+  reviewed knowledge-unit mappings and an idempotent evidence-bound memory ledger.
 - Add the v0.7 long-term learner intelligence research package covering revocable
   memory, opaque identity links, canonical concepts, retention baselines, shadow
   retest planning, confirmed preferences and lifecycle evaluation.

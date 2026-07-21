@@ -15,6 +15,7 @@ os.environ["EVIDENCE_DIR"] = "./data/test_evidence"
 os.environ["EXPORT_DIR"] = "./data/test_exports"
 os.environ["PROMPT_DIR"] = "./prompts"
 os.environ["CELERY_ALWAYS_EAGER"] = "true"
+os.environ["MEMORY_IDENTITY_SECRET"] = "test-only-memory-identity-secret"
 
 from ai_examiner.db import Base, engine  # noqa: E402
 from ai_examiner.main import app  # noqa: E402

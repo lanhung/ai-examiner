@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     max_concurrent_model_calls: int = Field(default=3, ge=1, le=20)
     max_model_retries: int = Field(default=2, ge=0, le=5)
 
+    # Required only when the optional v0.7 cross-project memory API is used.
+    memory_identity_secret: str | None = None
+
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024
