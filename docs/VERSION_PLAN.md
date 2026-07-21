@@ -14,7 +14,8 @@ This file is the authoritative version and branch status for Codex and other cod
 | Research | 0.6.0 | `research/v0.6.0` | Architecture and evaluation design | Not deployable |
 | Next development | 0.6.0.dev0 | `develop/v0.6.0` | Assessment stabilization complete; real Qwen regression verified | Local evaluation only |
 | Next research | 0.7.0 | `research/v0.7.0` | Long-term learner intelligence architecture and evaluation design | Not deployable |
-| Next implementation | 0.7.0.dev0 | `develop/v0.7.0` | WP-01 to WP-05 implemented; shadow evaluation next | Local evaluation only |
+| Next implementation | 0.7.0rc1 | `develop/v0.7.0` | WP-01 to WP-12 feature complete; release-candidate verification | Staging only |
+| v0.7 candidate | 0.7.0rc1 | `v0.7.0-rc.1` | Created only after Compose smoke and secret scan | Staging only |
 | Release candidate | 0.5.0rc4 | `v0.5.0-rc.4` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 
@@ -178,3 +179,7 @@ memory policy and opaque identity
 No v0.7 tag is created during research. The research branch remains on the v0.6
 package version. The first implementation branch uses `0.7.0.dev0` only after the
 research gate is accepted.
+
+The first candidate uses `0.7.0rc1` / `v0.7.0-rc.1`. The 300-pair concept-mapping
+activation gate and automatic retest injection remain held; those features do not
+block the candidate because their active behavior stays disabled.

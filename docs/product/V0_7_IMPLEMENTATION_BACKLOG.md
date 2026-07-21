@@ -125,6 +125,9 @@ Acceptance:
 
 ### WP-06: Retest recommendation integration
 
+Implementation status: complete on `develop/v0.7.0` with user-started, single-question
+retests and independent outcome linkage. Automatic injection remains disabled.
+
 Branch: `feature/v0.7-retest-ui`
 
 Deliverables:
@@ -143,6 +146,9 @@ Acceptance:
 - no plan exists for an unaccepted concept mapping.
 
 ### WP-07: Confirmed preference memory
+
+Implementation status: complete on `develop/v0.7.0`; only registry-approved explicit
+or user-confirmed preferences become active and scoring remains isolated.
 
 Branch: `feature/v0.7-preferences`
 
@@ -163,6 +169,9 @@ Acceptance:
 - adversarial sensitive/personality candidates are rejected.
 
 ### WP-08: Memory center
+
+Implementation status: complete on `develop/v0.7.0` with responsive observed versus
+predicted state, preferences and user-controlled retest actions.
 
 Branch: `feature/v0.7-memory-center`
 
@@ -185,6 +194,9 @@ Acceptance:
 
 ### WP-09: Export, correction and deletion
 
+Implementation status: complete on `develop/v0.7.0` with asynchronous JSON export,
+append-only correction and resumable scoped hard deletion.
+
 Branch: `feature/v0.7-memory-control`
 
 Deliverables:
@@ -204,6 +216,9 @@ Acceptance:
 - deletion completion audit contains counts, not deleted content.
 
 ### WP-10: Longitudinal evaluation runner
+
+Implementation status: deterministic offline runner complete. Mapping activation is
+held until the separately governed 300-pair multilingual Golden set exists.
 
 Branch: `feature/v0.7-memory-evals`
 
@@ -225,6 +240,9 @@ Acceptance:
 
 ### WP-11: PostgreSQL readiness
 
+Implementation status: complete at code/CI level; SQLite remains the default and no
+production migration is forced.
+
 Branch: `feature/v0.7-postgres-readiness`
 
 Deliverables:
@@ -243,6 +261,10 @@ Acceptance:
 - PostgreSQL completion can be deferred without changing the memory domain model.
 
 ### WP-12: Release hardening
+
+Implementation status: in release-candidate verification. Local migration round-trip,
+full regressions and source checks pass; production-like Compose smoke is required
+before candidate tagging.
 
 Branch: `release/v0.7.0`
 

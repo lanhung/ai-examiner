@@ -1,34 +1,31 @@
 # v0.7 Long-term Memory API Draft
 
-Status: Partial implementation on `develop/v0.7.0`
-Version: 0.7.0-dev.2
+Status: Implemented release-candidate contract on `develop/v0.7.0`
+Version: 0.7.0-rc.1
 
-Implemented in this increment: identity, links, settings, concepts, reviewed
-mappings, memory import/inspection, concept-state rebuild, growth series and shadow
-retest plans. Preferences, export, scoped deletion jobs and active retests remain
-contract-only.
+Implemented: identity, explicit links and settings, concepts, reviewed mappings,
+memory import/inspection/correction, concept-state rebuild, growth series,
+recommendation-only plans, user-started retests, confirmed preferences, memory
+center, short-lived export and scoped deletion jobs.
 
 ## 1. Contract rules
 
 - Existing v0.5 and v0.6 endpoints remain backward compatible.
 - All identifiers are opaque UUIDs.
-- Every write supports an `Idempotency-Key` header.
+- Evidence import is idempotent by source-event uniqueness. Other writes use explicit
+  lifecycle guards; universal `Idempotency-Key` support is not claimed in v0.7.
 - Every aggregate response includes `algorithm_version` and `rebuilt_at`.
 - Predicted values are labeled separately from observed values.
-- Memory-disabled identities reject durable writes with `409 memory_disabled`.
+- Memory-disabled identities reject durable memory writes with HTTP 409.
 - Cross-project reads require a confirmed identity link.
 - Until authentication exists, the API is evaluation-only behind an operator access
   boundary.
 
-Error envelope:
+Error envelope follows FastAPI's current compatibility contract:
 
 ```json
 {
-  "error": {
-    "code": "concept_mapping_unconfirmed",
-    "message": "The knowledge unit is not mapped to an accepted concept.",
-    "details": {}
-  }
+  "detail": "The knowledge unit is not mapped to an accepted concept."
 }
 ```
 
@@ -153,6 +150,17 @@ predicted_retention / predicted_at
 observed_confidence / prediction_confidence
 ```
 
+### `GET /api/learner-identities/{identity_id}/memory-center`
+
+Returns identity settings, concept states, growth, preferences and retest plans in a
+single UI-oriented response. Labels explicitly distinguish observations from
+time-adjusted predictions.
+
+### `POST /api/learner-identities/{identity_id}/memory/{event_id}/correct`
+
+Appends a correction that supersedes the selected evidence event, then rebuilds
+derived state. The original event remains in the audit ledger.
+
 ## 5. Concept mappings
 
 ### `GET /api/concepts`
@@ -197,12 +205,29 @@ Response items include:
 `mode=active` is rejected until the release feature flag and evaluation gate are
 both enabled.
 
+### `PATCH /api/learner-identities/{identity_id}/retest-items/{item_id}`
+
+Accepts or dismisses a recommendation. Dismissal records a cooldown and suppresses
+the same concept until that time.
+
+### `POST /api/learner-identities/{identity_id}/retest-items/{item_id}/start`
+
+Starts an accepted recommendation against a selected blueprint. The server requires
+an accepted `exact` or `narrower` concept mapping and creates one direct,
+unassisted question. Completion writes a linked `retest_outcome` event.
+
 ### `GET /api/learner-identities/{identity_id}/retest-plans`
 
 Returns all shadow plans and proposed items, newest first. Outcome linkage and
 filters are reserved for WP-06.
 
 ## 7. Preferences
+
+### `POST /api/learner-identities/{identity_id}/preferences`
+
+Creates a registry-approved explicit preference, or a proposed inferred preference.
+Inferred entries require at least two evidence references and never become active
+without confirmation.
 
 ### `GET /api/learner-identities/{identity_id}/preferences`
 
@@ -251,7 +276,6 @@ state from the immutable event ledger.
 
 ```json
 {
-  "format": "json",
   "include_source_quotes": false
 }
 ```
@@ -285,7 +309,18 @@ The response is a deletion job. While pending, new writes to the affected scope 
 blocked. Completion reports row categories and counts without returning deleted
 content.
 
-## 11. Audit and observability
+Deletion history is available from
+`GET /api/learner-identities/{identity_id}/memory-deletions`. A failed job can be
+resumed with `POST /api/memory-deletions/{audit_id}/retry`; writes remain blocked
+until it succeeds.
+
+## 11. Offline evaluation
+
+`POST /api/evaluations/longitudinal` runs deterministic fixtures without paid model
+calls. The report includes dataset, algorithm and policy versions, sample counts,
+uncertainty and held gates. Automatic retest injection remains disabled.
+
+## 12. Audit and observability
 
 Administrative evaluation endpoints may expose aggregate counts and timing, but
 must not expose external subject references, raw keys, answer text or provider

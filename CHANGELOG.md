@@ -6,6 +6,12 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ### Added
 
+- Complete the v0.7 long-term learner lifecycle with user-started retests,
+  registry-limited confirmed preferences, a responsive memory center, append-only
+  corrections, short-lived JSON export and scoped asynchronous deletion.
+- Add deterministic longitudinal evaluation reports with explicit held gates,
+  sample counts and uncertainty, plus PostgreSQL migration/domain CI.
+
 - Add the first v0.7 implementation foundation: HMAC-derived opaque learner
   identities, explicit memory controls, confirmed subject links, canonical concepts,
   reviewed knowledge-unit mappings and an idempotent evidence-bound memory ledger.

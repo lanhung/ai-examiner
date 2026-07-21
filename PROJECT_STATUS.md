@@ -2,29 +2,32 @@
 
 ## Current development status
 
-- Version: `0.7.0.dev0`
+- Version: `0.7.0rc1`
 - Branch: `develop/v0.7.0`
-- Work package: `WP-01 to WP-05 memory, longitudinal state and shadow retest`
-- Deployment: development evaluation only; stable/RC lines remain unchanged
-- Release tag: not created
+- Work package: `WP-01 to WP-12 feature complete`
+- Deployment: staging release-candidate verification only; stable line unchanged
+- Release tag: `v0.7.0-rc.1` after Compose smoke and secret scan
 
-This increment adds opaque identity linking, memory controls, canonical concept
-mappings, an idempotent evidence ledger, replayable retention estimates and shadow
-retest recommendations without changing the live OpenAI or Qwen media path. Retest
-plans remain advisory and cannot modify a live session. The inherited v0.5/v0.6
-details below remain historical context.
+This candidate completes the optional long-term intelligence lifecycle: opaque
+identity, reviewed concepts, replayable retention, user-started retests, confirmed
+preferences, memory center, correction, export, deletion, offline evaluation and
+PostgreSQL readiness. It does not change the OpenAI or Qwen media path when memory
+is disabled. Automatic retest injection remains disabled.
 
 ## v0.7 increment verification
 
 ```text
-WP-01 opaque identity and controls             implemented
-WP-02 canonical concept registry               implemented
-WP-03 idempotent memory event ledger            implemented
-WP-04 longitudinal state and growth series      implemented
-WP-05 shadow retest planner                     implemented
-Alembic head                                    20260721_0004
-Active retest scheduling                        disabled
-Preference memory / memory center               not implemented
+WP-01 to WP-05 memory/state/shadow planning      implemented
+WP-06 user-controlled retest lifecycle           implemented
+WP-07 confirmed preference registry              implemented
+WP-08 responsive memory center                   implemented
+WP-09 correction/export/scoped deletion          implemented
+WP-10 deterministic longitudinal evaluation     implemented
+WP-11 PostgreSQL readiness and CI                implemented
+WP-12 release hardening                          verification in progress
+Alembic head                                     20260721_0005
+Automatic retest injection                       disabled
+Concept mapping auto-activation                  held
 ```
 
 ## 发布状态
