@@ -58,7 +58,7 @@ function setStatus(id, text, kind = "") {
   node.className = `status ${kind}`;
 }
 async function api(path, options = {}) {
-  const response = await fetch(path, options);
+  const response = await fetch(path, {cache: "no-store", ...options});
   const raw = await response.text();
   let body = {};
   if (raw) {

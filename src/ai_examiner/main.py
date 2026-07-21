@@ -145,6 +145,14 @@ app = FastAPI(title=settings.app_name, version=__version__, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+@app.middleware("http")
+async def disable_dynamic_response_cache(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/health" or request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.exception_handler(JobQueueUnavailable)
 async def job_queue_unavailable_handler(_request: Request, exc: JobQueueUnavailable):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
