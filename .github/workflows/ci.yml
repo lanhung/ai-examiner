@@ -13,3 +13,32 @@ jobs:
       - run: uv sync --extra dev
       - run: uv run ruff check src tests
       - run: uv run pytest --cov=ai_examiner --cov-report=term-missing
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: examiner
+          POSTGRES_PASSWORD: examiner
+          POSTGRES_DB: examiner_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U examiner -d examiner_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://examiner:examiner@127.0.0.1:5432/examiner_test
+      MODEL_PROVIDER: mock
+      MEMORY_IDENTITY_SECRET: ci-postgres-memory-secret
+      CELERY_ALWAYS_EAGER: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra dev
+      - run: uv run alembic upgrade head
+      - run: uv run pytest tests/test_v07_completion.py tests/test_long_term_memory_v07.py

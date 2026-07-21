@@ -4,6 +4,8 @@ const state = {
   blueprintId: null,
   datasetId: null,
   sessionId: null,
+  learnerSubjectId: null,
+  identityId: localStorage.getItem("ai-examiner-identity-id"),
   providers: [],
   documents: [],
   voiceConfig: null,
@@ -29,6 +31,14 @@ const state = {
   voiceMode: "",
 };
 const $ = (id) => document.getElementById(id);
+
+const preferenceOptions = {
+  explanation_style: [["concise", "简洁"], ["step_by_step", "分步"], ["example_first", "先举例"]],
+  response_pace: [["fast", "快速"], ["balanced", "平衡"], ["deliberate", "留出思考时间"]],
+  interruption_style: [["minimal", "尽量少打断"], ["balanced", "平衡"], ["strict", "严格纠偏"]],
+  hint_style: [["none", "不给提示"], ["progressive", "逐步提示"], ["direct", "直接提示"]],
+  interface_language: [["zh-CN", "中文"], ["en", "English"]],
+};
 
 function ensureVoiceProviderControl() {
   if ($("voiceProvider")) return;
@@ -324,6 +334,8 @@ $("startSession").onclick = async () => {
       }),
     });
     state.sessionId = session.id;
+    state.learnerSubjectId = session.learner_subject_id;
+    $("enableMemory").disabled = false;
     const started = await api(`/api/sessions/${session.id}/start`, {method: "POST"});
     addMessage(started.turn);
     $("answerInput").disabled = false;
@@ -352,6 +364,7 @@ $("answerForm").onsubmit = async (event) => {
       $("sessionState").textContent = "已完成";
       $("answerHint").textContent = "答辩已完成，报告已经生成。";
       await showReport();
+      if (state.identityId && result.retest_item) await refreshMemory();
     } else {
       $("sendAnswer").disabled = false;
       $("answerInput").disabled = false;
@@ -392,6 +405,213 @@ async function showReport() {
     <p>${escapeHtml(report.disclaimer)}</p>`;
   $("reportPanel").scrollIntoView({behavior: "smooth"});
 }
+
+function syncPreferenceValues() {
+  const options = preferenceOptions[$("preferenceKey").value] || [];
+  $("preferenceValue").innerHTML = options
+    .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`)
+    .join("");
+}
+
+function browserIdentityReference() {
+  let reference = localStorage.getItem("ai-examiner-browser-reference");
+  if (!reference) {
+    reference = `browser-${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
+    localStorage.setItem("ai-examiner-browser-reference", reference);
+  }
+  return reference;
+}
+
+async function enableMemory() {
+  if (!state.learnerSubjectId) {
+    throw new Error("请先开始一场文本或语音答辩，再启用长期记忆");
+  }
+  const identity = await api("/api/learner-identities", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      external_subject_ref: browserIdentityReference(),
+      display_name: $("memoryDisplayName").value.trim() || "我的学习档案",
+      memory_enabled: true,
+      memory_scope: "linked_projects",
+    }),
+  });
+  state.identityId = identity.id;
+  localStorage.setItem("ai-examiner-identity-id", identity.id);
+  await api(`/api/learner-identities/${identity.id}/memory-settings`, {
+    method: "PATCH",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      memory_enabled: true,
+      memory_scope: "linked_projects",
+      retest_planning_enabled: true,
+    }),
+  });
+  await api(`/api/learner-identities/${identity.id}/links`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({learner_subject_id: state.learnerSubjectId, provenance: "explicit"}),
+  });
+  ["importMemory", "refreshMemory", "exportMemory", "deleteMemory", "savePreference", "planRetest"]
+    .forEach((id) => { $(id).disabled = false; });
+  $("memoryState").textContent = "已启用";
+  await refreshMemory();
+}
+
+function renderMemoryCenter(center) {
+  const states = center.concept_states || [];
+  $("conceptStates").innerHTML = states.map((item) => `
+    <div class="memory-row">
+      <div class="memory-row-head"><strong>${escapeHtml(item.concept_title || item.concept_id)}</strong><small>${item.evidence_count} 条证据</small></div>
+      <div class="memory-meter" title="已观察 ${Math.round(item.observed_mastery * 100)}%，时间推算 ${Math.round(item.predicted_retention * 100)}%"><span style="width:${Math.round(item.observed_mastery * 100)}%"></span><span class="predicted" style="width:${Math.round(item.predicted_retention * 100)}%"></span></div>
+      <small>已观察 ${Math.round(item.observed_mastery * 100)}% · 时间推算 ${Math.round(item.predicted_retention * 100)}% · 置信度 ${Math.round(item.prediction_confidence * 100)}%</small>
+      <small>${item.active_misconceptions.length ? `待纠正：${escapeHtml(item.active_misconceptions.join("；"))}` : "未记录活跃误区"}</small>
+    </div>`).join("") || `<div class="empty compact">尚无结构化学习证据。</div>`;
+
+  const preferences = center.preferences || [];
+  $("preferenceList").innerHTML = preferences.map((item) => `
+    <div class="memory-row">
+      <div class="memory-row-head"><strong>${escapeHtml(item.preference_key)}</strong><small>${escapeHtml(item.status)}</small></div>
+      <small>${escapeHtml(item.value)} · ${item.source === "explicit" ? "用户明确设置" : "系统提议"}</small>
+      ${item.status === "proposed" ? `<div class="memory-actions"><button data-preference-action="confirm" data-preference-id="${item.id}">确认</button><button class="danger-button" data-preference-action="reject" data-preference-id="${item.id}">拒绝</button></div>` : ""}
+    </div>`).join("") || `<div class="empty compact">尚无偏好。推断偏好必须经您确认后才会生效。</div>`;
+
+  const items = (center.retest_plans || []).flatMap((plan) => plan.items || []);
+  $("retestList").innerHTML = items.map((item) => `
+    <div class="memory-row">
+      <div class="memory-row-head"><strong>${escapeHtml(item.concept_title || item.concept_id)}</strong><small>${escapeHtml(item.status)}</small></div>
+      <small>原因：${escapeHtml(item.reason_code)} · 建议时间 ${new Date(item.due_at).toLocaleDateString()} · 预计保留度 ${Math.round(item.predicted_retention * 100)}%</small>
+      <div class="memory-actions">
+        ${item.status === "proposed" ? `<button data-retest-action="accept" data-retest-id="${item.id}">接受</button><button class="danger-button" data-retest-action="dismiss" data-retest-id="${item.id}">稍后再说</button>` : ""}
+        ${item.status === "accepted" ? `<button data-retest-action="start" data-retest-id="${item.id}">开始复测</button>` : ""}
+      </div>
+    </div>`).join("") || `<div class="empty compact">暂无复测建议。</div>`;
+
+  document.querySelectorAll("[data-preference-action]").forEach((button) => {
+    button.onclick = () => actOnPreference(button.dataset.preferenceId, button.dataset.preferenceAction);
+  });
+  document.querySelectorAll("[data-retest-action]").forEach((button) => {
+    button.onclick = () => actOnRetest(button.dataset.retestId, button.dataset.retestAction);
+  });
+}
+
+async function refreshMemory() {
+  if (!state.identityId) return;
+  const center = await api(`/api/learner-identities/${state.identityId}/memory-center`);
+  renderMemoryCenter(center);
+  $("memoryState").textContent = center.identity.memory_enabled ? "已启用" : "已关闭";
+  setStatus("memoryStatus", `已加载 ${center.concept_states.length} 个知识状态。`, "success");
+}
+
+async function actOnPreference(preferenceId, action) {
+  await api(`/api/learner-identities/${state.identityId}/preferences/${preferenceId}`, {
+    method: "PATCH",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({action}),
+  });
+  await refreshMemory();
+}
+
+async function actOnRetest(itemId, action) {
+  if (action === "start") {
+    const result = await api(`/api/learner-identities/${state.identityId}/retest-items/${itemId}/start`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({blueprint_id: state.blueprintId, profile: $("textProfile").value}),
+    });
+    state.sessionId = result.session_id;
+    addMessage(result.turn);
+    $("answerInput").disabled = false;
+    $("sendAnswer").disabled = false;
+    $("sessionState").textContent = "复测进行中";
+    document.querySelector(".conversation").scrollIntoView({behavior: "smooth"});
+    return;
+  }
+  await api(`/api/learner-identities/${state.identityId}/retest-items/${itemId}`, {
+    method: "PATCH",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({action, cooldown_days: 14}),
+  });
+  await refreshMemory();
+}
+
+async function waitForJob(jobId) {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const job = await api(`/api/jobs/${jobId}`);
+    setStatus("memoryStatus", `${job.message || job.status} · ${Math.round(job.progress * 100)}%`);
+    if (job.status === "completed") return job;
+    if (job.status === "failed") throw new Error(job.error || "后台任务失败");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error("后台任务等待超时");
+}
+
+$("preferenceKey").onchange = syncPreferenceValues;
+syncPreferenceValues();
+
+$("enableMemory").onclick = async () => {
+  setStatus("memoryStatus", "正在创建并关联学习档案…");
+  try { await enableMemory(); }
+  catch (error) { setStatus("memoryStatus", error.message, "error"); }
+};
+
+$("importMemory").onclick = async () => {
+  try {
+    const imported = await api(`/api/learner-identities/${state.identityId}/memory/import`, {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({dry_run: false}),
+    });
+    if (imported.imported > 0) {
+      await api(`/api/learner-identities/${state.identityId}/memory/rebuild`, {
+        method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({algorithm_version: "evidence-half-life-v1"}),
+      });
+    }
+    await refreshMemory();
+    setStatus("memoryStatus", `已导入 ${imported.imported} 条新证据，跳过 ${imported.skipped} 条重复证据。`, "success");
+  } catch (error) { setStatus("memoryStatus", error.message, "error"); }
+};
+
+$("refreshMemory").onclick = () => refreshMemory().catch((error) => setStatus("memoryStatus", error.message, "error"));
+
+$("savePreference").onclick = async () => {
+  try {
+    await api(`/api/learner-identities/${state.identityId}/preferences`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({preference_key: $("preferenceKey").value, value: $("preferenceValue").value, source: "explicit"}),
+    });
+    await refreshMemory();
+  } catch (error) { setStatus("memoryStatus", error.message, "error"); }
+};
+
+$("planRetest").onclick = async () => {
+  try {
+    await api(`/api/learner-identities/${state.identityId}/retest-plans`, {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({horizon_days: 30, max_items: 8}),
+    });
+    await refreshMemory();
+  } catch (error) { setStatus("memoryStatus", error.message, "error"); }
+};
+
+$("exportMemory").onclick = async () => {
+  try {
+    const queued = await api(`/api/learner-identities/${state.identityId}/memory/export`, {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({include_source_quotes: false}),
+    });
+    const job = await waitForJob(queued.id);
+    window.location.href = job.result.download_url;
+  } catch (error) { setStatus("memoryStatus", error.message, "error"); }
+};
+
+$("deleteMemory").onclick = async () => {
+  if (!window.confirm("确定删除全部长期认知状态、偏好和复测计划吗？原始项目与答辩记录不会删除。")) return;
+  try {
+    const queued = await api(`/api/learner-identities/${state.identityId}/memory`, {
+      method: "DELETE", headers: {"Content-Type": "application/json"}, body: JSON.stringify({scope: "all_long_term_memory", confirmation: "delete"}),
+    });
+    await waitForJob(queued.job.id);
+    await refreshMemory();
+  } catch (error) { setStatus("memoryStatus", error.message, "error"); }
+};
 
 async function loadEvidence() {
   if (!state.documentId) return;
@@ -740,6 +960,8 @@ async function connectVoice() {
     }),
   });
   state.voiceSessionId = voiceSession.id;
+  state.learnerSubjectId = voiceSession.learner_subject_id;
+  $("enableMemory").disabled = false;
   state.voiceStartedAt = Date.now();
   state.voiceFirstResponseRecorded = false;
   state.voiceInitialResponseSent = false;
@@ -967,3 +1189,13 @@ $("endVoice").onclick = () => endVoice("user_ended");
 window.addEventListener("beforeunload", () => {
   if (state.voiceStream) state.voiceStream.getTracks().forEach((track) => track.stop());
 });
+
+if (state.identityId) {
+  ["importMemory", "refreshMemory", "exportMemory", "deleteMemory", "savePreference", "planRetest"]
+    .forEach((id) => { $(id).disabled = false; });
+  refreshMemory().catch(() => {
+    state.identityId = null;
+    localStorage.removeItem("ai-examiner-identity-id");
+    $("memoryState").textContent = "尚未启用";
+  });
+}

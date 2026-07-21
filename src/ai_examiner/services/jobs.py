@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 
 from ..jobs import (
     analyze_visual_document_task,
+    delete_learner_memory_task,
+    export_learner_memory_task,
     generate_golden_dataset_task,
     run_benchmark_task,
 )
@@ -13,6 +15,8 @@ TASKS = {
     "golden_dataset": generate_golden_dataset_task,
     "visual_document": analyze_visual_document_task,
     "benchmark": run_benchmark_task,
+    "memory_export": export_learner_memory_task,
+    "memory_deletion": delete_learner_memory_task,
 }
 
 
@@ -30,6 +34,10 @@ def enqueue_job(db: Session, *, kind: str, project_id: str | None, payload: dict
     try:
         result = TASKS[kind].delay(job.id)
     except Exception as exc:
+        db.expire_all()
+        failed_job = db.get(BackgroundJob, job.id)
+        if failed_job and failed_job.status == "failed":
+            return failed_job
         job.status = "failed"
         job.error = "Background queue unavailable"
         db.commit()

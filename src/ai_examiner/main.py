@@ -51,7 +51,9 @@ from .models import (
     LearnerIdentity,
     LearnerIdentityLink,
     LearnerMemoryEvent,
+    LearnerPreference,
     LearnerSubject,
+    MemoryDeletionAudit,
     Project,
     PromptVersion,
     RetestPlan,
@@ -76,12 +78,19 @@ from .schemas import (
     LearnerIdentityCreate,
     LearnerIdentityLinkCreate,
     LongitudinalRebuildCreate,
+    MemoryCorrectionCreate,
+    MemoryDeletionCreate,
+    MemoryExportCreate,
     MemoryImportCreate,
     MemorySettingsUpdate,
     PolicyBenchmarkCreate,
+    PreferenceAction,
+    PreferenceCreate,
     ProjectCreate,
     PromptVersionCreate,
+    RetestItemAction,
     RetestPlanCreate,
+    RetestSessionCreate,
     SessionCreate,
     VisualAnalyzeCreate,
     VoiceEventCreate,
@@ -98,14 +107,18 @@ from .services.golden import GoldenDatasetService
 from .services.jobs import JobQueueUnavailable, enqueue_job, serialize_job
 from .services.joint import JointAnalysisService
 from .services.longitudinal import LongitudinalStateError, LongitudinalStateService
+from .services.longitudinal_evaluation import LongitudinalEvaluationService
 from .services.memory import (
     LearnerMemoryService,
     MemoryConflictError,
     MemoryPolicyError,
     canonical_token,
 )
+from .services.memory_control import MemoryControlError, MemoryControlService
 from .services.policy_benchmark import PolicyBenchmarkService
+from .services.preferences import PreferencePolicyError, PreferenceService
 from .services.prompts import activate_prompt, create_prompt_version, prompt_manifest
+from .services.retest import RetestLifecycleError, RetestLifecycleService
 from .services.visual import VisualEvidenceService
 from .services.voice import (
     VOICE_PROVIDERS,
@@ -630,12 +643,22 @@ def submit_answer(
         result = orchestrator.submit_answer(session, blueprint, payload.answer)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
+    retest_item = None
+    if result["completed"]:
+        retest_item = RetestLifecycleService(db).complete_from_session(
+            session, result["user_turn"]
+        )
+        if retest_item:
+            db.commit()
     return {
         "completed": result["completed"],
         "analysis": result["analysis"],
         "evaluation": result["evaluation"],
         "decision": result["decision"],
         "turns": [serialize_turn(result["user_turn"]), serialize_turn(result["assistant_turn"])],
+        "retest_item": RetestLifecycleService.serialize_item(retest_item)
+        if retest_item
+        else None,
     }
 
 
@@ -842,6 +865,7 @@ def serialize_identity(identity: LearnerIdentity, db: Session) -> dict:
         "display_name": identity.display_name,
         "memory_enabled": identity.memory_enabled,
         "memory_scope": identity.memory_scope,
+        "memory_write_blocked": identity.memory_write_blocked,
         "preference_inference_enabled": identity.preference_inference_enabled,
         "retest_planning_enabled": identity.retest_planning_enabled,
         "retention_days": identity.retention_days,
@@ -1174,6 +1198,312 @@ def list_retest_plans(
         "learner_identity_id": identity.id,
         "plans": LongitudinalStateService(db).plans(identity),
     }
+
+
+@app.patch("/api/learner-identities/{identity_id}/retest-items/{item_id}")
+def act_on_retest_item(
+    identity_id: str,
+    item_id: str,
+    payload: RetestItemAction,
+    db: Annotated[Session, Depends(get_db)],
+):
+    identity = learner_identity_or_404(db, identity_id)
+    service = RetestLifecycleService(db)
+    try:
+        item = service.item_for_identity(identity, item_id)
+        service.act(
+            identity,
+            item,
+            action=payload.action,
+            cooldown_days=payload.cooldown_days,
+        )
+    except RetestLifecycleError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    db.commit()
+    return service.serialize_item(item)
+
+
+@app.post("/api/learner-identities/{identity_id}/retest-items/{item_id}/start")
+def start_retest_session(
+    identity_id: str,
+    item_id: str,
+    payload: RetestSessionCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    identity = learner_identity_or_404(db, identity_id)
+    blueprint = db.get(Blueprint, payload.blueprint_id)
+    if not blueprint:
+        raise HTTPException(404, "Blueprint not found")
+    fallback = (
+        f"{settings.model_provider}:"
+        f"{settings.default_model_for(settings.model_provider)}"
+    )
+    profile = _profiles([payload.profile] if payload.profile else [], fallback)[0]
+    provider = provider_or_503(profile)
+    service = RetestLifecycleService(db)
+    try:
+        item = service.item_for_identity(identity, item_id)
+        session = service.start_session(
+            identity,
+            item,
+            blueprint=blueprint,
+            profile=profile,
+        )
+        turn = ExamOrchestrator(
+            db,
+            provider,
+            project_id=session.project_id,
+            session_id=session.id,
+        ).start_session(session, blueprint)
+    except (RetestLifecycleError, ValueError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+    db.commit()
+    return {
+        "session_id": session.id,
+        "status": session.status,
+        "retest_item": service.serialize_item(item),
+        "turn": serialize_turn(turn),
+    }
+
+
+@app.post("/api/learner-identities/{identity_id}/preferences", status_code=201)
+def create_learner_preference(
+    identity_id: str,
+    payload: PreferenceCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    identity = learner_identity_or_404(db, identity_id)
+    service = PreferenceService(db)
+    try:
+        preference = service.create_or_replace(
+            identity,
+            preference_key=payload.preference_key,
+            value=payload.value,
+            source=payload.source,
+            evidence=payload.evidence,
+            expires_in_days=payload.expires_in_days,
+        )
+    except PreferencePolicyError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    db.commit()
+    return service.serialize(preference)
+
+
+@app.get("/api/learner-identities/{identity_id}/preferences")
+def list_learner_preferences(
+    identity_id: str, db: Annotated[Session, Depends(get_db)]
+):
+    identity = learner_identity_or_404(db, identity_id)
+    preferences = PreferenceService(db).list(identity)
+    db.commit()
+    return {"learner_identity_id": identity.id, "preferences": preferences}
+
+
+@app.patch("/api/learner-identities/{identity_id}/preferences/{preference_id}")
+def act_on_learner_preference(
+    identity_id: str,
+    preference_id: str,
+    payload: PreferenceAction,
+    db: Annotated[Session, Depends(get_db)],
+):
+    identity = learner_identity_or_404(db, identity_id)
+    preference = db.get(LearnerPreference, preference_id)
+    if not preference:
+        raise HTTPException(404, "Preference not found")
+    service = PreferenceService(db)
+    try:
+        service.act(
+            identity,
+            preference,
+            action=payload.action,
+            value=payload.value,
+        )
+    except PreferencePolicyError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    db.commit()
+    return service.serialize(preference)
+
+
+@app.post("/api/learner-identities/{identity_id}/memory/{event_id}/correct")
+def correct_learner_memory(
+    identity_id: str,
+    event_id: str,
+    payload: MemoryCorrectionCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    identity = learner_identity_or_404(db, identity_id)
+    event = db.get(LearnerMemoryEvent, event_id)
+    if not event:
+        raise HTTPException(404, "Memory event not found")
+    try:
+        correction = MemoryControlService(db, settings).correct_event(
+            identity,
+            event,
+            observation=payload.observation,
+            reason=payload.reason,
+        )
+    except MemoryControlError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    db.commit()
+    return {
+        "id": correction.id,
+        "event_type": correction.event_type,
+        "supersedes_event_id": correction.supersedes_event_id,
+        "payload": correction.payload_json,
+    }
+
+
+@app.post("/api/learner-identities/{identity_id}/memory/export", status_code=202)
+def export_learner_memory(
+    identity_id: str,
+    payload: MemoryExportCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    identity = learner_identity_or_404(db, identity_id)
+    memory_service(db)
+    job = enqueue_job(
+        db,
+        kind="memory_export",
+        project_id=None,
+        payload={
+            "identity_id": identity.id,
+            "include_source_quotes": payload.include_source_quotes,
+        },
+    )
+    return serialize_job(job)
+
+
+@app.get("/api/memory-exports/{artifact_id}/file", include_in_schema=False)
+def download_memory_export(
+    artifact_id: str, db: Annotated[Session, Depends(get_db)]
+):
+    try:
+        artifact = MemoryControlService(db, settings).artifact_or_error(artifact_id)
+    except MemoryControlError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return FileResponse(
+        artifact.storage_path,
+        media_type="application/json",
+        filename=f"ai-examiner-memory-{artifact.id}.json",
+    )
+
+
+def _memory_deletion_target(payload: MemoryDeletionCreate) -> str | None:
+    if payload.scope == "preference":
+        return payload.preference_id
+    if payload.scope == "concept":
+        return payload.concept_id
+    if payload.scope == "project_link":
+        return payload.learner_subject_id
+    return None
+
+
+@app.delete("/api/learner-identities/{identity_id}/memory", status_code=202)
+def delete_learner_memory_scope(
+    identity_id: str,
+    payload: MemoryDeletionCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    identity = learner_identity_or_404(db, identity_id)
+    target = _memory_deletion_target(payload)
+    if payload.scope in {"preference", "concept", "project_link"} and not target:
+        raise HTTPException(400, f"Deletion scope {payload.scope} requires a target")
+    try:
+        audit = MemoryControlService(db, settings).begin_deletion(
+            identity,
+            scope=payload.scope,
+            target_ref=target,
+        )
+    except MemoryControlError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    db.commit()
+    job = enqueue_job(
+        db,
+        kind="memory_deletion",
+        project_id=None,
+        payload={"audit_id": audit.id},
+    )
+    return {"audit_id": audit.id, "job": serialize_job(job)}
+
+
+@app.get("/api/learner-identities/{identity_id}/memory-deletions")
+def list_memory_deletions(
+    identity_id: str, db: Annotated[Session, Depends(get_db)]
+):
+    learner_identity_or_404(db, identity_id)
+    audits = db.scalars(
+        select(MemoryDeletionAudit)
+        .where(MemoryDeletionAudit.learner_identity_id == identity_id)
+        .order_by(MemoryDeletionAudit.created_at.desc())
+    ).all()
+    return {
+        "learner_identity_id": identity_id,
+        "deletions": [
+            {
+                "id": audit.id,
+                "scope": audit.scope,
+                "target_ref": audit.target_ref,
+                "status": audit.status,
+                "counts": audit.counts_json,
+                "error_code": audit.error_code,
+                "created_at": audit.created_at.isoformat(),
+                "completed_at": audit.completed_at.isoformat()
+                if audit.completed_at
+                else None,
+            }
+            for audit in audits
+        ],
+    }
+
+
+@app.post("/api/memory-deletions/{audit_id}/retry", status_code=202)
+def retry_memory_deletion(
+    audit_id: str, db: Annotated[Session, Depends(get_db)]
+):
+    audit = db.get(MemoryDeletionAudit, audit_id)
+    if not audit or not audit.learner_identity_id:
+        raise HTTPException(404, "Memory deletion audit not found")
+    if audit.status != "failed":
+        raise HTTPException(409, "Only failed deletion jobs can be retried")
+    identity = learner_identity_or_404(db, audit.learner_identity_id)
+    identity.memory_write_blocked = True
+    audit.status = "pending"
+    audit.error_code = None
+    audit.completed_at = None
+    db.commit()
+    job = enqueue_job(
+        db,
+        kind="memory_deletion",
+        project_id=None,
+        payload={"audit_id": audit.id},
+    )
+    return {"audit_id": audit.id, "job": serialize_job(job)}
+
+
+@app.get("/api/learner-identities/{identity_id}/memory-center")
+def get_memory_center(
+    identity_id: str, db: Annotated[Session, Depends(get_db)]
+):
+    identity = learner_identity_or_404(db, identity_id)
+    longitudinal = LongitudinalStateService(db)
+    preferences = PreferenceService(db).list(identity)
+    db.commit()
+    return {
+        "identity": serialize_identity(identity, db),
+        "concept_states": longitudinal.states(identity),
+        "growth": longitudinal.growth(identity),
+        "preferences": preferences,
+        "retest_plans": longitudinal.plans(identity),
+        "labels": {
+            "observed": "Direct evidence recorded from an attempt",
+            "predicted": "Time-adjusted estimate, not a new observation",
+        },
+    }
+
+
+@app.post("/api/evaluations/longitudinal")
+def evaluate_longitudinal_engine():
+    return LongitudinalEvaluationService().run()
 
 
 @app.get("/api/learner-identities/{identity_id}/memory")

@@ -366,6 +366,7 @@ class LearnerIdentity(Base):
     preference_inference_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     retest_planning_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     retention_days: Mapped[int] = mapped_column(Integer, default=365)
+    memory_write_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
     policy_version: Mapped[str] = mapped_column(String(50), default="memory-policy-v1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     disabled_at: Mapped[datetime | None] = mapped_column(
@@ -555,11 +556,93 @@ class RetestItem(Base):
     uncertainty: Mapped[float] = mapped_column(Float)
     source_state_version: Mapped[str] = mapped_column(String(50))
     selected_question_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    exam_session_id: Mapped[str | None] = mapped_column(
+        ForeignKey("exam_sessions.id", ondelete="SET NULL"), nullable=True
+    )
     outcome_event_id: Mapped[str | None] = mapped_column(
         ForeignKey("learner_memory_events.id", ondelete="SET NULL"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(30), default="proposed")
+    dismissed_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class LearnerPreference(Base):
+    __tablename__ = "learner_preferences"
+    __table_args__ = (
+        UniqueConstraint(
+            "learner_identity_id", "preference_key", name="uq_identity_preference_key"
+        ),
+        Index("ix_preference_identity_status", "learner_identity_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learner_identity_id: Mapped[str] = mapped_column(
+        ForeignKey("learner_identities.id", ondelete="CASCADE")
+    )
+    preference_key: Mapped[str] = mapped_column(String(80))
+    value_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    source: Mapped[str] = mapped_column(String(30), default="explicit")
+    status: Mapped[str] = mapped_column(String(30), default="active")
+    evidence_json: Mapped[list] = mapped_column(JSON, default=list)
+    confirmation_count: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class MemoryExportArtifact(Base):
+    __tablename__ = "memory_export_artifacts"
+    __table_args__ = (
+        Index("ix_memory_export_identity_created", "learner_identity_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learner_identity_id: Mapped[str] = mapped_column(
+        ForeignKey("learner_identities.id", ondelete="CASCADE")
+    )
+    storage_path: Mapped[str] = mapped_column(String(500))
+    scope_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    record_counts: Mapped[dict] = mapped_column(JSON, default=dict)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class MemoryDeletionAudit(Base):
+    __tablename__ = "memory_deletion_audits"
+    __table_args__ = (
+        Index("ix_memory_deletion_identity_created", "learner_identity_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learner_identity_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learner_identities.id", ondelete="SET NULL"), nullable=True
+    )
+    scope: Mapped[str] = mapped_column(String(50))
+    target_ref: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="pending")
+    counts_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class KnowledgeState(Base):

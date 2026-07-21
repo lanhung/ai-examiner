@@ -191,3 +191,49 @@ class RetestPlanCreate(BaseModel):
     horizon_days: int = Field(default=14, ge=1, le=90)
     max_items: int = Field(default=8, ge=1, le=50)
     mode: Literal["shadow"] = "shadow"
+
+
+class RetestItemAction(BaseModel):
+    action: Literal["accept", "dismiss"]
+    cooldown_days: int = Field(default=14, ge=1, le=180)
+
+
+class RetestSessionCreate(BaseModel):
+    blueprint_id: str
+    profile: str | None = None
+
+
+class PreferenceCreate(BaseModel):
+    preference_key: str = Field(min_length=1, max_length=80)
+    value: Any
+    source: Literal["explicit", "inferred"] = "explicit"
+    evidence: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
+    expires_in_days: int | None = Field(default=None, ge=1, le=3650)
+
+
+class PreferenceAction(BaseModel):
+    action: Literal["confirm", "reject", "edit", "expire"]
+    value: Any | None = None
+
+
+class MemoryCorrectionCreate(BaseModel):
+    observation: float = Field(ge=0.0, le=1.0)
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+class MemoryExportCreate(BaseModel):
+    include_source_quotes: bool = False
+
+
+class MemoryDeletionCreate(BaseModel):
+    scope: Literal[
+        "preference",
+        "concept",
+        "project_link",
+        "all_long_term_memory",
+        "identity_and_memory",
+    ]
+    concept_id: str | None = None
+    learner_subject_id: str | None = None
+    preference_id: str | None = None
+    confirmation: Literal["delete"]

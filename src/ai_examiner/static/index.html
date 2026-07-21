@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI Examiner v0.6.0 Development</title>
-  <link rel="stylesheet" href="/static/styles.css?v=0.6.0-dev" />
+  <title>AI Examiner v0.7.0 Release Candidate</title>
+  <link rel="stylesheet" href="/static/styles.css?v=0.7.0-rc1" />
 </head>
 <body>
   <header>
     <div>
       <span class="eyebrow">Inquiry-first AI · Model panel</span>
-      <h1>AI 答辩官 v0.6 开发版</h1>
-      <p>多模态证据与低延迟实时语音一体化：可自然插话、实时字幕、连续追问并保留完整证据链。</p>
+      <h1>AI 答辩官 v0.7 候选版</h1>
+      <p>在多模态证据与自然语音基础上，加入长期认知状态、确认式偏好、用户启动的复测和完整记忆控制。</p>
     </div>
     <div id="providerBadge" class="badge">检查模型状态…</div>
   </header>
@@ -129,13 +129,48 @@
       </form>
     </section>
 
+    <section id="memoryPanel" class="panel memory-panel">
+      <div class="conversation-head">
+        <div><span class="eyebrow">Long-term learner intelligence</span><h2>记忆中心</h2></div>
+        <span id="memoryState" class="badge secondary">尚未启用</span>
+      </div>
+      <p>长期记忆默认关闭。启用后只保存结构化学习证据、确认偏好与复测结果，不将偏好用于评分。</p>
+      <div class="memory-controls">
+        <label>学习者显示名称<input id="memoryDisplayName" value="我的学习档案" maxlength="200" /></label>
+        <button id="enableMemory">启用长期记忆</button>
+        <button id="importMemory" disabled>导入本次答辩证据</button>
+        <button id="refreshMemory" disabled>刷新</button>
+        <button id="exportMemory" disabled>导出 JSON</button>
+        <button id="deleteMemory" class="danger-button" disabled>删除全部长期记忆</button>
+      </div>
+      <div id="memoryStatus" class="status"></div>
+      <div class="memory-columns">
+        <div>
+          <h3>知识状态</h3>
+          <div class="memory-legend"><span><i class="observed-dot"></i>已观察</span><span><i class="predicted-dot"></i>时间推算</span></div>
+          <div id="conceptStates" class="memory-list"><div class="empty compact">启用并导入答辩证据后显示。</div></div>
+        </div>
+        <div>
+          <h3>交流偏好</h3>
+          <div class="preference-form">
+            <select id="preferenceKey"><option value="explanation_style">解释方式</option><option value="response_pace">回应节奏</option><option value="interruption_style">打断风格</option><option value="hint_style">提示方式</option><option value="interface_language">界面语言</option></select>
+            <select id="preferenceValue"></select>
+            <button id="savePreference" disabled>确认偏好</button>
+          </div>
+          <div id="preferenceList" class="memory-list"><div class="empty compact">尚无已确认偏好。</div></div>
+        </div>
+      </div>
+      <div class="memory-section-head"><h3>复测建议</h3><button id="planRetest" disabled>生成建议</button></div>
+      <div id="retestList" class="memory-list"><div class="empty compact">系统只提供建议，复测由您接受并启动。</div></div>
+    </section>
+
     <section id="reportPanel" class="panel report hidden">
       <div class="conversation-head"><div><span class="eyebrow">Evidence report</span><h2>答辩报告</h2></div></div>
       <div id="reportContent"></div>
     </section>
   </main>
 
-  <footer>v0.6 开发版 · 自适应认知、证据化评估与高级实时会话控制</footer>
-  <script src="/static/app.js?v=0.6.0-assessment-v2"></script>
+  <footer>v0.7 候选版 · 长期认知状态、确认式偏好、用户控制复测与可删除记忆</footer>
+  <script src="/static/app.js?v=0.7.0-rc1"></script>
 </body>
 </html>

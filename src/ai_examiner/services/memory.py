@@ -21,6 +21,7 @@ from ..models import (
 ALLOWED_MEMORY_CATEGORIES = frozenset(
     {
         "concept_evidence",
+        "concept_correction",
         "misconception",
         "retest_outcome",
         "explicit_preference",
@@ -96,6 +97,7 @@ class LearnerMemoryService:
         return identity, True
 
     def update_settings(self, identity: LearnerIdentity, values: dict) -> LearnerIdentity:
+        self._assert_writable(identity)
         if "memory_enabled" in values:
             identity.memory_enabled = bool(values["memory_enabled"])
             identity.disabled_at = None if identity.memory_enabled else utcnow()
@@ -119,6 +121,7 @@ class LearnerMemoryService:
         *,
         provenance: str,
     ) -> tuple[LearnerIdentityLink, bool]:
+        self._assert_writable(identity)
         if identity.memory_scope == "project_only":
             linked_projects = set(
                 self.db.scalars(
@@ -249,6 +252,7 @@ class LearnerMemoryService:
     def import_evidence(self, identity: LearnerIdentity, *, dry_run: bool) -> dict:
         if not identity.memory_enabled:
             raise MemoryConflictError("Long-term memory is disabled for this identity")
+        self._assert_writable(identity)
         subject_ids = list(
             self.db.scalars(
                 select(LearnerIdentityLink.learner_subject_id).where(
@@ -362,3 +366,8 @@ class LearnerMemoryService:
     def _validate_category(category: str) -> None:
         if category not in ALLOWED_MEMORY_CATEGORIES:
             raise MemoryPolicyError(f"Memory category is not allowed: {category}")
+
+    @staticmethod
+    def _assert_writable(identity: LearnerIdentity) -> None:
+        if identity.memory_write_blocked:
+            raise MemoryConflictError("Memory writes are blocked by a deletion job")

@@ -28,6 +28,9 @@ ASSISTANCE_MULTIPLIERS = {
     "corrected": 0.25,
 }
 TARGET_RETENTION = 0.70
+STATE_EVENT_TYPES = frozenset(
+    {"concept_evidence", "concept_correction", "retest_outcome"}
+)
 
 
 class LongitudinalStateError(ValueError):
@@ -76,14 +79,19 @@ class LongitudinalStateService:
             select(LearnerMemoryEvent)
             .where(
                 LearnerMemoryEvent.learner_identity_id == identity.id,
-                LearnerMemoryEvent.event_type == "concept_evidence",
+                LearnerMemoryEvent.event_type.in_(STATE_EVENT_TYPES),
                 LearnerMemoryEvent.concept_id.is_not(None),
                 LearnerMemoryEvent.deleted_at.is_(None),
             )
             .order_by(LearnerMemoryEvent.occurred_at, LearnerMemoryEvent.id)
         ).all()
+        superseded = {
+            event.supersedes_event_id for event in events if event.supersedes_event_id
+        }
         grouped: dict[str, list[LearnerMemoryEvent]] = defaultdict(list)
         for event in events:
+            if event.id in superseded:
+                continue
             if event.concept_id:
                 grouped[event.concept_id].append(event)
 
@@ -165,7 +173,7 @@ class LongitudinalStateService:
         self._validate_algorithm(algorithm_version)
         query = select(LearnerMemoryEvent).where(
             LearnerMemoryEvent.learner_identity_id == identity.id,
-            LearnerMemoryEvent.event_type == "concept_evidence",
+            LearnerMemoryEvent.event_type.in_(STATE_EVENT_TYPES),
             LearnerMemoryEvent.concept_id.is_not(None),
             LearnerMemoryEvent.deleted_at.is_(None),
         )
@@ -174,8 +182,13 @@ class LongitudinalStateService:
         events = self.db.scalars(
             query.order_by(LearnerMemoryEvent.occurred_at, LearnerMemoryEvent.id)
         ).all()
+        superseded = {
+            event.supersedes_event_id for event in events if event.supersedes_event_id
+        }
         grouped: dict[str, list[LearnerMemoryEvent]] = defaultdict(list)
         for event in events:
+            if event.id in superseded:
+                continue
             if event.concept_id:
                 grouped[event.concept_id].append(event)
         concepts = self._concepts(set(grouped))
@@ -236,9 +249,23 @@ class LongitudinalStateService:
         ).all()
         if not states:
             raise LongitudinalStateError("Rebuild longitudinal state before planning retests")
+        dismissed_concepts = set(
+            self.db.scalars(
+                select(RetestItem.concept_id)
+                .join(RetestPlan, RetestPlan.id == RetestItem.retest_plan_id)
+                .where(
+                    RetestPlan.learner_identity_id == identity.id,
+                    RetestItem.status == "dismissed",
+                    RetestItem.dismissed_until.is_not(None),
+                    RetestItem.dismissed_until > calculation_time,
+                )
+            ).all()
+        )
         importance = self._concept_importance({state.concept_id for state in states})
         candidates = []
         for state in states:
+            if state.concept_id in dismissed_concepts:
+                continue
             current = self._serialize_state(state, None, calculation_time)
             due_at = ensure_utc(state.next_retest_at or calculation_time)
             has_misconception = bool(state.active_misconceptions)
@@ -355,6 +382,19 @@ class LongitudinalStateService:
                     "selected_question_id": item.selected_question_id,
                     "outcome_event_id": item.outcome_event_id,
                     "status": item.status,
+                    "exam_session_id": item.exam_session_id,
+                    "dismissed_until": ensure_utc(item.dismissed_until).isoformat()
+                    if item.dismissed_until
+                    else None,
+                    "accepted_at": ensure_utc(item.accepted_at).isoformat()
+                    if item.accepted_at
+                    else None,
+                    "started_at": ensure_utc(item.started_at).isoformat()
+                    if item.started_at
+                    else None,
+                    "completed_at": ensure_utc(item.completed_at).isoformat()
+                    if item.completed_at
+                    else None,
                 }
                 for item in items
             ],

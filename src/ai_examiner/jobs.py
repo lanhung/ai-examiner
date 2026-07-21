@@ -7,9 +7,17 @@ from celery import Celery
 
 from .config import get_settings
 from .db import SessionLocal, init_db
-from .models import BackgroundJob, Document, GoldenDataset, Project
+from .models import (
+    BackgroundJob,
+    Document,
+    GoldenDataset,
+    LearnerIdentity,
+    MemoryDeletionAudit,
+    Project,
+)
 from .services.benchmark import BenchmarkService
 from .services.golden import GoldenDatasetService
+from .services.memory_control import MemoryControlService
 from .services.visual import VisualEvidenceService
 
 settings = get_settings()
@@ -148,4 +156,95 @@ def run_benchmark_task(job_id: str) -> dict:
         return result
     except Exception as exc:
         _update_job(job_id, status="failed", progress=1.0, error=str(exc), completed_at=utcnow())
+        raise
+
+
+@celery_app.task(name="ai_examiner.export_learner_memory")
+def export_learner_memory_task(job_id: str) -> dict:
+    init_db()
+    _update_job(
+        job_id,
+        status="running",
+        progress=0.1,
+        started_at=utcnow(),
+        message="Building memory export",
+    )
+    try:
+        with SessionLocal() as db:
+            job = db.get(BackgroundJob, job_id)
+            identity = db.get(LearnerIdentity, job.payload["identity_id"])
+            if not identity:
+                raise ValueError("Learner identity not found")
+            result = MemoryControlService(db, settings).export(
+                identity,
+                include_source_quotes=bool(job.payload.get("include_source_quotes")),
+            )
+            db.commit()
+        _update_job(
+            job_id,
+            status="completed",
+            progress=1.0,
+            message="Memory export completed",
+            result=result,
+            completed_at=utcnow(),
+        )
+        return result
+    except Exception as exc:
+        _update_job(
+            job_id,
+            status="failed",
+            progress=1.0,
+            message="Memory export failed",
+            error=str(exc),
+            completed_at=utcnow(),
+        )
+        raise
+
+
+@celery_app.task(name="ai_examiner.delete_learner_memory")
+def delete_learner_memory_task(job_id: str) -> dict:
+    init_db()
+    _update_job(
+        job_id,
+        status="running",
+        progress=0.1,
+        started_at=utcnow(),
+        message="Deleting requested memory scope",
+    )
+    audit_id = ""
+    try:
+        with SessionLocal() as db:
+            job = db.get(BackgroundJob, job_id)
+            audit_id = str(job.payload["audit_id"])
+            audit = db.get(MemoryDeletionAudit, audit_id)
+            if not audit:
+                raise ValueError("Memory deletion audit not found")
+            result = MemoryControlService(db, settings).execute_deletion(audit)
+            db.commit()
+        _update_job(
+            job_id,
+            status="completed",
+            progress=1.0,
+            message="Memory deletion completed",
+            result=result,
+            completed_at=utcnow(),
+        )
+        return result
+    except Exception as exc:
+        if audit_id:
+            with SessionLocal() as db:
+                audit = db.get(MemoryDeletionAudit, audit_id)
+                if audit:
+                    MemoryControlService(db, settings).mark_deletion_failed(
+                        audit, type(exc).__name__
+                    )
+                    db.commit()
+        _update_job(
+            job_id,
+            status="failed",
+            progress=1.0,
+            message="Memory deletion failed",
+            error=str(exc),
+            completed_at=utcnow(),
+        )
         raise

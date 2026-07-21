@@ -98,9 +98,16 @@ class ExamOrchestrator:
         if not questions:
             raise ValueError("Blueprint contains no questions")
         self.cognitive.ensure_blueprint_graph(blueprint)
-        selected = questions[0]
-        selection = SelectionResult(selected, int(selected.get("difficulty", 2)), ["fixed_order"], [])
-        if session.question_strategy == "adaptive":
+        target_question_id = str(session.config.get("target_question_id") or "")
+        selected = next(
+            (question for question in questions if str(question.get("id")) == target_question_id),
+            questions[0],
+        )
+        reason = "user_started_retest" if target_question_id else "fixed_order"
+        selection = SelectionResult(
+            selected, int(selected.get("difficulty", 2)), [reason], []
+        )
+        if session.question_strategy == "adaptive" and not target_question_id:
             units, question_units = self.cognitive.graph(blueprint.id)
             selection = self.selector.select(
                 questions=questions,
