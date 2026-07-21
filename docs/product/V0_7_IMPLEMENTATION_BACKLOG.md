@@ -80,6 +80,9 @@ Acceptance:
 
 Branch: `feature/v0.7-longitudinal-state`
 
+Implementation status: complete on `develop/v0.7.0`; offline retention calibration
+report remains part of WP-10.
+
 Deliverables:
 
 - `LearnerConceptState` rebuildable aggregate;
@@ -99,6 +102,10 @@ Acceptance:
 ### WP-05: Retest planner in shadow mode
 
 Branch: `feature/v0.7-retest-shadow`
+
+Implementation status: deterministic recommendation-only planner complete on
+`develop/v0.7.0`; baseline comparison and candidate-question novelty remain part of
+WP-10 and WP-06 respectively.
 
 Deliverables:
 

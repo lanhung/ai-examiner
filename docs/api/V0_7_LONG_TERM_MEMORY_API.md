@@ -1,7 +1,12 @@
 # v0.7 Long-term Memory API Draft
 
-Status: Research contract, not implemented  
-Version: 0.7.0-draft.1
+Status: Partial implementation on `develop/v0.7.0`
+Version: 0.7.0-dev.2
+
+Implemented in this increment: identity, links, settings, concepts, reviewed
+mappings, memory import/inspection, concept-state rebuild, growth series and shadow
+retest plans. Preferences, export, scoped deletion jobs and active retests remain
+contract-only.
 
 ## 1. Contract rules
 
@@ -105,6 +110,13 @@ allowed memory categories.
 
 ### `GET /api/learner-identities/{identity_id}/growth`
 
+Optional query parameters:
+
+```text
+concept_id
+algorithm_version=no-decay-v1|fixed-half-life-v1|evidence-half-life-v1
+```
+
 ```json
 {
   "concepts": [
@@ -130,6 +142,17 @@ allowed memory categories.
 
 The API must never return a predicted value in an `observed_mastery` field.
 
+### `GET /api/learner-identities/{identity_id}/concept-states`
+
+Returns the latest materialized aggregate and a retention prediction recomputed at
+request time. Each item keeps these fields separate:
+
+```text
+observed_mastery / last_observed_at
+predicted_retention / predicted_at
+observed_confidence / prediction_confidence
+```
+
 ## 5. Concept mappings
 
 ### `GET /api/concepts`
@@ -153,8 +176,7 @@ state queues a rebuild and records the reviewer type.
 {
   "horizon_days": 14,
   "max_items": 8,
-  "mode": "shadow",
-  "project_id": null
+  "mode": "shadow"
 }
 ```
 
@@ -168,7 +190,7 @@ Response items include:
   "reason_code": "unresolved_misconception",
   "predicted_retention": 0.58,
   "uncertainty": 0.31,
-  "source_state_version": "long-state-v1"
+  "source_state_version": "longitudinal-state-v1:evidence-half-life-v1"
 }
 ```
 
@@ -177,7 +199,8 @@ both enabled.
 
 ### `GET /api/learner-identities/{identity_id}/retest-plans`
 
-Returns plans and outcomes. Filters include status, date range and concept.
+Returns all shadow plans and proposed items, newest first. Outcome linkage and
+filters are reserved for WP-06.
 
 ## 7. Preferences
 
@@ -212,14 +235,15 @@ payloads.
 
 ```json
 {
-  "algorithm_version": "fixed-half-life-v1",
+  "algorithm_version": "evidence-half-life-v1",
   "dry_run": true
 }
 ```
 
-Dry-run response compares old and rebuilt aggregates without replacing active
-state. Non-dry-run rebuilds must be idempotent and preserve the prior version until
-success.
+Supported baselines are `no-decay-v1`, `fixed-half-life-v1` and
+`evidence-half-life-v1`. Dry-run returns calculated aggregates without replacing
+active state. Non-dry-run is deterministic and idempotently replaces materialized
+state from the immutable event ledger.
 
 ## 9. Export
 

@@ -1,7 +1,7 @@
 # Migration from v0.6 development to v0.7 development
 
-Status: v0.7 foundation increment
-Migration revision: `20260721_0003`
+Status: v0.7 longitudinal state increment
+Migration revision: `20260721_0004`
 
 ## 1. Scope
 
@@ -13,6 +13,9 @@ learner_identity_links
 concepts
 knowledge_unit_concept_maps
 learner_memory_events
+learner_concept_states
+retest_plans
+retest_items
 ```
 
 It does not alter or backfill existing v0.5/v0.6 sessions, learner subjects,
@@ -81,7 +84,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
 Expected revision:
 
 ```text
-20260721_0003 (head)
+20260721_0004 (head)
 ```
 
 Existing text and voice sessions must remain usable without creating a long-term
@@ -96,12 +99,12 @@ production copy.
 docker compose -f docker-compose.yml -f docker-compose.prod.yml down --remove-orphans
 
 docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-  run --rm --no-deps ai-examiner alembic downgrade 20260720_0002
+  run --rm --no-deps ai-examiner alembic downgrade 20260721_0003
 ```
 
-The downgrade removes only the five v0.7 foundation tables. Existing v0.6 tables
-remain intact. Any v0.7 long-term identities, mappings and memory events are lost,
-so restore the pre-upgrade backup if those records must be retained.
+The one-step downgrade removes the three derived longitudinal/retest tables while
+preserving the five v0.7 foundation tables and immutable memory ledger. Downgrading
+again to `20260720_0002` removes the foundation tables and their data.
 
 Reapply:
 
@@ -116,7 +119,12 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
 - no existing evidence is imported automatically;
 - an accepted `exact` or `narrower` concept mapping is required for import;
 - imports are idempotent by source evidence, concept and event type;
+- longitudinal state can be rebuilt with versioned no-decay, fixed-half-life or
+  evidence-sensitive half-life algorithms;
+- observed mastery is stored separately from time-dependent predicted retention;
+- retest plans are shadow recommendations and never modify a live session;
 - deleting a project removes its subject links, mappings and imported memory events;
+- deleting a project rebuilds affected concept state and removes stale shadow plans;
 - canonical concepts and unrelated learner identities remain after project deletion;
 - disabling memory blocks new evidence imports but preserves reviewable existing
   memory until an explicit deletion workflow is implemented in a later work package.

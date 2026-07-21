@@ -47,12 +47,14 @@ from .models import (
     KnowledgeEvidenceEvent,
     KnowledgeUnit,
     KnowledgeUnitConceptMap,
+    LearnerConceptState,
     LearnerIdentity,
     LearnerIdentityLink,
     LearnerMemoryEvent,
     LearnerSubject,
     Project,
     PromptVersion,
+    RetestPlan,
     Turn,
     UsageEvent,
     VisualAnalysis,
@@ -73,11 +75,13 @@ from .schemas import (
     JointAnalysisCreate,
     LearnerIdentityCreate,
     LearnerIdentityLinkCreate,
+    LongitudinalRebuildCreate,
     MemoryImportCreate,
     MemorySettingsUpdate,
     PolicyBenchmarkCreate,
     ProjectCreate,
     PromptVersionCreate,
+    RetestPlanCreate,
     SessionCreate,
     VisualAnalyzeCreate,
     VoiceEventCreate,
@@ -93,6 +97,7 @@ from .services.evidence import create_highlighted_crop, persist_evidence, serial
 from .services.golden import GoldenDatasetService
 from .services.jobs import JobQueueUnavailable, enqueue_job, serialize_job
 from .services.joint import JointAnalysisService
+from .services.longitudinal import LongitudinalStateError, LongitudinalStateService
 from .services.memory import (
     LearnerMemoryService,
     MemoryConflictError,
@@ -1064,7 +1069,111 @@ def import_learner_memory(
         raise HTTPException(409, str(exc)) from exc
     if not payload.dry_run:
         db.commit()
-    return {"learner_identity_id": identity.id, **result}
+    return {
+        "learner_identity_id": identity.id,
+        **result,
+        "rebuild_required": result["imported"] > 0 and not payload.dry_run,
+    }
+
+
+@app.post("/api/learner-identities/{identity_id}/memory/rebuild")
+def rebuild_learner_memory(
+    identity_id: str,
+    payload: LongitudinalRebuildCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    identity = learner_identity_or_404(db, identity_id)
+    memory_service(db)
+    service = LongitudinalStateService(db)
+    try:
+        states = service.rebuild(
+            identity,
+            algorithm_version=payload.algorithm_version,
+            dry_run=payload.dry_run,
+        )
+    except LongitudinalStateError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not payload.dry_run:
+        db.commit()
+        states = service.states(identity)
+    return {
+        "learner_identity_id": identity.id,
+        "algorithm_version": payload.algorithm_version,
+        "dry_run": payload.dry_run,
+        "state_count": len(states),
+        "states": states,
+    }
+
+
+@app.get("/api/learner-identities/{identity_id}/concept-states")
+def get_learner_concept_states(
+    identity_id: str, db: Annotated[Session, Depends(get_db)]
+):
+    identity = learner_identity_or_404(db, identity_id)
+    memory_service(db)
+    states = LongitudinalStateService(db).states(identity)
+    return {
+        "learner_identity_id": identity.id,
+        "state_count": len(states),
+        "states": states,
+    }
+
+
+@app.get("/api/learner-identities/{identity_id}/growth")
+def get_learner_growth(
+    identity_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    concept_id: str | None = None,
+    algorithm_version: str = "evidence-half-life-v1",
+):
+    identity = learner_identity_or_404(db, identity_id)
+    memory_service(db)
+    try:
+        series = LongitudinalStateService(db).growth(
+            identity,
+            concept_id=concept_id,
+            algorithm_version=algorithm_version,
+        )
+    except LongitudinalStateError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {
+        "learner_identity_id": identity.id,
+        "algorithm_version": algorithm_version,
+        "series": series,
+    }
+
+
+@app.post("/api/learner-identities/{identity_id}/retest-plans", status_code=201)
+def create_retest_plan(
+    identity_id: str,
+    payload: RetestPlanCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    identity = learner_identity_or_404(db, identity_id)
+    memory_service(db)
+    try:
+        plan = LongitudinalStateService(db).create_retest_plan(
+            identity,
+            horizon_days=payload.horizon_days,
+            max_items=payload.max_items,
+            mode=payload.mode,
+        )
+    except LongitudinalStateError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    db.commit()
+    return plan
+
+
+@app.get("/api/learner-identities/{identity_id}/retest-plans")
+def list_retest_plans(
+    identity_id: str, db: Annotated[Session, Depends(get_db)]
+):
+    identity = learner_identity_or_404(db, identity_id)
+    memory_service(db)
+    return {
+        "learner_identity_id": identity.id,
+        "plans": LongitudinalStateService(db).plans(identity),
+    }
 
 
 @app.get("/api/learner-identities/{identity_id}/memory")
@@ -1162,6 +1271,16 @@ def delete_project(project_id: str, db: Annotated[Session, Depends(get_db)]):
     if not project:
         raise HTTPException(404, "Project not found")
     upload_path = settings.upload_dir / project_id
+    affected_identity_ids = set(
+        db.scalars(
+            select(LearnerIdentityLink.learner_identity_id)
+            .join(
+                LearnerSubject,
+                LearnerSubject.id == LearnerIdentityLink.learner_subject_id,
+            )
+            .where(LearnerSubject.project_id == project_id)
+        ).all()
+    )
     for run in db.scalars(
         select(BenchmarkRun).where(BenchmarkRun.project_id == project_id)
     ).all():
@@ -1179,6 +1298,25 @@ def delete_project(project_id: str, db: Annotated[Session, Depends(get_db)]):
         ).all():
             db.delete(dataset)
     db.delete(project)
+    db.flush()
+    longitudinal = LongitudinalStateService(db)
+    for identity_id in affected_identity_ids:
+        for plan in db.scalars(
+            select(RetestPlan).where(RetestPlan.learner_identity_id == identity_id)
+        ).all():
+            db.delete(plan)
+        identity = db.get(LearnerIdentity, identity_id)
+        if identity:
+            algorithm_version = db.scalar(
+                select(LearnerConceptState.algorithm_version).where(
+                    LearnerConceptState.learner_identity_id == identity_id
+                )
+            ) or "evidence-half-life-v1"
+            longitudinal.rebuild(
+                identity,
+                algorithm_version=algorithm_version,
+                dry_run=False,
+            )
     db.commit()
     if upload_path.exists():
         shutil.rmtree(upload_path, ignore_errors=True)

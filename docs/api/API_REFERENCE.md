@@ -132,6 +132,24 @@ qwen:qwen3-vl-plus   DashScope page and chart visual review
 
 The browser receives readiness and model metadata only. `DASHSCOPE_API_KEY` remains server-side.
 
+# v0.7 Longitudinal Memory Development API
+
+The v0.7 endpoints are evaluation-only and require `MEMORY_IDENTITY_SECRET`:
+
+```http
+POST /api/learner-identities/{id}/memory/import
+POST /api/learner-identities/{id}/memory/rebuild
+GET  /api/learner-identities/{id}/memory
+GET  /api/learner-identities/{id}/concept-states
+GET  /api/learner-identities/{id}/growth
+POST /api/learner-identities/{id}/retest-plans
+GET  /api/learner-identities/{id}/retest-plans
+```
+
+Rebuild accepts `no-decay-v1`, `fixed-half-life-v1` or
+`evidence-half-life-v1`. Retest creation accepts `mode=shadow` only; v0.7 does not
+inject retest items into live sessions.
+
 # v0.4 Realtime Voice API
 
 ## GET `/api/voice/config`

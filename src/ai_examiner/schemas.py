@@ -176,3 +176,18 @@ class ConceptMappingReview(BaseModel):
 
 class MemoryImportCreate(BaseModel):
     dry_run: bool = False
+
+
+class LongitudinalRebuildCreate(BaseModel):
+    algorithm_version: Literal[
+        "no-decay-v1",
+        "fixed-half-life-v1",
+        "evidence-half-life-v1",
+    ] = "evidence-half-life-v1"
+    dry_run: bool = False
+
+
+class RetestPlanCreate(BaseModel):
+    horizon_days: int = Field(default=14, ge=1, le=90)
+    max_items: int = Field(default=8, ge=1, le=50)
+    mode: Literal["shadow"] = "shadow"

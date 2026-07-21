@@ -4,13 +4,28 @@
 
 - Version: `0.7.0.dev0`
 - Branch: `develop/v0.7.0`
-- Work package: `WP-01 to WP-03 long-term memory foundation`
+- Work package: `WP-01 to WP-05 memory, longitudinal state and shadow retest`
 - Deployment: development evaluation only; stable/RC lines remain unchanged
 - Release tag: not created
 
 This increment adds opaque identity linking, memory controls, canonical concept
-mappings and an idempotent evidence ledger without changing the live OpenAI or Qwen
-media path. The inherited v0.5/v0.6 details below remain historical context.
+mappings, an idempotent evidence ledger, replayable retention estimates and shadow
+retest recommendations without changing the live OpenAI or Qwen media path. Retest
+plans remain advisory and cannot modify a live session. The inherited v0.5/v0.6
+details below remain historical context.
+
+## v0.7 increment verification
+
+```text
+WP-01 opaque identity and controls             implemented
+WP-02 canonical concept registry               implemented
+WP-03 idempotent memory event ledger            implemented
+WP-04 longitudinal state and growth series      implemented
+WP-05 shadow retest planner                     implemented
+Alembic head                                    20260721_0004
+Active retest scheduling                        disabled
+Preference memory / memory center               not implemented
+```
 
 ## 发布状态
 

@@ -481,6 +481,87 @@ class LearnerMemoryEvent(Base):
     )
 
 
+class LearnerConceptState(Base):
+    __tablename__ = "learner_concept_states"
+    __table_args__ = (
+        UniqueConstraint(
+            "learner_identity_id", "concept_id", name="uq_learner_concept_state"
+        ),
+        Index("ix_concept_state_retest", "learner_identity_id", "next_retest_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learner_identity_id: Mapped[str] = mapped_column(
+        ForeignKey("learner_identities.id", ondelete="CASCADE")
+    )
+    concept_id: Mapped[str] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE")
+    )
+    observed_mastery: Mapped[float] = mapped_column(Float, default=0.0)
+    observed_confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    last_observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    predicted_retention: Mapped[float] = mapped_column(Float, default=0.0)
+    prediction_confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    stability_days: Mapped[float] = mapped_column(Float, default=30.0)
+    difficulty_estimate: Mapped[float] = mapped_column(Float, default=5.5)
+    evidence_count: Mapped[int] = mapped_column(Integer, default=0)
+    independent_evidence_count: Mapped[int] = mapped_column(Integer, default=0)
+    assisted_evidence_count: Mapped[int] = mapped_column(Integer, default=0)
+    active_misconceptions: Mapped[list] = mapped_column(JSON, default=list)
+    next_retest_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    algorithm_version: Mapped[str] = mapped_column(
+        String(50), default="fixed-half-life-v1"
+    )
+    rebuilt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RetestPlan(Base):
+    __tablename__ = "retest_plans"
+    __table_args__ = (
+        Index("ix_retest_plan_identity_created", "learner_identity_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    learner_identity_id: Mapped[str] = mapped_column(
+        ForeignKey("learner_identities.id", ondelete="CASCADE")
+    )
+    horizon_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    horizon_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(30), default="shadow")
+    policy_version: Mapped[str] = mapped_column(String(50), default="retest-shadow-v1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RetestItem(Base):
+    __tablename__ = "retest_items"
+    __table_args__ = (
+        UniqueConstraint("retest_plan_id", "concept_id", name="uq_retest_plan_concept"),
+        Index("ix_retest_item_due", "retest_plan_id", "due_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    retest_plan_id: Mapped[str] = mapped_column(
+        ForeignKey("retest_plans.id", ondelete="CASCADE")
+    )
+    concept_id: Mapped[str] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE")
+    )
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    priority: Mapped[float] = mapped_column(Float)
+    reason_code: Mapped[str] = mapped_column(String(50))
+    predicted_retention: Mapped[float] = mapped_column(Float)
+    uncertainty: Mapped[float] = mapped_column(Float)
+    source_state_version: Mapped[str] = mapped_column(String(50))
+    selected_question_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    outcome_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("learner_memory_events.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(30), default="proposed")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class KnowledgeState(Base):
     __tablename__ = "knowledge_states"
     __table_args__ = (
