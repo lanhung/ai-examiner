@@ -40,3 +40,7 @@ deployment.
 - The release candidate passed a real `qwen-plus` blueprint and adaptive-answer
   smoke test. A full Docker Compose build remains required on a standard Vultr
   host because the SeetaCloud evaluation container blocks nested image builds.
+- Real-device acceptance confirmed a 638 ms OpenAI WebRTC first response and a
+  working Qwen PCM stream after gating the microphone during the opening turn.
+  Human-spoken ASR accuracy and subjective speaker quality still require a short
+  listener test on the target deployment.

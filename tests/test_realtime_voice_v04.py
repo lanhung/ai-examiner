@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 
 
 def create_project_and_blueprint(client):
@@ -223,3 +224,20 @@ def test_qwen_realtime_session_includes_safe_client_config(client, monkeypatch):
         socket.send_json(data["client_config"])
         assert socket.receive_json()["type"] == "session.updated"
     assert upstream.sent[0]["type"] == "session.update"
+
+
+def test_qwen_browser_gates_microphone_until_initial_response_finishes():
+    app_js = (
+        Path(__file__).parents[1] / "src" / "ai_examiner" / "static" / "app.js"
+    ).read_text(encoding="utf-8")
+
+    assert "voiceInputReady: false" in app_js
+    assert "!state.voiceInputReady || state.voiceMuted" in app_js
+    assert "state.voiceInputReady = false" in app_js
+    assert "track.enabled = false" in app_js
+    assert 'type === "response.done"' in app_js
+    assert "state.voiceInputReady = true" in app_js
+    assert "track.enabled = !state.voiceMuted && !state.voicePtt" in app_js
+    assert 'const transcript = (data.transcript || "").trim()' in app_js
+    assert "state.voiceInitialRequestAt = Date.now()" in app_js
+    assert "qwen_initial_response_timeout" in app_js

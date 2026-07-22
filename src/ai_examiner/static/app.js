@@ -24,8 +24,11 @@ const state = {
   voiceMuted: false,
   voicePtt: false,
   voiceStartedAt: 0,
+  voiceInitialRequestAt: 0,
   voiceFirstResponseRecorded: false,
   voiceInitialResponseSent: false,
+  voiceInputReady: false,
+  voiceInitialResponseTimer: null,
   voiceProvider: "openai",
   voiceClientConfig: null,
   voiceMode: "",
@@ -812,6 +815,7 @@ function playQwenPcm(base64Audio) {
 function sendInitialVoiceResponse() {
   if (state.voiceInitialResponseSent) return;
   state.voiceInitialResponseSent = true;
+  state.voiceInitialRequestAt = Date.now();
   if (state.voiceProvider === "openai") {
     sendRealtimeEvent({
       type: "conversation.item.create",
@@ -819,6 +823,16 @@ function sendInitialVoiceResponse() {
     });
   }
   sendRealtimeEvent({type: "response.create", event_id: `event_start_${Date.now()}`});
+  if (state.voiceProvider === "qwen") {
+    clearTimeout(state.voiceInitialResponseTimer);
+    state.voiceInitialResponseTimer = setTimeout(() => {
+      if (!state.voiceInputReady) {
+        setStatus("voiceStatus", "千问已连接，但首个问题响应超时。请结束语音后重试。", "error");
+        setVoiceVisual("", "首个问题未能及时生成，请结束后重试。");
+        persistVoiceEvent("error", null, "qwen_initial_response_timeout", null, {type: "client_timeout"});
+      }
+    }, 12000);
+  }
 }
 
 function handleRealtimeEvent(event) {
@@ -845,12 +859,15 @@ function handleRealtimeEvent(event) {
   } else if (type === "input_audio_buffer.speech_stopped") {
     setVoiceVisual("thinking", "已听完，正在组织追问…");
   } else if (type === "response.created") {
+    clearTimeout(state.voiceInitialResponseTimer);
+    state.voiceInitialResponseTimer = null;
     setVoiceVisual("thinking", "正在生成回应…");
   } else if (type === "response.output_audio_transcript.delta" || type === "response.audio_transcript.delta") {
     setVoiceVisual("speaking", data.delta || "AI 正在说…");
     if (!state.voiceFirstResponseRecorded) {
       state.voiceFirstResponseRecorded = true;
-      const latency = Math.max(0, Date.now() - state.voiceStartedAt);
+      const latencyStart = state.voiceInitialRequestAt || state.voiceStartedAt;
+      const latency = Math.max(0, Date.now() - latencyStart);
       persistVoiceEvent("first_response", null, "", latency, {type});
     }
   } else if (type === "response.audio.delta" && state.voiceProvider === "qwen") {
@@ -861,17 +878,29 @@ function handleRealtimeEvent(event) {
     persistVoiceEvent("transcript", "assistant", transcript, null, {type, item_id: data.item_id});
     setVoiceVisual("connected", "轮到您回答。直接说话即可。 ");
   } else if (type === "conversation.item.input_audio_transcription.completed") {
-    const transcript = data.transcript || "";
-    addVoiceTranscript("user", transcript);
-    persistVoiceEvent("transcript", "user", transcript, null, {type, item_id: data.item_id});
+    const transcript = (data.transcript || "").trim();
+    if (transcript) {
+      addVoiceTranscript("user", transcript);
+      persistVoiceEvent("transcript", "user", transcript, null, {type, item_id: data.item_id});
+    }
   } else if (type === "conversation.item.input_audio_transcription.delta") {
     const preview = `${data.text || ""}${data.stash || ""}`;
     if (preview) setVoiceVisual("listening", preview);
   } else if (type === "response.done") {
+    state.voiceInputReady = true;
+    if (state.voiceStream) {
+      state.voiceStream.getAudioTracks().forEach((track) => {
+        track.enabled = !state.voiceMuted && !state.voicePtt;
+      });
+    }
+    clearTimeout(state.voiceInitialResponseTimer);
+    state.voiceInitialResponseTimer = null;
     setVoiceVisual("connected", "轮到您回答。直接说话即可。 ");
     const usage = data.response && data.response.usage ? data.response.usage : (data.usage || {});
     persistVoiceEvent("response_done", null, "", null, {type, usage});
   } else if (type === "error") {
+    clearTimeout(state.voiceInitialResponseTimer);
+    state.voiceInitialResponseTimer = null;
     const message = data.error && data.error.message ? data.error.message : (data.message || "Realtime API 错误");
     setStatus("voiceStatus", message, "error");
     setVoiceVisual("", "连接出现错误，请结束后重试。 ");
@@ -915,7 +944,7 @@ async function connectQwenVoice(voiceSession, stream) {
   silentGain.gain.value = 0;
   processor.onaudioprocess = (event) => {
     const audioTrack = stream.getAudioTracks()[0];
-    if (state.voiceMuted || !audioTrack || !audioTrack.enabled || socket.readyState !== WebSocket.OPEN) return;
+    if (!state.voiceInputReady || state.voiceMuted || !audioTrack || !audioTrack.enabled || socket.readyState !== WebSocket.OPEN) return;
     const audio = floatAudioToPcm16Base64(event.inputBuffer.getChannelData(0), context.sampleRate);
     socket.send(JSON.stringify({
       type: "input_audio_buffer.append",
@@ -963,14 +992,19 @@ async function connectVoice() {
   state.learnerSubjectId = voiceSession.learner_subject_id;
   $("enableMemory").disabled = false;
   state.voiceStartedAt = Date.now();
+  state.voiceInitialRequestAt = 0;
   state.voiceFirstResponseRecorded = false;
   state.voiceInitialResponseSent = false;
+  state.voiceInputReady = false;
+  clearTimeout(state.voiceInitialResponseTimer);
+  state.voiceInitialResponseTimer = null;
   state.voiceProvider = provider.id;
   state.voiceClientConfig = voiceSession.client_config || null;
 
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1},
   });
+  stream.getAudioTracks().forEach((track) => { track.enabled = false; });
   state.voiceStream = stream;
   if (provider.id === "qwen") {
     await connectQwenVoice(voiceSession, stream);
@@ -1095,6 +1129,10 @@ async function endVoice(reason = "user_ended") {
   state.voiceAudio = null;
   state.voiceClientConfig = null;
   state.voiceInitialResponseSent = false;
+  state.voiceInitialRequestAt = 0;
+  state.voiceInputReady = false;
+  clearTimeout(state.voiceInitialResponseTimer);
+  state.voiceInitialResponseTimer = null;
   state.voiceSessionId = null;
   state.voiceMuted = false;
   state.voicePtt = false;

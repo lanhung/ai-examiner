@@ -48,6 +48,11 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ### Fixed
 
+- Gate microphone uplink until the examiner's initial realtime response completes,
+  preventing ambient input from racing the opening question on both OpenAI WebRTC
+  and Qwen WebSocket sessions.
+- Measure first-response latency from `response.create`, ignore empty user
+  transcripts, and surface a bounded Qwen opening-response timeout.
 - Evaluate follow-up answers against the active follow-up text instead of the
   parent main question.
 - Continue adaptive sessions after the follow-up limit when remaining questions
