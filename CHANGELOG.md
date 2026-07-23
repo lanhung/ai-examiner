@@ -82,6 +82,23 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   text sessions and realtime voice sessions.
 - Add browser and static regression coverage for mobile layout, contract-safe
   correction timing and template request wiring.
+- Add a deterministic v0.8 template evaluation runner and CLI covering validation,
+  recompilation, platform invariants, 21-pair distinctness, override boundaries and
+  local performance without paid-model calls.
+- Keep real-provider relevance, Docker Compose and Vultr rehearsal gates explicitly
+  held instead of allowing deterministic or Mock results to authorize release.
+- Add a provider-contract probe for compiled scenario templates with actual model,
+  token, latency, coverage and violation evidence but no credentials or prompts in
+  its output.
+- Add one bounded Planner repair attempt when a real provider returns a question
+  type, difficulty or objective mapping outside the compiled template contract.
+- Accept validated Qwen and independent-provider probe reports as evidence for only
+  the corresponding provider gates; relevance, Compose and Vultr gates remain held.
+- Allow Compose deployments to inject a separate environment file and host data
+  directory while preserving `.env` and `./data` defaults.
+- Add an isolated v0.8 Compose rehearsal for configuration, build, migration,
+  health, template gates and SQLite backup inspection without touching the active
+  project or using paid-model credentials.
 
 ## [0.7.0-rc.2] - 2026-07-23
 

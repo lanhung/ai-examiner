@@ -229,13 +229,51 @@ Delivered:
 - contract-safe correction timing controls and persistent save feedback;
 - desktop and 390-by-844 mobile browser verification without horizontal overflow.
 
+## Increment J: deterministic template evaluation
+
+Delivered:
+
+- one `template-evaluation-v1` machine-readable report contract;
+- seven latest-scenario and nine packaged-version validation;
+- deterministic recompilation and platform invariant gates;
+- all 21 pairwise scenario distinctness checks;
+- 112 valid/invalid override boundary probes;
+- local validation and compilation p50/p95 timings;
+- an explicit release-evidence hold that deterministic and Mock results cannot
+  clear.
+
+## Increment K: real-provider probes and deployment rehearsal harness
+
+Delivered:
+
+- a `template-provider-probe-v1` CLI using the real Session Planner path;
+- Qwen `qwen-plus` contract samples across thesis defense, course oral and
+  technical interview templates;
+- OpenAI `gpt-5.4-mini` independent samples across the same three templates;
+- actual provider/model, token, latency, coverage and violation evidence without
+  secrets or rendered prompts;
+- one bounded full-blueprint repair attempt for provider output outside the
+  immutable template contract;
+- provider evidence ingestion that releases only the Qwen and independent-provider
+  sample gates;
+- isolated Compose environment/data injection and a temporary-project rehearsal
+  script covering build, migration, health, deterministic evaluation and backup
+  inspection.
+
+Held:
+
+- frozen-corpus scenario relevance;
+- actual Docker Compose rehearsal on a Docker host;
+- Vultr upgrade and rollback rehearsal.
+
 ## Verification
 
 ```text
 WP-11 targeted tests          16 passed
+WP-12 targeted tests          32 passed
 Targeted Ruff                 passed
 Wheel built-in resource       packaged
-Full pytest                   118 passed
+Full pytest                   127 passed
 Full Ruff                     passed
 JavaScript syntax             passed
 git diff --check              passed
@@ -243,7 +281,9 @@ Tracked-source secret scan    no key patterns found
 Alembic single head           20260723_0007
 Alembic metadata drift check  no new upgrade operations
 Wheel build                   ai_examiner_mvp-0.8.0.dev0-py3-none-any.whl
-Docker Compose config         not run (Docker unavailable on this host)
+Qwen template probe           3/3 scenarios passed
+OpenAI template probe         3/3 scenarios passed
+Docker Compose rehearsal      held (Docker unavailable on this host)
 ```
 
 Pytest exits successfully, but the Windows interpreter still prints the existing

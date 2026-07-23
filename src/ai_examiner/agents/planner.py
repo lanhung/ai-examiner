@@ -107,6 +107,34 @@ excerpts in their original language and preserve the substantive assessment desi
             )
             if not self._matches_language(data, language):
                 raise ValueError(f"Planner did not produce the requested language: {language}")
+        self._normalize_questions(data)
+        if template_contract:
+            try:
+                self._apply_template_contract(data, template_contract)
+            except ValueError as exc:
+                data = self._json(
+                    """Correct a prior assessment blueprint that violated the supplied
+scenario contract. Return the complete blueprint. Every question type, difficulty,
+objective mapping, question count, and coverage decision must follow the contract.
+Do not silently broaden the taxonomy or weaken any bound.""",
+                    {
+                        **payload,
+                        "contract_violation": str(exc),
+                        "invalid_contract_result": data,
+                    },
+                    schema,
+                )
+                if not self._matches_language(data, language):
+                    raise ValueError(
+                        f"Planner contract repair used the wrong language: {language}"
+                    ) from exc
+                self._normalize_questions(data)
+                self._apply_template_contract(data, template_contract)
+        data["response_language"] = language
+        return data
+
+    @staticmethod
+    def _normalize_questions(data: dict[str, Any]) -> None:
         questions = data.get("questions") or []
         if not questions:
             raise ValueError("Planner produced no questions")
@@ -115,10 +143,6 @@ excerpts in their original language and preserve the substantive assessment desi
             question.setdefault("expected_points", [])
             question.setdefault("followups", [])
             question.setdefault("difficulty", 3)
-        if template_contract:
-            self._apply_template_contract(data, template_contract)
-        data["response_language"] = language
-        return data
 
     @staticmethod
     def _apply_template_contract(

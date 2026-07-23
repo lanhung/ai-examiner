@@ -115,6 +115,18 @@ class MockProvider(ModelProvider):
                 "followups": ["哪个补强最优先？", "如果无法新增实验，如何收缩论断？"],
             },
         ]
+        scenario = payload.get("scenario_planning_contract") or {}
+        allowed_types = list(scenario.get("allowed_question_types") or [])
+        difficulty = scenario.get("difficulty") or {}
+        minimum_difficulty = int(difficulty.get("minimum", 1))
+        maximum_difficulty = int(difficulty.get("maximum", 5))
+        if allowed_types:
+            for index, question in enumerate(questions):
+                question["type"] = allowed_types[index % len(allowed_types)]
+                question["difficulty"] = min(
+                    maximum_difficulty,
+                    max(minimum_difficulty, int(question["difficulty"])),
+                )
         return {
             "title": payload.get("filename", "未命名材料"),
             "summary": (

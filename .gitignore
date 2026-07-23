@@ -8,6 +8,7 @@ htmlcov/
 data/*.db
 data/*.db-*
 data/*.log
+data/*.json
 data/test_*/
 data/uploads/*
 !data/uploads/.gitkeep

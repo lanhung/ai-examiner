@@ -19,7 +19,7 @@ Current package version: `0.8.0.dev0`
 | WP-09 | Increment G complete | Seven bilingual reviewed scenarios with distinct runtime behavior and explicit safety boundaries |
 | WP-10 | Increment H complete | Safe import/export, local-authoring seam, stable errors and deterministic semantic diff |
 | WP-11 | Increment I complete | Responsive template library, structured editor, preview, lifecycle actions and session wiring |
-| WP-12 | In progress | Evaluation runner, provider samples, migration/Compose rehearsal and release hardening remain |
+| WP-12 | Increment K in progress | Deterministic runner and Qwen/OpenAI probes pass; isolated Compose harness ready, but Docker/Vultr execution and relevance remain |
 
 Increment A is a compatibility foundation, not a complete v0.8 release. It does
 not change session behavior or authorize production deployment.
@@ -277,6 +277,9 @@ Acceptance:
 ### WP-12: Evaluation runner and release hardening
 
 Branch: `feature/v0.8-template-evals`
+
+Status: Increment J deterministic runner and Increment K real-provider contract
+probes complete; relevance and deployment rehearsal evidence remains held.
 
 Deliverables:
 

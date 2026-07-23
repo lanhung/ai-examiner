@@ -1,4 +1,4 @@
-.PHONY: install install-providers run test lint demo smoke corpus clean
+.PHONY: install install-providers run test lint demo smoke corpus eval-templates probe-template-providers clean
 
 install:
 	uv sync --extra dev
@@ -23,6 +23,12 @@ smoke:
 
 corpus:
 	uv run ai-examiner-build-corpus --input ./papers --output ./golden_exports
+
+eval-templates:
+	uv run ai-examiner-evaluate-templates --output ./data/template-evaluation-report.json
+
+probe-template-providers:
+	uv run ai-examiner-probe-template-providers --document ./examples/sample_research.md
 
 clean:
 	rm -rf .pytest_cache .ruff_cache htmlcov .coverage data/*.db dist build *.egg-info

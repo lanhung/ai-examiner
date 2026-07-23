@@ -40,6 +40,37 @@ are available without making raw YAML the primary authoring interface. A selecte
 published template is applied consistently to blueprint, text and realtime voice
 requests.
 
+Run the deterministic v0.8 template gates without paid-model calls:
+
+```bash
+uv run ai-examiner-evaluate-templates \
+  --output ./data/template-evaluation-report.json
+```
+
+Add `--require-release-evidence` in release automation to keep the command failing
+until real-provider, Docker Compose and Vultr rehearsal evidence has been recorded.
+
+Probe configured real providers against three compiled scenario contracts:
+
+```bash
+uv run ai-examiner-probe-template-providers \
+  --document ./examples/sample_research.md \
+  --profiles qwen:qwen-plus,openai:gpt-5.4-mini
+```
+
+The provider probe checks access and contract compliance. It is deliberately
+separate from blind scenario-relevance judging.
+
+On a Docker host, run the isolated Compose rehearsal without touching the active
+deployment:
+
+```bash
+./deploy/rehearse-v08-compose.sh
+```
+
+It uses an isolated project name, temporary data directory, temporary Mock-only
+environment and a cleanup trap.
+
 Reviewed bilingual built-in scenarios now include:
 
 - thesis defense practice;
