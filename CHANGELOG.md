@@ -4,6 +4,12 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ## [Unreleased]
 
+### Added
+
+- Add the v0.8 industry template platform research package covering immutable
+  template versions, deterministic compilation, policy-bounded overrides, session
+  snapshots, lifecycle APIs, behavioral evaluation and an implementation backlog.
+
 ## [0.7.0-rc.2] - 2026-07-23
 
 ### Added

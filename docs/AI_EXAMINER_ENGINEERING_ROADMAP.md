@@ -2,7 +2,7 @@
 
 Document version: 2.0  
 Audience: Codex and other coding agents  
-Current development target: v0.6.0 implementation and v0.7.0 research
+Current development target: v0.7.0 release validation and v0.8.0 research
 
 ## 0. How to use this document
 
@@ -63,9 +63,9 @@ Prompt, model and policy changes require a frozen dataset comparison. Do not mer
 
 Keep Docker Compose deployable, preserve `.env` and `data/`, use additive migrations, document rollback, and never commit keys or user data.
 
-## 3. Current baseline: v0.4.1
+## 3. Current engineering baseline: v0.7.0rc2
 
-The stable system includes:
+The current candidate includes the stable v0.4 capabilities plus:
 
 - FastAPI, SQLAlchemy, SQLite, Redis and Celery;
 - Docker Compose deployment on Vultr/AutoDL;
@@ -78,16 +78,22 @@ The stable system includes:
 - WebRTC or streaming voice, transcripts, VAD and interruption support;
 - selectable models for blueprint and text examination;
 - local Ollama provider and persistent model storage.
+- adaptive knowledge state, auditable question selection and difficulty control;
+- evidence-bound independent versus assisted assessment;
+- normalized realtime timing signals and hardened OpenAI/Qwen opening turns;
+- optional opaque learner identity, canonical concepts and longitudinal state;
+- user-started retests, confirmed preferences and memory lifecycle controls;
+- additive Alembic migrations and PostgreSQL domain readiness.
 
-Known architectural debt:
+Known architectural debt relevant to v0.8:
 
-- fixed question sequence;
-- per-question JSON mastery rather than concept state;
-- no migration framework;
-- SQLite concurrency constraints;
-- limited long-term learner identity;
-- architecture/evaluation documents have version drift;
-- some provider behavior still needs real-session latency and quality measurements.
+- scenario behavior is split across `domain`, `mode`, flags and prompt text;
+- Planner question taxonomy is still centered on research defense;
+- report scoring contains mode-specific branches;
+- there is no immutable template version or session policy snapshot;
+- there is no safe lifecycle for local scenario authoring and publication;
+- SQLite concurrency constraints remain until the enterprise line;
+- some provider behavior still needs broader real-session quality measurements.
 
 ## 4. v0.5.0: Adaptive Cognitive Engine
 
@@ -218,6 +224,32 @@ Initial templates:
 - project review.
 
 A template must change policy and evaluation behavior, not only rename the AI role.
+
+Accepted research direction:
+
+- keep material blueprints separate from reusable scenario policy;
+- author templates in YAML/JSON and validate with JSON Schema Draft 2020-12 plus
+  deterministic semantic checks;
+- compile every template into fixed Planner, Policy, Assessment, Report, Voice and
+  Safety sections;
+- make published template versions immutable and store an effective snapshot and
+  fingerprint on every session;
+- allow only declared locked, bounded, selectable or one-way overrides;
+- prohibit executable code, arbitrary system prompts and automatic high-stakes
+  decisions in templates;
+- preserve v0.7 requests through deterministic legacy mappings;
+- treat QTI as a later assessment-item interoperability adapter, not the native
+  conversational template format;
+- ship reviewed built-ins before any public sharing or marketplace work;
+- require behavioral distinctness and invariant tests for every template.
+
+Detailed research specifications:
+
+- `docs/decisions/ADR-005-VERSIONED-SCENARIO-TEMPLATES.md`;
+- `docs/architecture/V0_8_INDUSTRY_TEMPLATE_PLATFORM.md`;
+- `docs/api/V0_8_TEMPLATE_API.md`;
+- `docs/evaluation/V0_8_TEMPLATE_EVALUATION_PLAN.md`;
+- `docs/product/V0_8_IMPLEMENTATION_BACKLOG.md`.
 
 ## 8. v0.9.0: Enterprise platform
 

@@ -16,6 +16,7 @@ This file is the authoritative version and branch status for Codex and other cod
 | Next research | 0.7.0 | `research/v0.7.0` | Long-term learner intelligence architecture and evaluation design | Not deployable |
 | Next implementation | 0.7.0rc2 | `develop/v0.7.0` | WP-01 to WP-12 complete; real Qwen, browser and real-audio acceptance passed | Staging only |
 | v0.7 candidate | 0.7.0rc2 | `v0.7.0-rc.2` | Candidate release; Vultr Compose promotion gate remains | Staging only |
+| Upcoming research | 0.8.0 | `research/v0.8.0` | Industry template architecture, API, evaluation and implementation design | Not deployable |
 | Release candidate | 0.5.0rc4 | `v0.5.0-rc.4` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 
@@ -39,6 +40,10 @@ This file is the authoritative version and branch status for Codex and other cod
   integration plus the reviewed v0.7 research documents.
 - v0.7 feature branches use `feature/v0.7-<short-name>` and branch from
   `develop/v0.7.0`.
+- `research/v0.8.0` contains template-platform design documents and disposable
+  experiments only. It must not be deployed and must not change the package version.
+- v0.8 implementation begins on `develop/v0.8.0` only after ADR-005 and all research
+  gates are accepted. Feature branches use `feature/v0.8-<short-name>`.
 - Feature branches use `feature/v0.5-<short-name>` and branch from `develop/v0.5.0`.
 - Bug fixes for the stable release use `fix/v0.4-<short-name>` and merge into `main`; required fixes are then forward-merged into development.
 - Do not develop unreleased features in the production worktree.
@@ -184,3 +189,34 @@ The first candidate used `0.7.0rc1` / `v0.7.0-rc.1`. The current corrected
 candidate uses `0.7.0rc2` / `v0.7.0-rc.2`. The 300-pair concept-mapping
 activation gate and automatic retest injection remain held; those features do not
 block the candidate because their active behavior stays disabled.
+
+## 11. v0.8 research gate
+
+Do not create `develop/v0.8.0` until all of the following are reviewed:
+
+- `docs/decisions/ADR-005-VERSIONED-SCENARIO-TEMPLATES.md`;
+- `docs/architecture/V0_8_INDUSTRY_TEMPLATE_PLATFORM.md`;
+- `docs/api/V0_8_TEMPLATE_API.md`;
+- `docs/evaluation/V0_8_TEMPLATE_EVALUATION_PLAN.md`;
+- `docs/product/V0_8_IMPLEMENTATION_BACKLOG.md`;
+- template schema, compiler determinism and override precedence;
+- built-in scenario list and prohibited-use boundary;
+- legacy mode compatibility and session snapshot migration;
+- behavioral distinctness and platform-invariant gates.
+
+v0.8 implementation order is fixed:
+
+```text
+schema and safe parser
+-> deterministic compiler and override lattice
+-> persistence and immutable lifecycle
+-> legacy mappings and session snapshots
+-> Planner, Policy, Assessment and Report integration
+-> reviewed built-in templates
+-> API and structured editor
+-> behavioral evaluation and release hardening
+```
+
+No v0.8 tag is created during research. This branch remains on package version
+`0.7.0rc2`. The first implementation branch uses `0.8.0.dev0` only after the
+research gate is accepted.
