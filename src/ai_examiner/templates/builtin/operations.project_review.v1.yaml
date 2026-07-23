@@ -1,0 +1,68 @@
+schema_version: "1.0"
+template:
+  slug: operations.project_review
+  version: 1.0.0
+  category: operations
+  title: {zh-CN: 项目复盘引导, en: Project Review Facilitation}
+  description: {zh-CN: 围绕结果、证据、决策、风险和学习进行非归责式项目复盘。, en: "Blameless project review focused on outcomes, evidence, decisions, risk, and learning."}
+  trust_level: built_in_reviewed
+  intended_use: internal_training
+  risk_tier: low
+capabilities:
+  required: [documents, assessment]
+  optional: [evidence, voice, adaptive_questions, long_term_memory]
+objectives:
+  - {id: outcomes, title: {zh-CN: 结果与目标, en: Outcomes and goals}, weight: 0.20, required_evidence: document_and_answer}
+  - {id: evidence, title: {zh-CN: 事实与证据, en: Facts and evidence}, weight: 0.25, required_evidence: document_and_answer}
+  - {id: decisions, title: {zh-CN: 决策质量, en: Decision quality}, weight: 0.20, required_evidence: answer}
+  - {id: risks, title: {zh-CN: 风险管理, en: Risk management}, weight: 0.20, required_evidence: document_and_answer}
+  - {id: learning, title: {zh-CN: 学习与改进, en: Learning and improvement}, weight: 0.15, required_evidence: answer}
+question_policy:
+  allowed_types: [evidence, risk, decision, tradeoff, critical_reflection, metacognitive, counterexample]
+  coverage:
+    outcomes: {minimum_questions: 1}
+    evidence: {minimum_questions: 1}
+    decisions: {minimum_questions: 1}
+    risks: {minimum_questions: 1}
+    learning: {minimum_questions: 1}
+  difficulty: {initial: 3, minimum: 1, maximum: 5, adaptive: true}
+  selection_strategy: adaptive
+  question_limit: 7
+assistance_policy:
+  mode: bounded
+  hints: {allowed: false, maximum_per_question: 0}
+  corrections: {allowed: true, timing: session_end}
+  answer_disclosure: {allowed: false}
+conversation_policy:
+  max_followups_per_question: 2
+  allowed_actions: [ASK_FOR_REASON, ASK_FOR_EVIDENCE, ASK_FOR_COUNTEREXAMPLE, CHALLENGE, CLARIFY, MOVE_ON, END]
+  interruption: {enabled: false, level: "off", user_can_disable: true}
+assessment_policy:
+  scale: {minimum: 0, maximum: 5}
+  dimensions:
+    - {id: correctness, title: {zh-CN: 事实准确性, en: Factual accuracy}, weight: 0.25, evidence_required: true}
+    - {id: completeness, title: {zh-CN: 复盘完整性, en: Review completeness}, weight: 0.20, evidence_required: true}
+    - {id: evidence_reasoning, title: {zh-CN: 证据与因果推理, en: Evidence and causal reasoning}, weight: 0.30, evidence_required: true}
+    - {id: boundary_awareness, title: {zh-CN: 风险与不确定性, en: Risk and uncertainty}, weight: 0.25, evidence_required: true}
+  assisted_performance: ignore
+  aggregate: no_total
+report_policy:
+  sections: [summary, objective_scores, dimension_scores, evidence, strengths, weaknesses, improvement_path, recommended_actions]
+  show_total_score: false
+  required_disclaimer: advisory_human_review_required
+safety_policy:
+  prohibited_uses: [automatic_employment_decision, protected_trait_inference, personality_or_emotion_scoring]
+  human_review_required: true
+  protected_trait_inference: forbidden
+presentation_policy: {role_id: project_facilitator, style_id: facilitative}
+voice_policy: {provider: disabled}
+compatibility: {mode: interview, difficulty: adaptive}
+overrides:
+  question_limit: {kind: bounded, minimum: 3, maximum: 15, default: 7}
+  max_followups_per_question: {kind: bounded, minimum: 0, maximum: 4, default: 2}
+  difficulty_initial: {kind: bounded, minimum: 1, maximum: 5, default: 3}
+  question_strategy: {kind: selectable, values: [fixed, adaptive], default: adaptive}
+  hints_allowed: {kind: locked}
+  corrections_allowed: {kind: toggle, default: true, direction: disable_only}
+  active_interruption: {kind: locked}
+  voice_provider: {kind: selectable, values: [disabled, openai, qwen], default: disabled}

@@ -10,6 +10,12 @@ BUILTIN_TEMPLATE_FILES = (
     "academic.thesis_defense.v1.yaml",
     "academic.thesis_defense.v1_1.yaml",
     "academic.thesis_defense.v1_2.yaml",
+    "academic.grant_review.v1.yaml",
+    "education.course_oral.v1.yaml",
+    "engineering.technical_interview.v1.yaml",
+    "enterprise.product_knowledge.v1.yaml",
+    "enterprise.sales_objection.v1.yaml",
+    "operations.project_review.v1.yaml",
 )
 
 

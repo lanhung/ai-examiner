@@ -1,0 +1,67 @@
+schema_version: "1.0"
+template:
+  slug: enterprise.product_knowledge
+  version: 1.0.0
+  category: enterprise
+  title: {zh-CN: 产品知识训练, en: Product Knowledge Training}
+  description: {zh-CN: 训练产品事实、适用场景、客户匹配与边界表达。, en: "Train product facts, use cases, customer fit, and boundary-aware explanations."}
+  trust_level: built_in_reviewed
+  intended_use: internal_training
+  risk_tier: moderate
+capabilities:
+  required: [documents, assessment]
+  optional: [evidence, voice, adaptive_questions, long_term_memory]
+objectives:
+  - {id: product_accuracy, title: {zh-CN: 产品准确性, en: Product accuracy}, weight: 0.30, required_evidence: document_and_answer}
+  - {id: application, title: {zh-CN: 场景应用, en: Application}, weight: 0.25, required_evidence: document_and_answer}
+  - {id: customer_fit, title: {zh-CN: 客户匹配, en: Customer fit}, weight: 0.20, required_evidence: document_and_answer}
+  - {id: boundaries, title: {zh-CN: 能力边界, en: Boundaries}, weight: 0.15, required_evidence: document_and_answer}
+  - {id: communication, title: {zh-CN: 清晰表达, en: Clear communication}, weight: 0.10, required_evidence: answer}
+question_policy:
+  allowed_types: [recall, explain, apply, compare, procedure, risk, objection]
+  coverage:
+    product_accuracy: {minimum_questions: 1}
+    application: {minimum_questions: 1}
+    customer_fit: {minimum_questions: 1}
+    boundaries: {minimum_questions: 1}
+  difficulty: {initial: 2, minimum: 1, maximum: 4, adaptive: true}
+  selection_strategy: adaptive
+  question_limit: 7
+assistance_policy:
+  mode: teaching
+  hints: {allowed: true, maximum_per_question: 2}
+  corrections: {allowed: true, timing: after_independent_attempt}
+  answer_disclosure: {allowed: true}
+conversation_policy:
+  max_followups_per_question: 2
+  allowed_actions: [ASK_FOLLOWUP, ASK_FOR_EXAMPLE, CLARIFY, GIVE_HINT, CORRECT, MOVE_ON, END]
+  interruption: {enabled: false, level: "off", user_can_disable: true}
+assessment_policy:
+  scale: {minimum: 0, maximum: 5}
+  dimensions:
+    - {id: correctness, title: {zh-CN: 事实正确性, en: Factual correctness}, weight: 0.40, evidence_required: true}
+    - {id: completeness, title: {zh-CN: 内容完整性, en: Completeness}, weight: 0.30, evidence_required: true}
+    - {id: evidence_reasoning, title: {zh-CN: 依据与应用, en: Grounding and application}, weight: 0.20, evidence_required: true}
+    - {id: boundary_awareness, title: {zh-CN: 边界意识, en: Boundary awareness}, weight: 0.10, evidence_required: true}
+  assisted_performance: report_separately
+  aggregate: weighted_dimensions
+report_policy:
+  sections: [summary, objective_scores, dimension_scores, evidence, strengths, weaknesses, learning_gain, knowledge_map, improvement_path, recommended_actions, retest_plan]
+  show_total_score: true
+  required_disclaimer: advisory_human_review_required
+safety_policy:
+  prohibited_uses: [automatic_employment_decision, protected_trait_inference, personality_or_emotion_scoring]
+  human_review_required: true
+  protected_trait_inference: forbidden
+presentation_policy: {role_id: product_trainer, style_id: coaching}
+voice_policy: {provider: disabled}
+compatibility: {mode: teaching, difficulty: adaptive}
+overrides:
+  question_limit: {kind: bounded, minimum: 2, maximum: 15, default: 7}
+  max_followups_per_question: {kind: bounded, minimum: 0, maximum: 4, default: 2}
+  difficulty_initial: {kind: bounded, minimum: 1, maximum: 4, default: 2}
+  question_strategy: {kind: selectable, values: [fixed, adaptive], default: adaptive}
+  hints_allowed: {kind: toggle, default: true, direction: disable_only}
+  corrections_allowed: {kind: toggle, default: true, direction: disable_only}
+  active_interruption: {kind: locked}
+  voice_provider: {kind: selectable, values: [disabled, openai, qwen], default: disabled}

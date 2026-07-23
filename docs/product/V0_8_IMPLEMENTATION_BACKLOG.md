@@ -11,12 +11,13 @@ Current package version: `0.8.0.dev0`
 | WP-01 | Increment A complete | Strict contract, generated JSON Schema, bounded parser, deterministic validation and adversarial tests |
 | WP-02 | Increment A complete | Canonical compiler, fingerprints, override lattice and audit tests |
 | WP-03 | Increment B complete | Four persistence models, immutable lifecycle service, additive `20260723_0006` migration and round-trip test |
-| WP-04 | Partial | Thesis-defense v1.0/v1.1 compatibility versions, idempotent persistence seed and catalog health delivered; remaining compatibility modes are pending |
+| WP-04 | Complete | Seven reviewed scenario identities, nine immutable versions, idempotent persistence seed and catalog health |
 | WP-05 | Increment C complete | Text/voice binding, project defaults, immutable snapshots, fingerprint verification and additive `20260723_0007` migration |
 | WP-06 | Increment D complete | Template-guided Planner, objective coverage audit, bounded taxonomy/difficulty and adaptive coverage priority |
 | WP-07 | Increment E complete | Cross-platform action authorization, assistance/disclosure bounds, interruption consent and decision audit |
 | WP-08 | Increment F complete | Deterministic template rubrics, objective/dimension evidence, aggregate policies, section builders and disclaimer registry |
-| WP-09 to WP-12 | Not started | Built-in scenarios, UI/API completion, governance, evaluation and release hardening remain held |
+| WP-09 | Increment G complete | Seven bilingual reviewed scenarios with distinct runtime behavior and explicit safety boundaries |
+| WP-10 to WP-12 | Not started | API/import/export, structured UI, governance, evaluation and release hardening remain held |
 
 Increment A is a compatibility foundation, not a complete v0.8 release. It does
 not change session behavior or authorize production deployment.
@@ -204,6 +205,8 @@ Acceptance:
 ### WP-09: Built-in scenario templates
 
 Branch: `feature/v0.8-built-in-templates`
+
+Status: Increment G complete on `develop/v0.8.0`.
 
 Deliverables:
 

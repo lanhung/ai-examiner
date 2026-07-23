@@ -54,6 +54,17 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   preserving deterministic internal diagnostics for adaptive selection.
 - Resolve required disclaimers from a reviewed registry and keep interaction,
   preference, emotion and voice timing signals outside correctness scoring.
+- Add six reviewed bilingual built-in scenarios for grant review, course oral
+  practice, technical interview practice, product knowledge training, sales
+  objection practice and project review facilitation.
+- Give every built-in scenario distinct objectives, question taxonomy, difficulty,
+  assistance, conversation, assessment, report, safety and presentation policies.
+- Add behavior-signature tests requiring every intended-distinct scenario pair to
+  differ in at least three runtime dimensions.
+- Add explicit human-review, protected-trait, personality/emotion and automated
+  employment/admission decision boundaries across the built-in catalog.
+- Expand persisted built-in health checks to seven template identities and nine
+  immutable versions.
 
 ## [0.7.0-rc.2] - 2026-07-23
 

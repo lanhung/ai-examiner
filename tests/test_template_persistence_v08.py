@@ -49,7 +49,7 @@ def test_builtin_template_seed_is_idempotent(client):
             db.scalar(select(func.count(TemplateValidationRun.id))),
         )
 
-    assert before == after == (1, 3, 3)
+    assert before == after == (7, 9, 9)
 
 
 def test_local_template_lifecycle_requires_validation_compilation_and_evaluation(client):
@@ -107,7 +107,13 @@ def test_local_template_lifecycle_requires_validation_compilation_and_evaluation
     assert detail.json()["versions"][0]["status"] == "published"
     catalog = client.get("/api/templates").json()
     assert {item["slug"] for item in catalog} == {
+        "academic.grant_review",
         "academic.thesis_defense",
+        "education.course_oral",
+        "engineering.technical_interview",
+        "enterprise.product_knowledge",
+        "enterprise.sales_objection",
+        "operations.project_review",
         "local.thesis_defense",
     }
 

@@ -168,13 +168,35 @@ Delivered:
 - `template-assessment-v1`, `assessment-report-v3` and
   `template-validator-v3` audit identifiers.
 
+## Increment G: reviewed built-in scenarios
+
+Delivered:
+
+- seven bilingual reviewed scenario identities and nine immutable versions;
+- thesis defense practice;
+- grant review practice;
+- course oral practice;
+- technical interview practice;
+- product knowledge training;
+- sales objection practice;
+- blameless project review facilitation;
+- materially different objectives, taxonomy, difficulty, assistance,
+  conversation, assessment, reporting and presentation policies;
+- pairwise behavior-signature tests requiring at least three runtime differences;
+- high-risk technical interview boundaries prohibiting automatic employment
+  decisions;
+- human review, protected-trait and personality/emotion scoring protections on
+  every built-in scenario;
+- no-total evidence reports for sales coaching and project facilitation;
+- persisted catalog health for seven identities and nine versions.
+
 ## Verification
 
 ```text
-Targeted assessment tests     41 passed
+Targeted built-in tests       30 passed
 Targeted Ruff                 passed
 Wheel built-in resource       packaged
-Full pytest                   104 passed
+Full pytest                   109 passed
 Full Ruff                     passed
 JavaScript syntax             passed
 git diff --check              passed

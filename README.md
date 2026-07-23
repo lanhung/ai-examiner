@@ -29,6 +29,20 @@ bounded effective conversation policy for action authorization, hints, correctio
 answer disclosure and active interruption. Text and finalized voice answers now use
 the session snapshot's weighted assessment rubric, and reports follow the template's
 objective weights, section order, total-score policy and required disclaimer.
+
+Reviewed bilingual built-in scenarios now include:
+
+- thesis defense practice;
+- grant review practice;
+- course oral practice;
+- technical interview practice;
+- product knowledge training;
+- sales objection practice;
+- project review facilitation.
+
+These scenarios compile to materially different runtime contracts; they are not
+role-name prompt variants. Technical interview output is training-only and cannot
+authorize automatic employment decisions.
 The current branch is for development evaluation only.
 
 The first v0.7 increment adds an optional opaque learner identity, explicit memory
