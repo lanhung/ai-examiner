@@ -25,6 +25,13 @@ def _parser() -> argparse.ArgumentParser:
         help="Optional template-provider-probe-v1 JSON evidence; may be repeated.",
     )
     parser.add_argument(
+        "--relevance-report",
+        action="append",
+        type=Path,
+        default=[],
+        help="Optional template-relevance-judge-v1 JSON evidence; may be repeated.",
+    )
+    parser.add_argument(
         "--require-release-evidence",
         action="store_true",
         help="Fail while provider, Docker or Vultr evidence remains held.",
@@ -38,9 +45,14 @@ def run_template_evaluation() -> None:
         json.loads(path.expanduser().resolve().read_text(encoding="utf-8"))
         for path in args.provider_probe
     ]
+    relevance_reports = [
+        json.loads(path.expanduser().resolve().read_text(encoding="utf-8"))
+        for path in args.relevance_report
+    ]
     report = evaluate_builtin_templates(
         performance_samples=args.performance_samples,
         provider_probe_reports=provider_reports,
+        relevance_reports=relevance_reports,
     )
     output = args.output.expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

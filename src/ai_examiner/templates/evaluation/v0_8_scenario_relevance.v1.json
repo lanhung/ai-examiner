@@ -1,0 +1,244 @@
+{
+  "schema_version": "1.0",
+  "corpus_version": "v0.8-scenario-relevance-v1",
+  "scenarios": {
+    "academic.grant_review": {
+      "topics": [
+        {
+          "objective_id": "significance",
+          "expected_question_types": ["motivation", "evaluate"],
+          "focus": {"zh-CN": "研究问题的重要性", "en": "the significance of the research problem"},
+          "evidence": {"zh-CN": "目标问题影响广泛，但现有材料只给出有限的需求数据", "en": "the target problem has broad impact, but the material provides limited demand evidence"}
+        },
+        {
+          "objective_id": "innovation",
+          "expected_question_types": ["novelty", "counterexample"],
+          "focus": {"zh-CN": "创新性与既有工作的差异", "en": "the novelty relative to prior work"},
+          "evidence": {"zh-CN": "方案组合了两种已有方法，但尚未证明组合产生新的能力", "en": "the proposal combines two existing methods without yet proving a new capability"}
+        },
+        {
+          "objective_id": "methodology",
+          "expected_question_types": ["method", "assumption"],
+          "focus": {"zh-CN": "研究方法与关键假设", "en": "the method and its key assumptions"},
+          "evidence": {"zh-CN": "研究设计依赖样本独立性，并计划使用对照实验", "en": "the design assumes independent samples and proposes a controlled experiment"}
+        },
+        {
+          "objective_id": "feasibility",
+          "expected_question_types": ["risk", "method"],
+          "focus": {"zh-CN": "资源、进度与可行性", "en": "resources, schedule, and feasibility"},
+          "evidence": {"zh-CN": "核心数据尚未获得，里程碑依赖外部合作方", "en": "key data is not yet available and milestones depend on an external partner"}
+        },
+        {
+          "objective_id": "impact_risk",
+          "expected_question_types": ["risk", "evaluate"],
+          "focus": {"zh-CN": "预期影响与失败风险", "en": "expected impact and failure risk"},
+          "evidence": {"zh-CN": "高影响结论建立在未经验证的规模化假设上", "en": "the high-impact claim relies on an unvalidated scaling assumption"}
+        }
+      ]
+    },
+    "academic.thesis_defense": {
+      "topics": [
+        {
+          "objective_id": "contribution",
+          "expected_question_types": ["novelty", "motivation"],
+          "focus": {"zh-CN": "论文的核心贡献", "en": "the thesis's central contribution"},
+          "evidence": {"zh-CN": "论文提出新流程，但与最接近基线的差异只在附录中说明", "en": "the thesis proposes a new workflow, while the closest-baseline difference appears only in the appendix"}
+        },
+        {
+          "objective_id": "methodology",
+          "expected_question_types": ["method", "assumption"],
+          "focus": {"zh-CN": "方法选择与成立条件", "en": "the method choice and its validity conditions"},
+          "evidence": {"zh-CN": "方法假设数据平稳，但实验包含明显的时间漂移", "en": "the method assumes stationary data although the experiment contains temporal drift"}
+        },
+        {
+          "objective_id": "evidence_quality",
+          "expected_question_types": ["evidence", "counterexample"],
+          "focus": {"zh-CN": "实验是否支持主要结论", "en": "whether the experiment supports the main claim"},
+          "evidence": {"zh-CN": "平均指标提高，但三个子组中有一个显著下降", "en": "the mean metric improves while one of three subgroups declines materially"}
+        },
+        {
+          "objective_id": "limitations",
+          "expected_question_types": ["limitation", "generalization"],
+          "focus": {"zh-CN": "结论的局限与外推边界", "en": "limitations and generalization boundaries"},
+          "evidence": {"zh-CN": "样本来自单一机构，尚无跨地区验证", "en": "the sample comes from one institution with no cross-region validation"}
+        },
+        {
+          "objective_id": "communication",
+          "expected_question_types": ["critical_reflection", "transfer"],
+          "focus": {"zh-CN": "如何清晰解释证据链", "en": "how to communicate the evidence chain clearly"},
+          "evidence": {"zh-CN": "汇报先给结论，关键假设和证据来源在后续页面才出现", "en": "the presentation states conclusions before revealing key assumptions and evidence sources"}
+        }
+      ]
+    },
+    "education.course_oral": {
+      "topics": [
+        {
+          "objective_id": "conceptual_understanding",
+          "expected_question_types": ["recall", "explain"],
+          "focus": {"zh-CN": "概念定义与关键区别", "en": "the concept definition and key distinction"},
+          "evidence": {"zh-CN": "课程材料区分相关与因果，并给出混杂因素示例", "en": "the course material distinguishes correlation from causation and gives a confounder example"}
+        },
+        {
+          "objective_id": "application",
+          "expected_question_types": ["apply", "transfer"],
+          "focus": {"zh-CN": "将概念应用到新情境", "en": "applying the concept to a new situation"},
+          "evidence": {"zh-CN": "新案例改变了样本来源，但保持了相同的评价指标", "en": "the new case changes the sample source while retaining the same evaluation metric"}
+        },
+        {
+          "objective_id": "reasoning",
+          "expected_question_types": ["compare", "explain"],
+          "focus": {"zh-CN": "解释推理步骤而非背诵结论", "en": "explaining the reasoning rather than recalling a conclusion"},
+          "evidence": {"zh-CN": "材料给出三步推导，其中第二步依赖隐含前提", "en": "the material gives a three-step derivation whose second step relies on an implicit premise"}
+        },
+        {
+          "objective_id": "reflection",
+          "expected_question_types": ["metacognitive", "transfer"],
+          "focus": {"zh-CN": "识别自己最不确定的部分", "en": "identifying the least certain part of one's understanding"},
+          "evidence": {"zh-CN": "示例答案正确，但没有说明结论在哪些条件下会失效", "en": "the sample answer is correct but does not state when the conclusion would fail"}
+        },
+        {
+          "objective_id": "application",
+          "expected_question_types": ["apply", "compare"],
+          "focus": {"zh-CN": "比较两种解题方法", "en": "comparing two solution methods"},
+          "evidence": {"zh-CN": "两种方法得到相同结果，但计算成本和假设不同", "en": "two methods reach the same result with different costs and assumptions"}
+        }
+      ]
+    },
+    "engineering.technical_interview": {
+      "topics": [
+        {
+          "objective_id": "problem_framing",
+          "expected_question_types": ["analyze", "apply"],
+          "focus": {"zh-CN": "需求边界与关键约束", "en": "requirements, boundaries, and constraints"},
+          "evidence": {"zh-CN": "系统需要低延迟，但吞吐量和一致性要求尚未排序", "en": "the system requires low latency, while throughput and consistency priorities remain unspecified"}
+        },
+        {
+          "objective_id": "architecture",
+          "expected_question_types": ["decision", "compare"],
+          "focus": {"zh-CN": "架构选择及组件职责", "en": "architecture choice and component ownership"},
+          "evidence": {"zh-CN": "方案使用消息队列解耦写入，但没有说明失败重放机制", "en": "the design decouples writes with a queue but omits the replay mechanism"}
+        },
+        {
+          "objective_id": "tradeoffs",
+          "expected_question_types": ["tradeoff", "counterexample"],
+          "focus": {"zh-CN": "性能、一致性与复杂度权衡", "en": "performance, consistency, and complexity trade-offs"},
+          "evidence": {"zh-CN": "缓存降低延迟，同时引入陈旧读取风险", "en": "caching reduces latency while introducing stale-read risk"}
+        },
+        {
+          "objective_id": "validation",
+          "expected_question_types": ["risk", "analyze"],
+          "focus": {"zh-CN": "验证方案与故障场景", "en": "validation strategy and failure scenarios"},
+          "evidence": {"zh-CN": "压测覆盖正常流量，但没有模拟依赖超时和重试风暴", "en": "load tests cover normal traffic but not dependency timeouts or retry storms"}
+        },
+        {
+          "objective_id": "communication",
+          "expected_question_types": ["transfer", "decision"],
+          "focus": {"zh-CN": "清晰表达技术决策依据", "en": "communicating the rationale for technical decisions"},
+          "evidence": {"zh-CN": "候选方案列出组件，却没有连接需求、约束和选择理由", "en": "the proposal lists components without connecting requirements, constraints, and rationale"}
+        }
+      ]
+    },
+    "enterprise.product_knowledge": {
+      "topics": [
+        {
+          "objective_id": "product_accuracy",
+          "expected_question_types": ["recall", "explain"],
+          "focus": {"zh-CN": "产品能力的准确描述", "en": "an accurate description of product capability"},
+          "evidence": {"zh-CN": "产品支持批量导入，但单次文件大小和格式受到限制", "en": "the product supports batch import with file-size and format limits"}
+        },
+        {
+          "objective_id": "application",
+          "expected_question_types": ["apply", "procedure"],
+          "focus": {"zh-CN": "在客户场景中正确使用产品", "en": "using the product correctly in a customer scenario"},
+          "evidence": {"zh-CN": "客户需要审计记录，标准方案要求先启用保留策略", "en": "the customer needs audit records and the standard workflow first enables retention policy"}
+        },
+        {
+          "objective_id": "customer_fit",
+          "expected_question_types": ["compare", "objection"],
+          "focus": {"zh-CN": "判断产品与需求是否匹配", "en": "judging product-to-need fit"},
+          "evidence": {"zh-CN": "客户要求离线运行，而当前版本依赖云端推理", "en": "the customer requires offline operation while the current version depends on cloud inference"}
+        },
+        {
+          "objective_id": "boundaries",
+          "expected_question_types": ["risk", "explain"],
+          "focus": {"zh-CN": "明确能力边界与升级路径", "en": "stating capability boundaries and escalation paths"},
+          "evidence": {"zh-CN": "材料明确禁止承诺尚未发布的合规认证", "en": "the material explicitly forbids promising an unreleased compliance certification"}
+        },
+        {
+          "objective_id": "communication",
+          "expected_question_types": ["explain", "objection"],
+          "focus": {"zh-CN": "用清晰、不过度承诺的语言回答", "en": "answering clearly without overpromising"},
+          "evidence": {"zh-CN": "客户问题需要先澄清数据量和部署区域", "en": "the customer question requires clarification of data volume and deployment region"}
+        }
+      ]
+    },
+    "enterprise.sales_objection": {
+      "topics": [
+        {
+          "objective_id": "discovery",
+          "expected_question_types": ["discovery", "metacognitive"],
+          "focus": {"zh-CN": "先理解客户异议背后的需求", "en": "discovering the need behind the objection"},
+          "evidence": {"zh-CN": "客户说价格高，但同时担心迁移成本和实施风险", "en": "the customer says the price is high while also worrying about migration cost and implementation risk"}
+        },
+        {
+          "objective_id": "needs_reasoning",
+          "expected_question_types": ["compare", "apply"],
+          "focus": {"zh-CN": "把需求与可验证价值连接起来", "en": "connecting needs to verifiable value"},
+          "evidence": {"zh-CN": "客户最重要的指标是减少人工复核时间，而不是功能数量", "en": "the customer's primary metric is reducing manual review time, not feature count"}
+        },
+        {
+          "objective_id": "value_communication",
+          "expected_question_types": ["objection", "compare"],
+          "focus": {"zh-CN": "基于证据表达价值", "en": "communicating value with evidence"},
+          "evidence": {"zh-CN": "试点数据只覆盖一个团队，不能直接外推到整个集团", "en": "pilot data covers one team and cannot be directly generalized to the whole group"}
+        },
+        {
+          "objective_id": "objection_handling",
+          "expected_question_types": ["objection", "apply"],
+          "focus": {"zh-CN": "回应异议并提出下一步", "en": "responding to the objection and proposing a next step"},
+          "evidence": {"zh-CN": "客户要求保证结果，但材料只允许承诺试点验收指标", "en": "the customer requests a guaranteed result while the material allows only pilot acceptance criteria"}
+        },
+        {
+          "objective_id": "ethical_boundaries",
+          "expected_question_types": ["risk", "metacognitive"],
+          "focus": {"zh-CN": "避免虚假承诺和操纵", "en": "avoiding false promises and manipulation"},
+          "evidence": {"zh-CN": "竞争信息未经验证，政策禁止把传闻作为事实陈述", "en": "competitive information is unverified and policy forbids presenting rumor as fact"}
+        }
+      ]
+    },
+    "operations.project_review": {
+      "topics": [
+        {
+          "objective_id": "outcomes",
+          "expected_question_types": ["evidence", "critical_reflection"],
+          "focus": {"zh-CN": "项目结果与原始目标的差距", "en": "the gap between project outcomes and original goals"},
+          "evidence": {"zh-CN": "核心功能按时交付，但采用率只有目标的一半", "en": "the core feature shipped on time but adoption reached only half the target"}
+        },
+        {
+          "objective_id": "evidence",
+          "expected_question_types": ["evidence", "counterexample"],
+          "focus": {"zh-CN": "区分事实、解释与推断", "en": "separating facts, explanations, and inferences"},
+          "evidence": {"zh-CN": "日志显示错误率上升，但没有数据证明原因是供应商变更", "en": "logs show a higher error rate without evidence that the vendor change caused it"}
+        },
+        {
+          "objective_id": "decisions",
+          "expected_question_types": ["decision", "tradeoff"],
+          "focus": {"zh-CN": "关键决策及其权衡", "en": "key decisions and their trade-offs"},
+          "evidence": {"zh-CN": "团队为赶进度减少测试范围，并接受了更高回归风险", "en": "the team reduced test scope to meet schedule and accepted higher regression risk"}
+        },
+        {
+          "objective_id": "risks",
+          "expected_question_types": ["risk", "counterexample"],
+          "focus": {"zh-CN": "风险识别、所有者与缓解措施", "en": "risk identification, ownership, and mitigation"},
+          "evidence": {"zh-CN": "依赖风险被记录，但没有明确负责人和触发阈值", "en": "a dependency risk is recorded without an owner or trigger threshold"}
+        },
+        {
+          "objective_id": "learning",
+          "expected_question_types": ["metacognitive", "critical_reflection"],
+          "focus": {"zh-CN": "可复用的经验与下一步改进", "en": "reusable learning and the next improvement"},
+          "evidence": {"zh-CN": "复盘提出加强沟通，但没有定义可观察的流程变化", "en": "the review proposes better communication without defining an observable process change"}
+        }
+      ]
+    }
+  }
+}

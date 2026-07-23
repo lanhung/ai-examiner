@@ -176,6 +176,15 @@ unsafe or prohibited recommendation rate = 0 in frozen cases
 Report confidence intervals and sample counts. Do not publish a winner from a tiny
 sample or from a judge evaluating its own generated output alone.
 
+Implementation status:
+
+- `v0.8-scenario-relevance-v1` expands to 210 fingerprinted frozen cases;
+- corpus integrity and balance are deterministic release checks;
+- judge reports must be blind, cross-provider and bound to the corpus fingerprint;
+- each passing template requires reciprocal judging by at least two providers;
+- at least three complete 30-case template evaluations must pass before RC;
+- real blind-judge reports remain held and cannot be replaced by Mock output.
+
 ## 7. Assistance and scoring integrity
 
 For defense, teaching and training templates, replay matched independent and assisted

@@ -224,6 +224,7 @@ def evaluate_builtin_templates(
     *,
     performance_samples: int = 25,
     provider_probe_reports: list[dict[str, Any]] | None = None,
+    relevance_reports: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if not 1 <= performance_samples <= 500:
         raise ValueError("performance_samples must be between 1 and 500")
@@ -335,8 +336,20 @@ def evaluate_builtin_templates(
     provider_evidence, provider_held = _provider_evidence(
         provider_probe_reports or []
     )
+    from .relevance import evaluate_relevance_reports
+
+    relevance_evidence = evaluate_relevance_reports(relevance_reports)
     held_gates = [
-        "scenario_relevance_frozen_corpus",
+        *(
+            []
+            if relevance_evidence["corpus"]["status"] == "passed"
+            else ["scenario_relevance_frozen_corpus"]
+        ),
+        *(
+            []
+            if relevance_evidence["status"] == "passed"
+            else ["scenario_relevance_blind_judging"]
+        ),
         *provider_held,
         "docker_compose_rehearsal",
         "vultr_upgrade_and_rollback_rehearsal",
@@ -384,6 +397,7 @@ def evaluate_builtin_templates(
             "status": "passed" if not held_gates else "held",
             "held_gates": held_gates,
             "provider_contract_samples": provider_evidence,
+            "scenario_relevance": relevance_evidence,
             "note": (
                 "Deterministic gates do not substitute for provider, Docker, or "
                 "Vultr release evidence."

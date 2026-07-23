@@ -18,9 +18,11 @@ class RepairingPlannerProvider(ModelProvider):
 
     def __init__(self) -> None:
         self.calls = 0
+        self.last_contract = {}
 
     def complete_json(self, *, agent, instructions, payload, schema_hint):
         self.calls += 1
+        self.last_contract = payload["scenario_planning_contract"]
         allowed = payload["scenario_planning_contract"]["allowed_question_types"]
         objectives = payload["scenario_planning_contract"]["objectives"]
         question_type = "reasoning" if self.calls == 1 else allowed[0]
@@ -67,6 +69,11 @@ def test_planner_retries_once_when_provider_violates_template_contract():
     )
 
     assert provider.calls == 2
+    assert provider.last_contract["identity"]["slug"] == "education.course_oral"
+    assert provider.last_contract["presentation"]["role_id"]
+    assert provider.last_contract["assistance"]["mode"]
+    assert provider.last_contract["assessment"]["dimensions"]
+    assert provider.last_contract["report"]["sections"]
     assert blueprint["questions"][0]["type"] in contract["question_selection"][
         "allowed_types"
     ]

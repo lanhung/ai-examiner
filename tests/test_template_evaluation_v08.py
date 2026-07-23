@@ -76,7 +76,8 @@ def test_real_provider_probe_evidence_releases_only_provider_gates():
     assert "real_qwen_provider_sample" not in evidence["held_gates"]
     assert "independent_real_provider_sample" not in evidence["held_gates"]
     assert evidence["status"] == "held"
-    assert "scenario_relevance_frozen_corpus" in evidence["held_gates"]
+    assert "scenario_relevance_frozen_corpus" not in evidence["held_gates"]
+    assert "scenario_relevance_blind_judging" in evidence["held_gates"]
 
 
 def test_template_evaluation_cli_writes_report_and_can_enforce_held_gates(

@@ -59,7 +59,8 @@ uv run ai-examiner-evaluate-templates \
 ```
 
 This releases only the provider contract-sample gates. Scenario relevance and
-deployment rehearsals remain independent.
+deployment rehearsals remain independent. Relevance evidence is documented in
+`docs/evaluation/V0_8_SCENARIO_RELEVANCE_CORPUS.md`.
 
 ## Vultr staging sequence
 
@@ -116,7 +117,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 Production remains on `main` or an immutable accepted tag. Promotion is prohibited
 while any of these are held:
 
-- scenario relevance frozen corpus;
+- cross-provider blind scenario-relevance judging;
 - isolated Compose rehearsal;
 - Vultr staging upgrade and rollback;
 - backup restore verification against a staging copy.

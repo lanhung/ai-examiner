@@ -262,18 +262,74 @@ Delivered:
 
 Held:
 
-- frozen-corpus scenario relevance;
+- cross-provider blind scenario-relevance judging;
 - actual Docker Compose rehearsal on a Docker host;
 - Vultr upgrade and rollback rehearsal.
+
+## Increment L: frozen scenario-relevance corpus
+
+Delivered:
+
+- a fingerprinted `v0.8-scenario-relevance-v1` corpus for all seven built-ins;
+- deterministic expansion to 210 cases, with 30 cases per template;
+- exact balancing across `zh-CN`/English, difficulty levels 2/3/4 and five answer
+  quality classes;
+- objective and expected-question-type checks against the latest immutable
+  template definitions;
+- a blind-judge evidence contract that requires different non-Mock generator and
+  judge providers;
+- per-template relevance improvement, 95% confidence intervals, high-quality,
+  grounding, single-question and unsafe-behavior metrics;
+- a release threshold requiring at least three complete 30-case templates;
+- corpus export and evidence aggregation through
+  `ai-examiner-evaluate-template-relevance`;
+- combined report ingestion through repeatable `--relevance-report` arguments.
+
+Held:
+
+- real cross-provider blind-judge reports have not been generated;
+- the frozen corpus passing integrity checks does not by itself establish scenario
+  quality.
+
+## Increment M: runtime scenario relevance
+
+Delivered:
+
+- actual `SessionPlanner` execution for baseline and scenario arms;
+- independent arm generation with no shared model context;
+- deterministic A/B blinding and post-judge unblinding;
+- reciprocal cross-provider and minimum-two-judge release requirements;
+- release rejection for batched calibration output;
+- full scenario identity, presentation, assistance, assessment and report context
+  supplied to the Planner;
+- a real Qwen-generated/OpenAI-judged two-case correction pilot.
+
+Real pilot after the Planner correction:
+
+```text
+Scenario                       enterprise.sales_objection
+Runtime cases                  2 / 30
+Mean relevance improvement     +1.5
+95% CI                         [-1.44, 4.44]
+High-quality rate              100%
+Grounded rate                  100%
+Single-main-question rate      100%
+Unsafe rate                    0%
+```
+
+This remains held because 2 cases cannot substitute for 30, the confidence
+interval is wide, the reciprocal direction is absent and three templates are
+required.
 
 ## Verification
 
 ```text
 WP-11 targeted tests          16 passed
-WP-12 targeted tests          32 passed
+WP-12 pre-Increment-L tests   32 passed
+Increment L/M focused tests   11 passed
 Targeted Ruff                 passed
 Wheel built-in resource       packaged
-Full pytest                   127 passed
+Full pytest                   134 passed
 Full Ruff                     passed
 JavaScript syntax             passed
 git diff --check              passed
@@ -283,8 +339,15 @@ Alembic metadata drift check  no new upgrade operations
 Wheel build                   ai_examiner_mvp-0.8.0.dev0-py3-none-any.whl
 Qwen template probe           3/3 scenarios passed
 OpenAI template probe         3/3 scenarios passed
-Docker Compose rehearsal      held (Docker unavailable on this host)
+Frozen relevance corpus       210/210 cases valid
+Blind relevance judging       held
+Docker Compose rehearsal      held (no capable Docker host)
 ```
+
+The configured SeetaCloud instance was checked as a possible rehearsal host. It
+contains a Docker client but runs inside a restricted container. `dockerd` cannot
+create the Docker NAT chain because host `iptables` capabilities are unavailable.
+No existing deployment directory, data or container was modified.
 
 Pytest exits successfully, but the Windows interpreter still prints the existing
 async-generator cleanup `access violation` message after completing all tests.

@@ -99,6 +99,21 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 - Add an isolated v0.8 Compose rehearsal for configuration, build, migration,
   health, template gates and SQLite backup inspection without touching the active
   project or using paid-model credentials.
+- Add a fingerprinted frozen relevance corpus spanning all seven built-in
+  scenarios, with 210 cases balanced across language, difficulty and answer
+  quality.
+- Add deterministic corpus validation plus cross-provider blind-judge evidence
+  aggregation, confidence intervals and release thresholds for at least three
+  complete scenarios.
+- Reject Mock, self-judged, stale-fingerprint and incomplete relevance evidence
+  instead of allowing structural provider probes to stand in for scenario quality.
+- Add independent baseline/scenario generation, deterministic A/B blinding and
+  reciprocal cross-provider judging for scenario relevance.
+- Require release relevance artifacts to come from the production
+  `SessionPlanner` path; keep batched contract generation as non-release
+  calibration only.
+- Feed scenario identity, presentation, assistance, assessment and report context
+  into Planner generation so templates alter examiner behavior beyond taxonomy.
 
 ## [0.7.0-rc.2] - 2026-07-23
 
