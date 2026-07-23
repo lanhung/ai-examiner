@@ -14,6 +14,10 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
+)
+from sqlalchemy import (
+    inspect as sa_inspect,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -46,6 +50,158 @@ class Project(Base):
     sessions: Mapped[list[ExamSession]] = relationship(
         back_populates="project", cascade="all, delete"
     )
+    template_bindings: Mapped[list[ProjectTemplateBinding]] = relationship(
+        back_populates="project", cascade="all, delete"
+    )
+
+
+class ScenarioTemplate(Base):
+    __tablename__ = "scenario_templates"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    slug: Mapped[str] = mapped_column(String(160), unique=True)
+    category: Mapped[str] = mapped_column(String(40))
+    owner_scope: Mapped[str] = mapped_column(String(30), default="local")
+    status: Mapped[str] = mapped_column(String(30), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    versions: Mapped[list[ScenarioTemplateVersion]] = relationship(
+        back_populates="template", cascade="all, delete"
+    )
+
+
+class ScenarioTemplateVersion(Base):
+    __tablename__ = "scenario_template_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "template_id",
+            "semantic_version",
+            name="uq_scenario_template_semantic_version",
+        ),
+        Index("ix_template_version_status", "template_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    template_id: Mapped[str] = mapped_column(
+        ForeignKey("scenario_templates.id", ondelete="CASCADE")
+    )
+    semantic_version: Mapped[str] = mapped_column(String(80))
+    schema_version: Mapped[str] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(30), default="draft")
+    source_json: Mapped[dict] = mapped_column(JSON)
+    compiled_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    compiler_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    fingerprint: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    evaluation_summary_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_from_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("scenario_template_versions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    template: Mapped[ScenarioTemplate] = relationship(back_populates="versions")
+    validation_runs: Mapped[list[TemplateValidationRun]] = relationship(
+        back_populates="template_version", cascade="all, delete"
+    )
+
+
+class TemplateValidationRun(Base):
+    __tablename__ = "template_validation_runs"
+    __table_args__ = (
+        Index(
+            "ix_template_validation_version_created",
+            "template_version_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    template_version_id: Mapped[str] = mapped_column(
+        ForeignKey("scenario_template_versions.id", ondelete="CASCADE")
+    )
+    validator_version: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(30))
+    issues_json: Mapped[list] = mapped_column(JSON, default=list)
+    capability_snapshot_json: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    template_version: Mapped[ScenarioTemplateVersion] = relationship(
+        back_populates="validation_runs"
+    )
+
+
+class ProjectTemplateBinding(Base):
+    __tablename__ = "project_template_bindings"
+    __table_args__ = (
+        Index("ix_project_template_binding_active", "project_id", "superseded_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE")
+    )
+    template_version_id: Mapped[str] = mapped_column(
+        ForeignKey("scenario_template_versions.id", ondelete="RESTRICT")
+    )
+    default_overrides_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    project: Mapped[Project] = relationship(back_populates="template_bindings")
+
+
+_IMMUTABLE_TEMPLATE_VERSION_FIELDS = (
+    "template_id",
+    "semantic_version",
+    "schema_version",
+    "source_json",
+    "compiled_json",
+    "compiler_version",
+    "fingerprint",
+    "evaluation_summary_json",
+    "created_from_version_id",
+    "published_at",
+)
+
+
+@event.listens_for(ScenarioTemplateVersion, "before_update")
+def _guard_published_template_version(_mapper, _connection, target) -> None:
+    state = sa_inspect(target)
+    status_history = state.attrs.status.history
+    previous_status = (
+        status_history.deleted[0]
+        if status_history.deleted
+        else target.status
+    )
+    if previous_status not in {"published", "deprecated"}:
+        return
+    changed = [
+        field
+        for field in _IMMUTABLE_TEMPLATE_VERSION_FIELDS
+        if state.attrs[field].history.has_changes()
+    ]
+    if changed:
+        raise ValueError(
+            "Published template version is immutable: " + ", ".join(changed)
+        )
+    if status_history.has_changes():
+        allowed = previous_status == "published" and target.status == "deprecated"
+        if not allowed:
+            raise ValueError(
+                f"Invalid immutable template status transition: "
+                f"{previous_status} -> {target.status}"
+            )
+
+
+@event.listens_for(ScenarioTemplateVersion, "before_delete")
+def _guard_published_template_version_delete(_mapper, _connection, target) -> None:
+    if target.status in {"published", "deprecated"}:
+        raise ValueError("Published template version cannot be deleted")
 
 
 class Document(Base):

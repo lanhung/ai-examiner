@@ -2,6 +2,14 @@
 
 ## 1. Conventions
 
+Implementation status on `develop/v0.8.0`:
+
+- catalog, identity/version reads, create, replace, clone, validate, compile and
+  lifecycle status endpoints are implemented;
+- project binding, session snapshots, preview, diff, import and export remain
+  planned;
+- this API is development-only until the v0.8 release gates pass.
+
 - Base path: `/api`
 - IDs are UUID strings.
 - Template semantic versions are immutable after publication.

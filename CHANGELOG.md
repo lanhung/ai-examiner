@@ -13,6 +13,8 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   parsing, semantic validation and deterministic compilation.
 - Add the reviewed thesis-defense compatibility template, compact built-in catalog
   API, template health API and packaged-resource verification.
+- Add immutable scenario-template persistence, lifecycle and authoring APIs,
+  idempotent built-in seeding and additive Alembic migration `20260723_0006`.
 
 ## [0.7.0-rc.2] - 2026-07-23
 

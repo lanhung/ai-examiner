@@ -207,10 +207,10 @@ def test_builtin_template_health_api_reports_versions(client):
     health = response.json()
     assert health == {
         "status": "ok",
-        "template_count": 1,
-        "valid_count": 1,
-        "invalid_count": 0,
+        "expected_builtin_count": 1,
+        "persisted_template_count": 1,
+        "persisted_version_count": 1,
         "validator_version": "template-validator-v1",
         "compiler_version": "template-compiler-v1",
-        "invalid_templates": [],
+        "issues": [],
     }

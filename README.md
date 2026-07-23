@@ -8,6 +8,21 @@ line remains v0.4.1 and the preserved v0.5 release snapshot remains
 The accepted template-platform study is preserved on `research/v0.8.0`. The current
 branch implements that design incrementally and is not a production release.
 
+## v0.8 current implementation
+
+- strict, bounded YAML/JSON scenario-template contract;
+- deterministic structural and semantic validation;
+- canonical compiler, override lattice and SHA-256 policy fingerprints;
+- reviewed `academic.thesis_defense@1.0.0` compatibility template;
+- immutable template identity/version persistence and lifecycle;
+- passing validation, compilation and behavioral-evaluation publication gates;
+- idempotent startup seeding and built-in fingerprint health checks;
+- additive Alembic revision `20260723_0006`;
+- read-only catalog plus local authoring lifecycle APIs.
+
+Template-to-session binding and runtime policy integration are not enabled yet.
+The current branch is for development evaluation only.
+
 The first v0.7 increment adds an optional opaque learner identity, explicit memory
 settings, reviewed canonical concept mappings and an evidence-bound long-term memory
 ledger. Memory remains disabled unless explicitly enabled and does not change the

@@ -7,7 +7,7 @@
 - Base candidate: `v0.7.0-rc.2`
 - Release tag: not created
 - Deployment status: local development only
-- Alembic head: `20260721_0005` (unchanged)
+- Alembic head: `20260723_0006`
 
 v0.8 is being delivered as reviewable vertical slices. The first slice establishes
 the safe, deterministic foundation of the Industry Template Platform without
@@ -42,17 +42,51 @@ The catalog deliberately exposes only reviewed metadata, capabilities, validatio
 versions and the compiled fingerprint. It does not expose the complete compiled
 policy or any generated system instructions.
 
+## Increment B: persistence and lifecycle
+
+Delivered:
+
+- additive SQLite/PostgreSQL-compatible migration `20260723_0006`;
+- `ScenarioTemplate`, `ScenarioTemplateVersion`, `TemplateValidationRun` and
+  `ProjectTemplateBinding` persistence models;
+- unique semantic versions per template identity;
+- idempotent startup seed for reviewed built-in versions;
+- source and fingerprint drift detection for an existing built-in version;
+- draft replacement, validation, compilation, clone and lifecycle APIs;
+- explicit `draft -> candidate -> published -> deprecated` transition rules;
+- passing validation, compiled artifact and behavioral evaluation gates before
+  publication;
+- local trust progression from `local_draft` through `local_published`;
+- ORM update and delete guards for published and deprecated versions;
+- SQLite `0005 -> 0006 -> 0005 -> 0006` migration regression preserving v0.7 data;
+- PostgreSQL CI coverage for template persistence tests.
+
+Authoring endpoints added:
+
+```text
+POST /api/templates
+GET  /api/templates/{template_id}
+GET  /api/template-versions/{version_id}
+PUT  /api/template-versions/{version_id}
+POST /api/template-versions/{version_id}/clone
+POST /api/template-versions/{version_id}/validate
+POST /api/template-versions/{version_id}/compile
+POST /api/template-versions/{version_id}/status
+```
+
 ## Verification
 
 ```text
-Targeted template tests       18 passed
+Targeted template tests       25 passed
 Targeted Ruff                 passed
 Wheel built-in resource       packaged
-Full pytest                   76 passed
+Full pytest                   83 passed
 Full Ruff                     passed
 JavaScript syntax             passed
 git diff --check              passed
-Tracked-source secret scan    passed
+Tracked-source secret scan    pending final staged-content gate
+Alembic single head           20260723_0006
+Alembic metadata drift check  no new upgrade operations
 Docker Compose config         not run (Docker unavailable on this host)
 ```
 
@@ -65,11 +99,12 @@ diagnostic issue.
 
 The following work remains intentionally disabled or unimplemented:
 
-- no template persistence, lifecycle migration or public import;
+- no public template import or export;
 - no session binding or immutable runtime snapshot;
 - no Planner, Policy Controller, Evaluator or Reporter behavior change;
 - no database-backed catalog editor;
-- no external template may claim `built_in_reviewed` trust;
+- local authoring is demoted to local trust states and cannot claim
+  `built_in_reviewed`;
 - no public marketplace, organization model or executable plugin;
 - no merge to `main`, final `v0.8.0` tag or production deployment.
 

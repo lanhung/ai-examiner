@@ -57,6 +57,8 @@ from .models import (
     Project,
     PromptVersion,
     RetestPlan,
+    ScenarioTemplate,
+    ScenarioTemplateVersion,
     Turn,
     UsageEvent,
     VisualAnalysis,
@@ -91,6 +93,10 @@ from .schemas import (
     RetestItemAction,
     RetestPlanCreate,
     RetestSessionCreate,
+    ScenarioTemplateCloneCreate,
+    ScenarioTemplateCreate,
+    ScenarioTemplateSourceUpdate,
+    ScenarioTemplateStatusUpdate,
     SessionCreate,
     VisualAnalyzeCreate,
     VoiceEventCreate,
@@ -119,6 +125,15 @@ from .services.policy_benchmark import PolicyBenchmarkService
 from .services.preferences import PreferencePolicyError, PreferenceService
 from .services.prompts import activate_prompt, create_prompt_version, prompt_manifest
 from .services.retest import RetestLifecycleError, RetestLifecycleService
+from .services.templates import (
+    TemplateLifecycleError,
+    TemplateLifecycleService,
+    persisted_template_catalog,
+    persisted_template_health,
+    serialize_template,
+    serialize_template_version,
+    serialize_validation_run,
+)
 from .services.visual import VisualEvidenceService
 from .services.voice import (
     VOICE_PROVIDERS,
@@ -129,10 +144,6 @@ from .services.voice import (
     qwen_realtime_session_config,
     record_voice_event,
     voice_provider_ready,
-)
-from .template_engine.catalog import (
-    builtin_template_catalog,
-    builtin_template_health,
 )
 
 settings = get_settings()
@@ -160,6 +171,17 @@ async def disable_dynamic_response_cache(request: Request, call_next):
 @app.exception_handler(JobQueueUnavailable)
 async def job_queue_unavailable_handler(_request: Request, exc: JobQueueUnavailable):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(TemplateLifecycleError)
+async def template_lifecycle_error_handler(
+    _request: Request,
+    exc: TemplateLifecycleError,
+):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": {"code": exc.code, "message": str(exc)}},
+    )
 
 
 def provider_or_503(profile: str | None = None):
@@ -254,13 +276,135 @@ def providers():
 
 
 @app.get("/api/templates")
-def templates():
-    return builtin_template_catalog()
+def templates(
+    db: Annotated[Session, Depends(get_db)],
+    category: str | None = None,
+    include_drafts: bool = False,
+):
+    return persisted_template_catalog(
+        db,
+        category=category,
+        include_drafts=include_drafts,
+    )
 
 
 @app.get("/api/templates/health")
-def template_health():
-    return builtin_template_health()
+def template_health(db: Annotated[Session, Depends(get_db)]):
+    return persisted_template_health(db)
+
+
+@app.post("/api/templates", status_code=201)
+def create_scenario_template(
+    payload: ScenarioTemplateCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    template, version = TemplateLifecycleService(db).create_local(
+        slug=payload.slug,
+        category=payload.category,
+        semantic_version=payload.semantic_version,
+        source=payload.source,
+    )
+    return {
+        "template": serialize_template(db, template),
+        "version": serialize_template_version(db, version),
+    }
+
+
+@app.get("/api/templates/{template_id}")
+def get_scenario_template(
+    template_id: str,
+    db: Annotated[Session, Depends(get_db)],
+):
+    template = db.get(ScenarioTemplate, template_id)
+    if not template:
+        raise HTTPException(404, "Template not found")
+    return serialize_template(db, template)
+
+
+@app.get("/api/template-versions/{version_id}")
+def get_scenario_template_version(
+    version_id: str,
+    db: Annotated[Session, Depends(get_db)],
+):
+    version = db.get(ScenarioTemplateVersion, version_id)
+    if not version:
+        raise HTTPException(404, "Template version not found")
+    return serialize_template_version(db, version)
+
+
+@app.post("/api/template-versions/{version_id}/clone", status_code=201)
+def clone_scenario_template_version(
+    version_id: str,
+    payload: ScenarioTemplateCloneCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    version = db.get(ScenarioTemplateVersion, version_id)
+    if not version:
+        raise HTTPException(404, "Template version not found")
+    cloned = TemplateLifecycleService(db).clone(
+        version,
+        semantic_version=payload.semantic_version,
+    )
+    return serialize_template_version(db, cloned)
+
+
+@app.put("/api/template-versions/{version_id}")
+def replace_scenario_template_version(
+    version_id: str,
+    payload: ScenarioTemplateSourceUpdate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    version = db.get(ScenarioTemplateVersion, version_id)
+    if not version:
+        raise HTTPException(404, "Template version not found")
+    updated = TemplateLifecycleService(db).replace_source(version, payload.source)
+    return serialize_template_version(db, updated)
+
+
+@app.post("/api/template-versions/{version_id}/validate")
+def validate_scenario_template_version(
+    version_id: str,
+    db: Annotated[Session, Depends(get_db)],
+):
+    version = db.get(ScenarioTemplateVersion, version_id)
+    if not version:
+        raise HTTPException(404, "Template version not found")
+    run = TemplateLifecycleService(db).validate(version)
+    return serialize_validation_run(run)
+
+
+@app.post("/api/template-versions/{version_id}/compile")
+def compile_scenario_template_version(
+    version_id: str,
+    db: Annotated[Session, Depends(get_db)],
+):
+    version = db.get(ScenarioTemplateVersion, version_id)
+    if not version:
+        raise HTTPException(404, "Template version not found")
+    compiled = TemplateLifecycleService(db).compile(version)
+    return serialize_template_version(
+        db,
+        compiled,
+        include_source=False,
+        include_compiled=True,
+    )
+
+
+@app.post("/api/template-versions/{version_id}/status")
+def transition_scenario_template_version(
+    version_id: str,
+    payload: ScenarioTemplateStatusUpdate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    version = db.get(ScenarioTemplateVersion, version_id)
+    if not version:
+        raise HTTPException(404, "Template version not found")
+    transitioned = TemplateLifecycleService(db).transition(
+        version,
+        status=payload.status,
+        evaluation_summary=payload.evaluation_summary,
+    )
+    return serialize_template_version(db, transitioned)
 
 
 @app.post("/api/projects", status_code=201)

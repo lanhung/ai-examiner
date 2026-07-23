@@ -42,9 +42,11 @@ def init_db() -> None:
         command.upgrade(alembic_config, "head")
     Base.metadata.create_all(bind=engine)
     from .services.prompts import seed_prompt_registry
+    from .services.templates import seed_builtin_templates
 
     with SessionLocal() as db:
         seed_prompt_registry(db, settings.prompt_dir)
+        seed_builtin_templates(db)
 
 
 def get_db() -> Generator[Session, None, None]:

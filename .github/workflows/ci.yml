@@ -41,4 +41,8 @@ jobs:
           python-version: "3.12"
       - run: uv sync --extra dev
       - run: uv run alembic upgrade head
-      - run: uv run pytest tests/test_v07_completion.py tests/test_long_term_memory_v07.py
+      - run: >-
+          uv run pytest
+          tests/test_v07_completion.py
+          tests/test_long_term_memory_v07.py
+          tests/test_template_persistence_v08.py

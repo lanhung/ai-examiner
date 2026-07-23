@@ -97,6 +97,37 @@ class PromptVersionCreate(BaseModel):
     activate: bool = False
 
 
+class ScenarioTemplateCreate(BaseModel):
+    slug: str = Field(
+        pattern=r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$",
+        max_length=160,
+    )
+    category: Literal[
+        "academic", "education", "engineering", "enterprise", "operations", "internal"
+    ]
+    semantic_version: str = Field(
+        pattern=r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$",
+        max_length=80,
+    )
+    source: dict[str, Any]
+
+
+class ScenarioTemplateCloneCreate(BaseModel):
+    semantic_version: str = Field(
+        pattern=r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$",
+        max_length=80,
+    )
+
+
+class ScenarioTemplateSourceUpdate(BaseModel):
+    source: dict[str, Any]
+
+
+class ScenarioTemplateStatusUpdate(BaseModel):
+    status: Literal["draft", "candidate", "published", "deprecated"]
+    evaluation_summary: dict[str, Any] = Field(default_factory=dict)
+
+
 class AsyncGoldenDatasetCreate(GoldenDatasetCreate):
     asynchronous: bool = True
 
