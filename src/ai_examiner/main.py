@@ -549,6 +549,14 @@ def generate_blueprint(
     document = db.get(Document, selected_document_id)
     if not project or not document or document.project_id != project_id:
         raise HTTPException(404, "Project or document not found")
+    mode = payload.mode if payload else "defense"
+    resolved_template = SessionTemplateService(db).resolve(
+        project,
+        mode=mode,
+        template_version_id=payload.template_version_id if payload else None,
+        template_overrides=payload.template_overrides if payload else {},
+        request_overrides={},
+    )
     provider = provider_or_503(payload.profile if payload else None)
     orchestrator = ExamOrchestrator(db, provider, project_id=project_id)
     try:
@@ -556,7 +564,19 @@ def generate_blueprint(
             document_text=document.content_text,
             filename=document.filename,
             language=project.language,
+            template_contract=(
+                resolved_template.snapshot if resolved_template else None
+            ),
         )
+        if resolved_template:
+            data["template_plan"].update(
+                {
+                    "template_version_id": resolved_template.template_version_id,
+                    "fingerprint": resolved_template.fingerprint,
+                    "compiler_version": resolved_template.compiler_version,
+                    "resolution_source": resolved_template.resolution_source,
+                }
+            )
         page_assets = {
             asset.page_number: asset
             for asset in db.scalars(
@@ -596,6 +616,7 @@ def generate_blueprint(
         "provider": blueprint.provider,
         "model": blueprint.model,
         "grounding": grounding,
+        "template_plan": blueprint.data.get("template_plan"),
         "data": blueprint.data,
     }
 

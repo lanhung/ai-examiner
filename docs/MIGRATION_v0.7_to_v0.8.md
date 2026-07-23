@@ -60,9 +60,9 @@ Expected template health:
 ```json
 {
   "status": "ok",
-  "expected_builtin_count": 2,
+  "expected_builtin_count": 3,
   "persisted_template_count": 1,
-  "persisted_version_count": 2,
+  "persisted_version_count": 3,
   "issues": []
 }
 ```

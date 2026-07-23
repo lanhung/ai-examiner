@@ -105,13 +105,33 @@ DELETE /api/projects/{project_id}/template-binding
 GET    /api/sessions/{session_id}/template
 ```
 
+## Increment D: template-guided planning and adaptive selection
+
+Delivered:
+
+- immutable `academic.thesis_defense@1.2.0` with the expanded assumption and
+  critical-reflection taxonomy while retaining v1.0 and v1.1;
+- optional template version, overrides and mode on blueprint generation;
+- Planner input containing the compiled objectives, allowed question types,
+  coverage requirements, difficulty bounds and question limit;
+- objective IDs on every template-guided question;
+- deterministic rejection of provider output outside the allowed type or
+  difficulty bounds;
+- deterministic question-limit enforcement;
+- explicit `met` or `impossible` objective-coverage result in blueprint data;
+- adaptive candidate filtering by the immutable session snapshot;
+- required-objective coverage priority before ordinary gap/importance scoring;
+- template fingerprint and effective selector constraints in adaptive decision
+  audit records;
+- compatibility for old blueprints without template objective metadata.
+
 ## Verification
 
 ```text
-Targeted template tests       38 passed
+Targeted template tests       42 passed
 Targeted Ruff                 passed
 Wheel built-in resource       packaged
-Full pytest                   90 passed
+Full pytest                   94 passed
 Full Ruff                     passed
 JavaScript syntax             passed
 git diff --check              passed
@@ -131,7 +151,8 @@ diagnostic issue.
 The following work remains intentionally disabled or unimplemented:
 
 - no public template import or export;
-- no Planner, Policy Controller, Evaluator or Reporter template-policy integration;
+- no Policy Controller action allowlist, Evaluator rubric or Reporter section
+  template-policy integration;
 - no database-backed catalog editor;
 - local authoring is demoted to local trust states and cannot claim
   `built_in_reviewed`;

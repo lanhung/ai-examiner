@@ -23,6 +23,15 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   template-free compatibility for legacy teaching and interview requests.
 - Add immutable `academic.thesis_defense@1.1.0` with bounded follow-up overrides
   while retaining the published `1.0.0` artifact.
+- Add immutable `academic.thesis_defense@1.2.0` with assumption and critical
+  reflection question types while retaining v1.0 and v1.1.
+- Feed compiled objectives, allowed question types, coverage requirements,
+  difficulty bounds and question limits into blueprint planning.
+- Record objective mappings and explicit met/impossible coverage results on
+  template-guided blueprints.
+- Make adaptive selection honor the session snapshot's allowed types, difficulty
+  bounds and unmet objective coverage, with the effective contract recorded in
+  decision audit events.
 
 ## [0.7.0-rc.2] - 2026-07-23
 

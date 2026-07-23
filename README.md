@@ -13,8 +13,8 @@ branch implements that design incrementally and is not a production release.
 - strict, bounded YAML/JSON scenario-template contract;
 - deterministic structural and semantic validation;
 - canonical compiler, override lattice and SHA-256 policy fingerprints;
-- reviewed, immutable `academic.thesis_defense@1.0.0` and `@1.1.0`
-  compatibility versions;
+- reviewed, immutable `academic.thesis_defense@1.0.0`, `@1.1.0` and
+  `@1.2.0` compatibility versions;
 - immutable template identity/version persistence and lifecycle;
 - passing validation, compilation and behavioral-evaluation publication gates;
 - idempotent startup seeding and built-in fingerprint health checks;
@@ -23,7 +23,9 @@ branch implements that design incrementally and is not a production release.
 
 Text and voice sessions now resolve an explicit template, project default or legacy
 mode mapping and retain an immutable effective-policy snapshot and fingerprint.
-Planner, conversation, assessment and report integration remain in development.
+Planner and adaptive selection now consume template objectives, question taxonomy,
+coverage and difficulty constraints. Conversation, assessment and report
+integration remain in development.
 The current branch is for development evaluation only.
 
 The first v0.7 increment adds an optional opaque learner identity, explicit memory

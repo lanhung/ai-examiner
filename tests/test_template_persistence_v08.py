@@ -49,7 +49,7 @@ def test_builtin_template_seed_is_idempotent(client):
             db.scalar(select(func.count(TemplateValidationRun.id))),
         )
 
-    assert before == after == (1, 2, 2)
+    assert before == after == (1, 3, 3)
 
 
 def test_local_template_lifecycle_requires_validation_compilation_and_evaluation(client):

@@ -76,10 +76,18 @@ class ExamOrchestrator:
         )
 
     def build_blueprint(
-        self, *, document_text: str, filename: str, language: str
+        self,
+        *,
+        document_text: str,
+        filename: str,
+        language: str,
+        template_contract: dict[str, Any] | None = None,
     ) -> tuple[dict, dict]:
         blueprint = self.planner.plan(
-            document_text=document_text, filename=filename, language=language
+            document_text=document_text,
+            filename=filename,
+            language=language,
+            template_contract=template_contract,
         )
         grounding = self.grounding.check_blueprint(blueprint, document_text)
         blueprint["grounding_check"] = grounding
@@ -109,6 +117,7 @@ class ExamOrchestrator:
         )
         if session.question_strategy == "adaptive" and not target_question_id:
             units, question_units = self.cognitive.graph(blueprint.id)
+            template_policy = self._template_question_policy(session)
             selection = self.selector.select(
                 questions=questions,
                 question_units=question_units,
@@ -116,6 +125,7 @@ class ExamOrchestrator:
                 units=units,
                 asked_question_ids=[],
                 prior_question_ids=self.cognitive.prior_question_ids(session),
+                policy_contract=template_policy,
             )
             selected = selection.question or questions[0]
         session.status = "active"
@@ -141,7 +151,11 @@ class ExamOrchestrator:
             target_difficulty=selection.target_difficulty,
             reason_codes=selection.reason_codes,
             candidate_scores=selection.candidate_scores,
-            policy_config=self.selector.weights if session.question_strategy == "adaptive" else {},
+            policy_config=(
+                self._selector_policy_config(session)
+                if session.question_strategy == "adaptive"
+                else {}
+            ),
         )
         self.db.commit()
         self.db.refresh(turn)
@@ -219,6 +233,7 @@ class ExamOrchestrator:
         elif decision["action"] == "MOVE_ON":
             if session.question_strategy == "adaptive":
                 units, question_units = self.cognitive.graph(blueprint.id)
+                template_policy = self._template_question_policy(session)
                 selection = self.selector.select(
                     questions=questions,
                     question_units=question_units,
@@ -227,6 +242,7 @@ class ExamOrchestrator:
                     asked_question_ids=asked_question_ids,
                     current_question_id=question["id"],
                     prior_question_ids=self.cognitive.prior_question_ids(session),
+                    policy_contract=template_policy,
                 )
                 next_question = selection.question
             else:
@@ -286,7 +302,11 @@ class ExamOrchestrator:
             target_difficulty=(selection.target_difficulty if selection else None),
             reason_codes=(selection.reason_codes if selection else [decision.get("reason", "policy")]),
             candidate_scores=(selection.candidate_scores if selection else []),
-            policy_config=self.selector.weights if session.question_strategy == "adaptive" else {},
+            policy_config=(
+                self._selector_policy_config(session)
+                if session.question_strategy == "adaptive"
+                else {}
+            ),
         )
         self.db.commit()
         self.db.refresh(user_turn)
@@ -389,7 +409,7 @@ class ExamOrchestrator:
                 target_difficulty=int(question.get("difficulty", 3)),
                 reason_codes=["final_transcript_evidence"],
                 candidate_scores=[],
-                policy_config=self.selector.weights,
+                policy_config=self._selector_policy_config(session),
             )
             finalized.append(
                 {
@@ -435,3 +455,19 @@ class ExamOrchestrator:
             if policy.get("action") == "ASK_FOLLOWUP":
                 return "followup"
         return "followup"
+
+    @staticmethod
+    def _template_question_policy(session: ExamSession) -> dict[str, Any]:
+        return dict(
+            (session.template_snapshot_json or {}).get("question_selection") or {}
+        )
+
+    def _selector_policy_config(self, session: ExamSession) -> dict[str, Any]:
+        policy = self._template_question_policy(session)
+        return {
+            "weights": self.selector.weights,
+            "template_fingerprint": session.template_fingerprint,
+            "allowed_types": policy.get("allowed_types") or [],
+            "coverage": policy.get("coverage") or {},
+            "difficulty": policy.get("difficulty") or {},
+        }

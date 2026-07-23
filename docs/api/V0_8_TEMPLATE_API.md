@@ -224,6 +224,40 @@ The response includes the immutable version and fingerprint:
 Voice-session creation accepts the same template fields. The text and voice paths
 must compile to the same effective policy fingerprint for equivalent inputs.
 
+## 6.1 Blueprint planning
+
+`POST /api/projects/{project_id}/blueprints` accepts optional `mode`,
+`template_version_id` and `template_overrides` fields in addition to
+`document_id` and `profile`.
+
+When a template resolves, the Planner receives the compiled objectives, allowed
+question types, objective coverage, difficulty bounds and question limit. The
+blueprint response includes:
+
+```json
+{
+  "template_plan": {
+    "template_version_id": "uuid",
+    "semantic_version": "1.2.0",
+    "fingerprint": "sha256:...",
+    "resolution_source": "explicit | project_default | legacy",
+    "objectives": ["contribution", "methodology"],
+    "allowed_question_types": ["evidence", "method"],
+    "difficulty": {"minimum": 1, "maximum": 5},
+    "question_limit": 6,
+    "coverage": {
+      "status": "met | impossible",
+      "counts": {},
+      "unmet": []
+    }
+  }
+}
+```
+
+Every template-guided question contains `objective_ids`. Output with an undeclared
+question type or out-of-bounds difficulty is rejected rather than silently
+entering a session.
+
 ## 7. Session and report inspection
 
 ### `GET /api/sessions/{session_id}/template`

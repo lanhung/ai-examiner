@@ -192,7 +192,7 @@ def test_builtin_template_catalog_api_is_public_and_compact(client):
     assert len(templates) == 1
     template = templates[0]
     assert template["slug"] == "academic.thesis_defense"
-    assert template["version"] == "1.1.0"
+    assert template["version"] == "1.2.0"
     assert template["title"]["zh-CN"] == "论文答辩训练"
     assert template["trust_level"] == "built_in_reviewed"
     assert template["valid"] is True
@@ -209,9 +209,9 @@ def test_builtin_template_health_api_reports_versions(client):
     health = response.json()
     assert health == {
         "status": "ok",
-        "expected_builtin_count": 2,
+        "expected_builtin_count": 3,
         "persisted_template_count": 1,
-        "persisted_version_count": 2,
+        "persisted_version_count": 3,
         "validator_version": "template-validator-v1",
         "compiler_version": "template-compiler-v1",
         "issues": [],

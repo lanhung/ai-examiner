@@ -56,7 +56,7 @@ def test_legacy_text_session_resolves_latest_published_template_snapshot(client)
     inspected = client.get(f"/api/sessions/{session['id']}/template")
     assert inspected.status_code == 200
     template = inspected.json()
-    assert template["semantic_version"] == "1.1.0"
+    assert template["semantic_version"] == "1.2.0"
     assert template["integrity"] == "verified"
     assert template["resolution_source"] == "legacy"
     assert template["snapshot"]["legacy"]["question_limit"] == 6

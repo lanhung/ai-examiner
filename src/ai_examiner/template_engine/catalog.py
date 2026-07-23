@@ -9,6 +9,7 @@ from .validator import TEMPLATE_VALIDATOR_VERSION, validate_template
 BUILTIN_TEMPLATE_FILES = (
     "academic.thesis_defense.v1.yaml",
     "academic.thesis_defense.v1_1.yaml",
+    "academic.thesis_defense.v1_2.yaml",
 )
 
 

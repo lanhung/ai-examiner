@@ -71,13 +71,35 @@ class AdaptiveQuestionSelector:
         asked_question_ids: list[str],
         current_question_id: str | None = None,
         prior_question_ids: list[str] | None = None,
+        policy_contract: dict[str, Any] | None = None,
     ) -> SelectionResult:
         enriched_states = []
         for unit_id, state in states.items():
             enriched_states.append({**state, "importance": units.get(unit_id, {}).get("importance", 0.7)})
         target = self.difficulty.target(enriched_states)
+        policy = policy_contract or {}
+        difficulty_policy = policy.get("difficulty") or {}
+        minimum_difficulty = int(difficulty_policy.get("minimum", 1))
+        maximum_difficulty = int(difficulty_policy.get("maximum", 5))
+        target = max(minimum_difficulty, min(maximum_difficulty, target))
         asked = set(asked_question_ids)
         prior = set(prior_question_ids or [])
+        allowed_types = set(policy.get("allowed_types") or [])
+        coverage = policy.get("coverage") or {}
+        coverage_counts = {
+            objective_id: sum(
+                objective_id in (question.get("objective_ids") or [])
+                for question in questions
+                if str(question.get("id", "")) in asked
+            )
+            for objective_id in coverage
+        }
+        unmet_objectives = {
+            objective_id
+            for objective_id, rule in coverage.items()
+            if coverage_counts.get(objective_id, 0)
+            < int(rule.get("minimum_questions", 0))
+        }
         current_units = {
             item["knowledge_unit_id"] for item in question_units.get(current_question_id or "", [])
         }
@@ -87,6 +109,8 @@ class AdaptiveQuestionSelector:
         for question in questions:
             question_id = str(question.get("id", ""))
             if not question_id or question_id in asked:
+                continue
+            if allowed_types and str(question.get("type") or "") not in allowed_types:
                 continue
             mappings = question_units.get(question_id, [])
             linked_ids = [item["knowledge_unit_id"] for item in mappings]
@@ -133,6 +157,8 @@ class AdaptiveQuestionSelector:
                 for item in state.get("misconceptions", [])
             )
             difficulty = max(1, min(5, int(question.get("difficulty", 3))))
+            if not minimum_difficulty <= difficulty <= maximum_difficulty:
+                continue
             if question_id in prior:
                 novelty = 0.1
             elif current_units.intersection(linked_ids):
@@ -148,23 +174,40 @@ class AdaptiveQuestionSelector:
                 "novelty": novelty,
             }
             total = sum(self.weights[key] * value for key, value in components.items())
+            coverage_priority = (
+                1.0
+                if unmet_objectives.intersection(question.get("objective_ids") or [])
+                else 0.0
+            )
             candidates.append(
                 {
                     "question_id": question_id,
                     "difficulty": difficulty,
                     "total": round(total, 6),
+                    "coverage_priority": coverage_priority,
                     **{key: round(value, 6) for key, value in components.items()},
                 }
             )
 
-        candidates.sort(key=lambda item: (-item["total"], item["question_id"]))
+        candidates.sort(
+            key=lambda item: (
+                -item["coverage_priority"],
+                -item["total"],
+                item["question_id"],
+            )
+        )
         if not candidates:
             return SelectionResult(None, target, ["no_eligible_question"], [])
         selected = candidates[0]
         question = next(q for q in questions if str(q.get("id")) == selected["question_id"])
-        reasons = [
+        reasons = (
+            ["required_objective_coverage"]
+            if selected["coverage_priority"]
+            else []
+        ) + [
             key
             for key in ("misconception_priority", "knowledge_gap", "importance", "uncertainty")
             if selected.get(key, 0.0) >= 0.7
-        ] or ["best_available_candidate"]
+        ]
+        reasons = reasons or ["best_available_candidate"]
         return SelectionResult(question, target, reasons, candidates)

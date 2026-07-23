@@ -49,6 +49,9 @@ class ApiMessage(BaseModel):
 class BlueprintCreate(BaseModel):
     document_id: str
     profile: str | None = None
+    mode: str = "defense"
+    template_version_id: str | None = None
+    template_overrides: dict[str, Any] = Field(default_factory=dict)
 
 
 class GoldenDatasetCreate(BaseModel):
