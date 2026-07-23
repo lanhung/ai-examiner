@@ -19,7 +19,10 @@ branch implements that design incrementally and is not a production release.
 - passing validation, compilation and behavioral-evaluation publication gates;
 - idempotent startup seeding and built-in fingerprint health checks;
 - additive Alembic revisions `20260723_0006` and `20260723_0007`;
-- read-only catalog plus local authoring lifecycle APIs.
+- read-only catalog plus local authoring lifecycle APIs;
+- bounded YAML/JSON import that always creates an untrusted local draft;
+- source-only JSON/YAML export and deterministic policy-section semantic diff;
+- an explicit local-authoring authorization seam for the v0.9 identity/RBAC work.
 
 Text and voice sessions now resolve an explicit template, project default or legacy
 mode mapping and retain an immutable effective-policy snapshot and fingerprint.

@@ -65,6 +65,13 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   employment/admission decision boundaries across the built-in catalog.
 - Expand persisted built-in health checks to seven template identities and nine
   immutable versions.
+- Add bounded YAML/JSON template import that always assigns local ownership,
+  `draft` lifecycle and `local_draft` trust regardless of imported metadata.
+- Add source-only JSON/YAML template export with explicit attachment, fingerprint
+  and export-contract headers.
+- Add deterministic semantic template diff grouped by behavioral policy section.
+- Add stable transfer error contracts and an explicit local-authoring
+  authorization dependency seam for the v0.9 identity and RBAC implementation.
 
 ## [0.7.0-rc.2] - 2026-07-23
 

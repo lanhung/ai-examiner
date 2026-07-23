@@ -190,19 +190,39 @@ Delivered:
 - no-total evidence reports for sales coaching and project facilitation;
 - persisted catalog health for seven identities and nine versions.
 
+## Increment H: safe template transfer and semantic comparison
+
+Delivered:
+
+- bounded YAML/JSON import through the existing safe parser;
+- forced local ownership, `draft` lifecycle and `local_draft` trust on every
+  imported template;
+- source-only JSON/YAML export with no document, memory, prompt, credential or
+  runtime state;
+- deterministic recursive diff with JSON Pointer paths;
+- behavioral changes grouped by template, objectives, questioning, assistance,
+  conversation, assessment, reporting, safety, presentation, voice,
+  compatibility and override policy;
+- stable missing-version, invalid-format, unsafe-document and oversized-document
+  errors;
+- dynamic-response `Cache-Control: no-store` regression coverage;
+- an explicit authoring-context dependency that documents the current
+  single-user local boundary and can be replaced by v0.9 RBAC.
+
 ## Verification
 
 ```text
-Targeted built-in tests       30 passed
+Targeted template tests       30 passed
 Targeted Ruff                 passed
 Wheel built-in resource       packaged
-Full pytest                   109 passed
+Full pytest                   114 passed
 Full Ruff                     passed
 JavaScript syntax             passed
 git diff --check              passed
 Tracked-source secret scan    no key patterns found
 Alembic single head           20260723_0007
 Alembic metadata drift check  no new upgrade operations
+Wheel build                   ai_examiner_mvp-0.8.0.dev0-py3-none-any.whl
 Docker Compose config         not run (Docker unavailable on this host)
 ```
 
@@ -215,10 +235,11 @@ diagnostic issue.
 
 The following work remains intentionally disabled or unimplemented:
 
-- no public template import or export;
 - no database-backed catalog editor;
 - local authoring is demoted to local trust states and cannot claim
   `built_in_reviewed`;
+- the current authoring dependency is a local single-user seam, not authentication
+  or organization authorization;
 - no public marketplace, organization model or executable plugin;
 - no merge to `main`, final `v0.8.0` tag or production deployment.
 

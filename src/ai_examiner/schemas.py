@@ -133,6 +133,20 @@ class ScenarioTemplateStatusUpdate(BaseModel):
     evaluation_summary: dict[str, Any] = Field(default_factory=dict)
 
 
+class ScenarioTemplateImport(BaseModel):
+    document: str | dict[str, Any]
+    target_slug: str | None = Field(
+        default=None,
+        pattern=r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$",
+        max_length=160,
+    )
+    semantic_version: str | None = Field(
+        default=None,
+        pattern=r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$",
+        max_length=80,
+    )
+
+
 class ProjectTemplateBindingUpdate(BaseModel):
     template_version_id: str
     default_overrides: dict[str, Any] = Field(default_factory=dict)

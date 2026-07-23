@@ -231,6 +231,8 @@ Acceptance:
 
 Branch: `feature/v0.8-template-api`
 
+Status: Increment H complete on `develop/v0.8.0`.
+
 Deliverables:
 
 - catalog, authoring, validation, compilation and lifecycle endpoints;

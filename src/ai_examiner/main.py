@@ -96,6 +96,7 @@ from .schemas import (
     RetestSessionCreate,
     ScenarioTemplateCloneCreate,
     ScenarioTemplateCreate,
+    ScenarioTemplateImport,
     ScenarioTemplateSourceUpdate,
     ScenarioTemplateStatusUpdate,
     SessionCreate,
@@ -131,6 +132,16 @@ from .services.session_templates import (
     SessionTemplateService,
     serialize_project_template_binding,
 )
+from .services.template_access import (
+    TemplateAuthoringContext,
+    template_authoring_context,
+)
+from .services.template_transfer import (
+    TEMPLATE_EXPORT_VERSION,
+    export_template_document,
+    import_template_document,
+    semantic_template_diff,
+)
 from .services.templates import (
     TemplateLifecycleError,
     TemplateLifecycleService,
@@ -154,6 +165,10 @@ from .services.voice import (
 
 settings = get_settings()
 STATIC_DIR = Path(__file__).parent / "static"
+TemplateAuthoringAccess = Annotated[
+    TemplateAuthoringContext,
+    Depends(template_authoring_context),
+]
 
 
 @asynccontextmanager
@@ -303,6 +318,7 @@ def template_health(db: Annotated[Session, Depends(get_db)]):
 def create_scenario_template(
     payload: ScenarioTemplateCreate,
     db: Annotated[Session, Depends(get_db)],
+    _access: TemplateAuthoringAccess,
 ):
     template, version = TemplateLifecycleService(db).create_local(
         slug=payload.slug,
@@ -311,6 +327,30 @@ def create_scenario_template(
         source=payload.source,
     )
     return {
+        "template": serialize_template(db, template),
+        "version": serialize_template_version(db, version),
+    }
+
+
+@app.post("/api/templates/import", status_code=201)
+def import_scenario_template(
+    payload: ScenarioTemplateImport,
+    db: Annotated[Session, Depends(get_db)],
+    access: TemplateAuthoringAccess,
+):
+    template, version = import_template_document(
+        db,
+        document=payload.document,
+        target_slug=payload.target_slug,
+        semantic_version=payload.semantic_version,
+    )
+    return {
+        "import_version": TEMPLATE_EXPORT_VERSION,
+        "trust_assignment": "local_draft",
+        "authorization": {
+            "scope": access.scope,
+            "enforced": access.authorization_enforced,
+        },
         "template": serialize_template(db, template),
         "version": serialize_template_version(db, version),
     }
@@ -343,6 +383,7 @@ def clone_scenario_template_version(
     version_id: str,
     payload: ScenarioTemplateCloneCreate,
     db: Annotated[Session, Depends(get_db)],
+    _access: TemplateAuthoringAccess,
 ):
     version = db.get(ScenarioTemplateVersion, version_id)
     if not version:
@@ -359,6 +400,7 @@ def replace_scenario_template_version(
     version_id: str,
     payload: ScenarioTemplateSourceUpdate,
     db: Annotated[Session, Depends(get_db)],
+    _access: TemplateAuthoringAccess,
 ):
     version = db.get(ScenarioTemplateVersion, version_id)
     if not version:
@@ -371,6 +413,7 @@ def replace_scenario_template_version(
 def validate_scenario_template_version(
     version_id: str,
     db: Annotated[Session, Depends(get_db)],
+    _access: TemplateAuthoringAccess,
 ):
     version = db.get(ScenarioTemplateVersion, version_id)
     if not version:
@@ -383,6 +426,7 @@ def validate_scenario_template_version(
 def compile_scenario_template_version(
     version_id: str,
     db: Annotated[Session, Depends(get_db)],
+    _access: TemplateAuthoringAccess,
 ):
     version = db.get(ScenarioTemplateVersion, version_id)
     if not version:
@@ -401,6 +445,7 @@ def transition_scenario_template_version(
     version_id: str,
     payload: ScenarioTemplateStatusUpdate,
     db: Annotated[Session, Depends(get_db)],
+    _access: TemplateAuthoringAccess,
 ):
     version = db.get(ScenarioTemplateVersion, version_id)
     if not version:
@@ -411,6 +456,55 @@ def transition_scenario_template_version(
         evaluation_summary=payload.evaluation_summary,
     )
     return serialize_template_version(db, transitioned)
+
+
+@app.get("/api/template-versions/{version_id}/export")
+def export_scenario_template_version(
+    version_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    output_format: str = Query(default="yaml", alias="format", pattern="^(json|yaml)$"),
+):
+    version = db.get(ScenarioTemplateVersion, version_id)
+    if not version:
+        raise TemplateLifecycleError(
+            "TEMPLATE_VERSION_NOT_FOUND",
+            "Template version not found",
+            status_code=404,
+        )
+    payload, media_type = export_template_document(
+        version,
+        output_format=output_format,
+    )
+    filename = (
+        f"{version.template.slug}-{version.semantic_version}."
+        f"{'json' if output_format == 'json' else 'yaml'}"
+    )
+    return Response(
+        content=payload,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Template-Export-Version": TEMPLATE_EXPORT_VERSION,
+            "X-Template-Fingerprint": version.fingerprint or "",
+        },
+    )
+
+
+@app.get("/api/template-versions/{left_id}/diff/{right_id}")
+def diff_scenario_template_versions(
+    left_id: str,
+    right_id: str,
+    db: Annotated[Session, Depends(get_db)],
+):
+    left = db.get(ScenarioTemplateVersion, left_id)
+    right = db.get(ScenarioTemplateVersion, right_id)
+    if not left or not right:
+        raise TemplateLifecycleError(
+            "TEMPLATE_VERSION_NOT_FOUND",
+            "One or both template versions were not found",
+            status_code=404,
+        )
+    return semantic_template_diff(left, right)
 
 
 @app.get("/api/projects/{project_id}/template-binding")

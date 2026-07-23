@@ -7,7 +7,8 @@ Implementation status on `develop/v0.8.0`:
 - catalog, identity/version reads, create, replace, clone, validate, compile and
   lifecycle status endpoints are implemented;
 - project binding and session snapshots are implemented;
-- preview, semantic template diff, import and export remain planned;
+- semantic template diff, bounded import and source-only export are implemented;
+- preview remains planned;
 - this API is development-only until the v0.8 release gates pass.
 
 - Base path: `/api`
@@ -152,18 +153,50 @@ session or learner-memory event.
 
 ### `GET /api/template-versions/{left_id}/diff/{right_id}`
 
-Returns semantic differences grouped by objectives, policies, rubric, report, safety
-and overrides. Secret or rendered prompt content is not returned.
+Returns a deterministic recursive semantic diff. Changes carry JSON Pointer paths
+and are grouped under template metadata, capabilities, objectives, questioning,
+assistance, conversation, assessment, reporting, safety, presentation, voice,
+compatibility and override policy. Secret or rendered prompt content is not
+returned.
 
 ### `GET /api/template-versions/{version_id}/export?format=yaml`
 
-Exports canonical template source and metadata. Export excludes compiled internal
-prompt text and application state.
+Exports canonical template source only as UTF-8 YAML or JSON. Response headers
+identify the immutable source fingerprint and `template-export-v1` contract.
+Export excludes compiled internal prompt text, documents, learner memory,
+credentials and application state.
 
 ### `POST /api/templates/import`
 
-Accepts bounded YAML or JSON and always creates a `local_draft`. Import never
-publishes or activates a template.
+Accepts bounded YAML or JSON and always creates a new local identity and initial
+version. The server ignores any ownership, lifecycle or trust claim in the
+document and assigns:
+
+```text
+owner_scope = local
+status = draft
+trust_level = local_draft
+```
+
+Import never publishes or activates a template. Optional `target_slug` and
+`semantic_version` fields allow the caller to choose a non-conflicting local
+identity without changing the imported behavior.
+
+## 4.1 Authoring authorization seam
+
+Template mutation endpoints use a shared authoring-context dependency. In v0.8 it
+identifies a local operator and reports:
+
+```json
+{
+  "scope": "local_template_authoring",
+  "authorization_enforced": false
+}
+```
+
+This is an explicit integration seam, not production authentication. v0.9 must
+replace it with authenticated actor, organization and role checks before enabling
+multi-user authoring.
 
 ## 5. Project binding
 
