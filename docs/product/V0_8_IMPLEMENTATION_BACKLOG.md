@@ -1,5 +1,22 @@
 # v0.8 Industry Template Platform Implementation Backlog
 
+## 0. Implementation status
+
+Current branch: `develop/v0.8.0`
+
+Current package version: `0.8.0.dev0`
+
+| Work package | Status | Current evidence |
+|---|---|---|
+| WP-01 | Increment A complete | Strict contract, generated JSON Schema, bounded parser, deterministic validation and adversarial tests |
+| WP-02 | Increment A complete | Canonical compiler, fingerprints, override lattice and audit tests |
+| WP-03 | Not started | Persistence and migration remain held |
+| WP-04 | Partial | Thesis-defense compatibility template and read-only catalog health API delivered; remaining modes and persistence seed are pending |
+| WP-05 to WP-12 | Not started | Runtime integration, UI, governance, evaluation and release hardening remain held |
+
+Increment A is a compatibility foundation, not a complete v0.8 release. It does
+not change session behavior or authorize production deployment.
+
 ## 1. Execution rules
 
 - Keep `research/v0.8.0` documentation and disposable experiments only.

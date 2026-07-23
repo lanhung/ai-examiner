@@ -130,6 +130,10 @@ from .services.voice import (
     record_voice_event,
     voice_provider_ready,
 )
+from .template_engine.catalog import (
+    builtin_template_catalog,
+    builtin_template_health,
+)
 
 settings = get_settings()
 STATIC_DIR = Path(__file__).parent / "static"
@@ -247,6 +251,16 @@ def providers():
         entry.public_dict(profile_ready(settings, entry.id))
         for entry in CATALOG
     ]
+
+
+@app.get("/api/templates")
+def templates():
+    return builtin_template_catalog()
+
+
+@app.get("/api/templates/health")
+def template_health():
+    return builtin_template_health()
 
 
 @app.post("/api/projects", status_code=201)

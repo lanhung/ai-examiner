@@ -1,11 +1,12 @@
-# AI Examiner v0.7.0 Development
+# AI Examiner v0.8.0 Development
 
-Current development branch: `develop/v0.7.0` (`0.7.0rc2`). The stable production
+Current development branch: `develop/v0.8.0` (`0.8.0.dev0`). The v0.7 release
+candidate remains available at `develop/v0.7.0` / `v0.7.0-rc.2`. The stable production
 line remains v0.4.1 and the preserved v0.5 release snapshot remains
 `release/v0.5.0` / `v0.5.0-rc.4` until final acceptance.
 
-The documentation-only v0.8 template-platform study is maintained on
-`research/v0.8.0`; it is not deployable and does not change the package version.
+The accepted template-platform study is preserved on `research/v0.8.0`. The current
+branch implements that design incrementally and is not a production release.
 
 The first v0.7 increment adds an optional opaque learner identity, explicit memory
 settings, reviewed canonical concept mappings and an evidence-bound long-term memory
