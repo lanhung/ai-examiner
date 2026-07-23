@@ -7,12 +7,11 @@
 - Base candidate: `v0.7.0-rc.2`
 - Release tag: not created
 - Deployment status: local development only
-- Alembic head: `20260723_0006`
+- Alembic head: `20260723_0007`
 
-v0.8 is being delivered as reviewable vertical slices. The first slice establishes
-the safe, deterministic foundation of the Industry Template Platform without
-changing stored sessions, database schemas, the current browser workflow or the
-v0.7 text and realtime examination behavior.
+v0.8 is being delivered as reviewable vertical slices. The current increment
+extends the safe, deterministic template foundation into durable session binding
+without yet changing Planner, Policy, Assessment or Report Agent behavior.
 
 ## Increment A: contract and compiler foundation
 
@@ -74,18 +73,50 @@ POST /api/template-versions/{version_id}/compile
 POST /api/template-versions/{version_id}/status
 ```
 
+## Increment C: session binding and immutable replay snapshots
+
+Delivered:
+
+- immutable `academic.thesis_defense@1.1.0` compatibility version with declared
+  bounded follow-up overrides while preserving published v1.0;
+- deterministic template resolution precedence:
+  explicit session version, project default binding, then legacy mode mapping;
+- project binding read, replace and clear endpoints with compiled default-override
+  validation;
+- optional template version and override fields on text and realtime voice session
+  creation;
+- effective runtime settings derived from one compiler path for text and voice;
+- immutable compiled snapshot, compiler version, accepted overrides and fingerprint
+  on every newly mapped defense session;
+- session inspection endpoint with stored-artifact fingerprint verification;
+- Qwen voice safety clamps applied before compilation so the recorded snapshot
+  matches runtime behavior;
+- additive migration `20260723_0007` and downgrade refusal when bound sessions
+  would lose historical policy;
+- backward compatibility for old request bodies and unmapped teaching/interview
+  modes.
+
+Runtime endpoints added:
+
+```text
+GET    /api/projects/{project_id}/template-binding
+PUT    /api/projects/{project_id}/template-binding
+DELETE /api/projects/{project_id}/template-binding
+GET    /api/sessions/{session_id}/template
+```
+
 ## Verification
 
 ```text
-Targeted template tests       25 passed
+Targeted template tests       38 passed
 Targeted Ruff                 passed
 Wheel built-in resource       packaged
-Full pytest                   83 passed
+Full pytest                   90 passed
 Full Ruff                     passed
 JavaScript syntax             passed
 git diff --check              passed
 Tracked-source secret scan    pending final staged-content gate
-Alembic single head           20260723_0006
+Alembic single head           20260723_0007
 Alembic metadata drift check  no new upgrade operations
 Docker Compose config         not run (Docker unavailable on this host)
 ```
@@ -100,8 +131,7 @@ diagnostic issue.
 The following work remains intentionally disabled or unimplemented:
 
 - no public template import or export;
-- no session binding or immutable runtime snapshot;
-- no Planner, Policy Controller, Evaluator or Reporter behavior change;
+- no Planner, Policy Controller, Evaluator or Reporter template-policy integration;
 - no database-backed catalog editor;
 - local authoring is demoted to local trust states and cannot claim
   `built_in_reviewed`;

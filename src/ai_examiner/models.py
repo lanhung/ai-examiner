@@ -249,6 +249,18 @@ class ExamSession(Base):
     current_question_index: Mapped[int] = mapped_column(Integer, default=0)
     current_question_attempts: Mapped[int] = mapped_column(Integer, default=0)
     mastery_state: Mapped[dict] = mapped_column(JSON, default=dict)
+    template_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("scenario_template_versions.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    template_snapshot_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    template_fingerprint: Mapped[str | None] = mapped_column(
+        String(80), nullable=True
+    )
+    template_compiler_version: Mapped[str | None] = mapped_column(
+        String(80), nullable=True
+    )
+    template_overrides_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     learner_subject_id: Mapped[str | None] = mapped_column(
         ForeignKey("learner_subjects.id", ondelete="SET NULL"), nullable=True
     )

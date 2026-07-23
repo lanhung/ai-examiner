@@ -6,7 +6,10 @@ from ..templates.builtin import load_builtin_template
 from .compiler import TEMPLATE_COMPILER_VERSION, TemplateCompiler
 from .validator import TEMPLATE_VALIDATOR_VERSION, validate_template
 
-BUILTIN_TEMPLATE_FILES = ("academic.thesis_defense.v1.yaml",)
+BUILTIN_TEMPLATE_FILES = (
+    "academic.thesis_defense.v1.yaml",
+    "academic.thesis_defense.v1_1.yaml",
+)
 
 
 def _localized(value: dict[str, str]) -> dict[str, str]:

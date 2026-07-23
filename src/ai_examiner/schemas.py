@@ -22,6 +22,8 @@ class SessionCreate(BaseModel):
     question_limit: int = Field(default=6, ge=1, le=20)
     question_strategy: Literal["fixed", "adaptive"] = "fixed"
     learner_subject_key: str | None = Field(default=None, min_length=1, max_length=160)
+    template_version_id: str | None = None
+    template_overrides: dict[str, Any] = Field(default_factory=dict)
 
 
 class PolicyBenchmarkCreate(BaseModel):
@@ -128,6 +130,11 @@ class ScenarioTemplateStatusUpdate(BaseModel):
     evaluation_summary: dict[str, Any] = Field(default_factory=dict)
 
 
+class ProjectTemplateBindingUpdate(BaseModel):
+    template_version_id: str
+    default_overrides: dict[str, Any] = Field(default_factory=dict)
+
+
 class AsyncGoldenDatasetCreate(GoldenDatasetCreate):
     asynchronous: bool = True
 
@@ -149,6 +156,8 @@ class VoiceSessionCreate(BaseModel):
     question_strategy: Literal["fixed", "adaptive"] = "fixed"
     learner_subject_key: str | None = Field(default=None, max_length=160)
     analysis_profile: str | None = Field(default=None, max_length=160)
+    template_version_id: str | None = None
+    template_overrides: dict[str, Any] = Field(default_factory=dict)
 
 
 class VoiceEventCreate(BaseModel):

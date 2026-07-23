@@ -49,7 +49,7 @@ def test_builtin_template_seed_is_idempotent(client):
             db.scalar(select(func.count(TemplateValidationRun.id))),
         )
 
-    assert before == after == (1, 1, 1)
+    assert before == after == (1, 2, 2)
 
 
 def test_local_template_lifecycle_requires_validation_compilation_and_evaluation(client):
@@ -259,6 +259,16 @@ def test_sqlite_migration_upgrade_downgrade_reupgrade_preserves_v07_data(tmp_pat
     }
     alembic("upgrade", "head")
     assert expected_tables <= set(inspect(migration_engine).get_table_names())
+    assert {
+        "template_version_id",
+        "template_snapshot_json",
+        "template_fingerprint",
+        "template_compiler_version",
+        "template_overrides_json",
+    } <= {
+        column["name"]
+        for column in inspect(migration_engine).get_columns("exam_sessions")
+    }
     with migration_engine.connect() as connection:
         assert connection.scalar(
             text("SELECT COUNT(*) FROM projects WHERE id = 'legacy-project'")

@@ -89,6 +89,7 @@ from .schemas import (
     PreferenceAction,
     PreferenceCreate,
     ProjectCreate,
+    ProjectTemplateBindingUpdate,
     PromptVersionCreate,
     RetestItemAction,
     RetestPlanCreate,
@@ -125,6 +126,10 @@ from .services.policy_benchmark import PolicyBenchmarkService
 from .services.preferences import PreferencePolicyError, PreferenceService
 from .services.prompts import activate_prompt, create_prompt_version, prompt_manifest
 from .services.retest import RetestLifecycleError, RetestLifecycleService
+from .services.session_templates import (
+    SessionTemplateService,
+    serialize_project_template_binding,
+)
 from .services.templates import (
     TemplateLifecycleError,
     TemplateLifecycleService,
@@ -405,6 +410,53 @@ def transition_scenario_template_version(
         evaluation_summary=payload.evaluation_summary,
     )
     return serialize_template_version(db, transitioned)
+
+
+@app.get("/api/projects/{project_id}/template-binding")
+def get_project_template_binding(
+    project_id: str,
+    db: Annotated[Session, Depends(get_db)],
+):
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    binding = SessionTemplateService(db).active_binding(project.id)
+    return {"binding": serialize_project_template_binding(binding)}
+
+
+@app.put("/api/projects/{project_id}/template-binding")
+def set_project_template_binding(
+    project_id: str,
+    payload: ProjectTemplateBindingUpdate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    project = db.get(Project, project_id)
+    version = db.get(ScenarioTemplateVersion, payload.template_version_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    if not version:
+        raise HTTPException(404, "Template version not found")
+    binding = SessionTemplateService(db).bind_project(
+        project,
+        version,
+        default_overrides=payload.default_overrides,
+    )
+    return {"binding": serialize_project_template_binding(binding)}
+
+
+@app.delete("/api/projects/{project_id}/template-binding")
+def clear_project_template_binding(
+    project_id: str,
+    db: Annotated[Session, Depends(get_db)],
+):
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    binding = SessionTemplateService(db).clear_project_binding(project.id)
+    return {
+        "cleared": binding is not None,
+        "binding": serialize_project_template_binding(binding),
+    }
 
 
 @app.post("/api/projects", status_code=201)
@@ -711,6 +763,24 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
     blueprint = db.get(Blueprint, payload.blueprint_id)
     if not project or not blueprint or blueprint.project_id != project.id:
         raise HTTPException(404, "Project or blueprint not found")
+    request_overrides: dict[str, object] = {}
+    fields = payload.model_fields_set
+    for field, override in (
+        ("question_limit", "question_limit"),
+        ("max_followups_per_question", "max_followups_per_question"),
+        ("question_strategy", "question_strategy"),
+        ("allow_hints", "hints_allowed"),
+        ("allow_corrections", "corrections_allowed"),
+    ):
+        if field in fields:
+            request_overrides[override] = getattr(payload, field)
+    resolved_template = SessionTemplateService(db).resolve(
+        project,
+        mode=payload.mode,
+        template_version_id=payload.template_version_id,
+        template_overrides=payload.template_overrides,
+        request_overrides=request_overrides,
+    )
     profile = payload.profile or (
         f"{settings.model_provider}:{settings.default_model_for(settings.model_provider)}"
     )
@@ -725,18 +795,56 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
             "mode",
             "question_strategy",
             "learner_subject_key",
+            "template_version_id",
+            "template_overrides",
         }
     )
+    mode = payload.mode
+    question_strategy = payload.question_strategy
+    if resolved_template:
+        legacy = resolved_template.legacy
+        mode = resolved_template.effective_mode
+        question_strategy = legacy["question_strategy"]
+        config.update(
+            {
+                "allow_hints": legacy["allow_hints"],
+                "allow_corrections": legacy["allow_corrections"],
+                "question_limit": legacy["question_limit"],
+                "max_followups_per_question": legacy[
+                    "max_followups_per_question"
+                ],
+                "template_resolution_source": (
+                    resolved_template.resolution_source
+                ),
+            }
+        )
     config["profile"] = profile
     session = ExamSession(
         project_id=project.id,
         blueprint_id=blueprint.id,
-        mode=payload.mode,
+        mode=mode,
         config=config,
         status="created",
+        template_version_id=(
+            resolved_template.template_version_id if resolved_template else None
+        ),
+        template_snapshot_json=(
+            resolved_template.snapshot if resolved_template else None
+        ),
+        template_fingerprint=(
+            resolved_template.fingerprint if resolved_template else None
+        ),
+        template_compiler_version=(
+            resolved_template.compiler_version if resolved_template else None
+        ),
+        template_overrides_json=(
+            resolved_template.overrides if resolved_template else None
+        ),
         learner_subject_id=subject.id if subject else None,
-        question_strategy=payload.question_strategy,
-        policy_version="adaptive-v1" if payload.question_strategy == "adaptive" else "fixed-v1",
+        question_strategy=question_strategy,
+        policy_version=(
+            "adaptive-v1" if question_strategy == "adaptive" else "fixed-v1"
+        ),
     )
     db.add(session)
     db.commit()
@@ -748,6 +856,8 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
         "question_strategy": session.question_strategy,
         "policy_version": session.policy_version,
         "learner_subject_id": session.learner_subject_id,
+        "template_version_id": session.template_version_id,
+        "template_fingerprint": session.template_fingerprint,
     }
 
 
@@ -843,8 +953,21 @@ def get_session(session_id: str, db: Annotated[Session, Depends(get_db)]):
         "policy_version": session.policy_version,
         "learner_subject_id": session.learner_subject_id,
         "mastery_state": session.mastery_state,
+        "template_version_id": session.template_version_id,
+        "template_fingerprint": session.template_fingerprint,
         "turns": [serialize_turn(turn) for turn in session.turns],
     }
+
+
+@app.get("/api/sessions/{session_id}/template")
+def get_session_template(
+    session_id: str,
+    db: Annotated[Session, Depends(get_db)],
+):
+    session = db.get(ExamSession, session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+    return SessionTemplateService(db).inspect_session(session)
 
 
 @app.get("/api/sessions/{session_id}/report")
@@ -2256,6 +2379,8 @@ def serialize_voice_session(voice: VoiceSession, db: Session, *, include_events:
         "status": voice.status,
         "question_strategy": exam.question_strategy if exam else "fixed",
         "learner_subject_id": exam.learner_subject_id if exam else None,
+        "template_version_id": exam.template_version_id if exam else None,
+        "template_fingerprint": exam.template_fingerprint if exam else None,
         "config": {key: value for key, value in (voice.config or {}).items() if key != "instructions"},
         "metrics": voice.metrics,
         "started_at": voice.started_at.isoformat() if voice.started_at else None,
@@ -2327,6 +2452,39 @@ def start_voice_session(
     subject = cognitive.get_or_create_subject(project.id, payload.learner_subject_key)
     if payload.analysis_profile:
         _profiles([payload.analysis_profile], payload.analysis_profile)
+    question_limit = (
+        min(payload.question_limit, 4)
+        if payload.provider == "qwen"
+        else payload.question_limit
+    )
+    max_followups = (
+        min(payload.max_followups, 1)
+        if payload.provider == "qwen"
+        else payload.max_followups
+    )
+    request_overrides: dict[str, object] = {"voice_provider": payload.provider}
+    fields = payload.model_fields_set
+    if "question_limit" in fields or payload.provider == "qwen":
+        request_overrides["question_limit"] = question_limit
+    if "max_followups" in fields or payload.provider == "qwen":
+        request_overrides["max_followups_per_question"] = max_followups
+    if "question_strategy" in fields:
+        request_overrides["question_strategy"] = payload.question_strategy
+    resolved_template = SessionTemplateService(db).resolve(
+        project,
+        mode=payload.mode,
+        template_version_id=payload.template_version_id,
+        template_overrides=payload.template_overrides,
+        request_overrides=request_overrides,
+    )
+    mode = payload.mode
+    question_strategy = payload.question_strategy
+    if resolved_template:
+        legacy = resolved_template.legacy
+        mode = resolved_template.effective_mode
+        question_limit = legacy["question_limit"]
+        max_followups = legacy["max_followups_per_question"]
+        question_strategy = legacy["question_strategy"]
     try:
         voice = create_voice_session(
             db,
@@ -2334,15 +2492,16 @@ def start_voice_session(
             blueprint=blueprint,
             settings=settings,
             provider=payload.provider,
-            mode=payload.mode,
+            mode=mode,
             language=payload.language,
             voice=payload.voice,
             vad_eagerness=payload.vad_eagerness,
-            question_limit=payload.question_limit,
-            max_followups=payload.max_followups,
-            question_strategy=payload.question_strategy,
+            question_limit=question_limit,
+            max_followups=max_followups,
+            question_strategy=question_strategy,
             learner_subject_id=subject.id if subject else None,
             analysis_profile=payload.analysis_profile,
+            resolved_template=resolved_template,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

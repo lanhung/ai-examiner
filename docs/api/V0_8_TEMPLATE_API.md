@@ -6,8 +6,8 @@ Implementation status on `develop/v0.8.0`:
 
 - catalog, identity/version reads, create, replace, clone, validate, compile and
   lifecycle status endpoints are implemented;
-- project binding, session snapshots, preview, diff, import and export remain
-  planned;
+- project binding and session snapshots are implemented;
+- preview, semantic template diff, import and export remain planned;
 - this API is development-only until the v0.8 release gates pass.
 
 - Base path: `/api`
@@ -183,8 +183,8 @@ Changing the binding does not alter existing sessions.
 
 ### `GET /api/projects/{project_id}/template-binding`
 
-Returns the active project default, effective override preview and compatibility
-warnings.
+Returns the active project default and its validated default overrides. A `DELETE`
+request clears the active default without deleting its history.
 
 ## 6. Session creation
 
@@ -208,21 +208,16 @@ If `template_version_id` is absent, the server uses the project binding or legac
 mode mapping. A supplied template and a contradictory legacy mode return
 `422 TEMPLATE_MODE_CONFLICT`.
 
-The response includes:
+The response includes the immutable version and fingerprint:
 
 ```json
 {
   "id": "session-uuid",
-  "template": {
-    "template_id": "uuid",
-    "version_id": "uuid",
-    "slug": "academic.thesis_defense",
-    "semantic_version": "1.0.0",
-    "fingerprint": "sha256:...",
-    "compiler_version": "template-compiler-v1"
-  },
-  "effective_settings": {},
-  "override_audit": []
+  "template_version_id": "uuid",
+  "template_fingerprint": "sha256:...",
+  "config": {
+    "template_resolution_source": "explicit | project_default | legacy"
+  }
 }
 ```
 
@@ -233,8 +228,9 @@ must compile to the same effective policy fingerprint for equivalent inputs.
 
 ### `GET /api/sessions/{session_id}/template`
 
-Returns the immutable effective snapshot metadata and a safe structured view of the
-compiled policy. It does not reload current template content.
+Returns immutable effective snapshot metadata, accepted overrides and a structured
+view of the compiled policy. It verifies the snapshot fingerprint against the
+stored compiler and template schema metadata; it does not recompile current source.
 
 ### Existing report endpoint
 

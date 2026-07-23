@@ -1,0 +1,143 @@
+schema_version: "1.0"
+template:
+  slug: academic.thesis_defense
+  version: 1.1.0
+  category: academic
+  title:
+    zh-CN: 论文答辩训练
+    en: Thesis Defense Practice
+  description:
+    zh-CN: 基于论文材料、用户回答和证据链的论文答辩训练。
+    en: Evidence-grounded thesis defense practice.
+  trust_level: built_in_reviewed
+  intended_use: practice_and_advisory
+  risk_tier: moderate
+capabilities:
+  required: [documents, evidence, assessment]
+  optional: [voice, adaptive_questions, long_term_memory, visual_analysis]
+objectives:
+  - id: contribution
+    title: {zh-CN: 核心贡献, en: Contribution}
+    weight: 0.20
+    required_evidence: document_and_answer
+  - id: methodology
+    title: {zh-CN: 方法理解, en: Methodology}
+    weight: 0.25
+    required_evidence: document_and_answer
+  - id: evidence_quality
+    title: {zh-CN: 证据质量, en: Evidence quality}
+    weight: 0.25
+    required_evidence: document_and_answer
+  - id: limitations
+    title: {zh-CN: 局限与边界, en: Limitations}
+    weight: 0.15
+    required_evidence: document_and_answer
+  - id: communication
+    title: {zh-CN: 答辩表达, en: Communication}
+    weight: 0.15
+    required_evidence: answer
+question_policy:
+  allowed_types:
+    [motivation, novelty, method, evidence, limitation, counterexample, transfer, generalization]
+  coverage:
+    contribution: {minimum_questions: 1}
+    methodology: {minimum_questions: 1}
+    evidence_quality: {minimum_questions: 1}
+    limitations: {minimum_questions: 1}
+  difficulty:
+    initial: 3
+    minimum: 1
+    maximum: 5
+    adaptive: false
+  selection_strategy: fixed
+  question_limit: 6
+assistance_policy:
+  mode: bounded
+  hints:
+    allowed: true
+    maximum_per_question: 1
+  corrections:
+    allowed: true
+    timing: after_independent_attempt
+  answer_disclosure:
+    allowed: false
+conversation_policy:
+  max_followups_per_question: 2
+  allowed_actions: [ASK_FOLLOWUP, GIVE_HINT, MOVE_ON, END]
+  interruption:
+    enabled: false
+    level: "off"
+    user_can_disable: true
+assessment_policy:
+  scale: {minimum: 0, maximum: 5}
+  dimensions:
+    - id: correctness
+      title: {zh-CN: 正确性, en: Correctness}
+      weight: 0.35
+      evidence_required: true
+    - id: completeness
+      title: {zh-CN: 完整性, en: Completeness}
+      weight: 0.25
+      evidence_required: true
+    - id: evidence_reasoning
+      title: {zh-CN: 证据与推理, en: Evidence and reasoning}
+      weight: 0.25
+      evidence_required: true
+    - id: boundary_awareness
+      title: {zh-CN: 边界意识, en: Boundary awareness}
+      weight: 0.15
+      evidence_required: true
+  assisted_performance: report_separately
+  aggregate: weighted_dimensions
+report_policy:
+  sections:
+    [summary, objective_scores, dimension_scores, evidence, strengths, weaknesses, knowledge_map, improvement_path, recommended_actions]
+  show_total_score: true
+  required_disclaimer: practice_not_formal_decision
+safety_policy:
+  prohibited_uses:
+    [automatic_admission_decision, automatic_employment_decision, protected_trait_inference, personality_or_emotion_scoring]
+  human_review_required: true
+  protected_trait_inference: forbidden
+presentation_policy:
+  role_id: academic_examiner
+  style_id: rigorous_supportive
+voice_policy:
+  provider: disabled
+compatibility:
+  mode: defense
+  difficulty: adaptive
+overrides:
+  question_limit:
+    kind: bounded
+    minimum: 1
+    maximum: 20
+    default: 6
+  max_followups_per_question:
+    kind: bounded
+    minimum: 0
+    maximum: 5
+    default: 2
+  difficulty_initial:
+    kind: bounded
+    minimum: 1
+    maximum: 5
+    default: 3
+  question_strategy:
+    kind: selectable
+    values: [fixed, adaptive]
+    default: fixed
+  hints_allowed:
+    kind: toggle
+    default: true
+    direction: disable_only
+  corrections_allowed:
+    kind: toggle
+    default: true
+    direction: disable_only
+  active_interruption:
+    kind: locked
+  voice_provider:
+    kind: selectable
+    values: [disabled, openai, qwen]
+    default: disabled

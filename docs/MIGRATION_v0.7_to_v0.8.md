@@ -16,8 +16,19 @@ template_validation_runs
 project_template_bindings
 ```
 
-It does not alter v0.7 projects, documents, blueprints, text sessions, voice
-sessions, learner memory or evidence rows.
+Alembic revision `20260723_0007` adds nullable columns to `exam_sessions`:
+
+```text
+template_version_id
+template_snapshot_json
+template_fingerprint
+template_compiler_version
+template_overrides_json
+```
+
+Existing v0.7 projects, documents, blueprints, text sessions, voice sessions,
+learner memory and evidence rows remain readable. Old sessions retain null template
+columns and are reported as legacy sessions.
 
 Startup seeds source-controlled built-in templates by slug and semantic version.
 Repeated startup is idempotent. If an existing built-in version has different
@@ -49,9 +60,9 @@ Expected template health:
 ```json
 {
   "status": "ok",
-  "expected_builtin_count": 1,
+  "expected_builtin_count": 2,
   "persisted_template_count": 1,
-  "persisted_version_count": 1,
+  "persisted_version_count": 2,
   "issues": []
 }
 ```
@@ -65,7 +76,7 @@ docker compose exec ai-examiner alembic current
 Expected revision:
 
 ```text
-20260723_0006
+20260723_0007
 ```
 
 ## Downgrade
@@ -77,6 +88,6 @@ template snapshot:
 docker compose exec ai-examiner alembic downgrade 20260721_0005
 ```
 
-Future session-binding migrations will add snapshot references. Once bound sessions
-exist, destructive downgrade is refused so historical examinations cannot silently
-lose their effective policy. Restore from backup or retain the v0.8 schema instead.
+Once bound sessions exist, revision `20260723_0007` refuses destructive downgrade
+so historical examinations cannot silently lose their effective policy. Restore
+from backup, explicitly archive those sessions, or retain the v0.8 schema instead.

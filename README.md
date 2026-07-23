@@ -13,14 +13,17 @@ branch implements that design incrementally and is not a production release.
 - strict, bounded YAML/JSON scenario-template contract;
 - deterministic structural and semantic validation;
 - canonical compiler, override lattice and SHA-256 policy fingerprints;
-- reviewed `academic.thesis_defense@1.0.0` compatibility template;
+- reviewed, immutable `academic.thesis_defense@1.0.0` and `@1.1.0`
+  compatibility versions;
 - immutable template identity/version persistence and lifecycle;
 - passing validation, compilation and behavioral-evaluation publication gates;
 - idempotent startup seeding and built-in fingerprint health checks;
-- additive Alembic revision `20260723_0006`;
+- additive Alembic revisions `20260723_0006` and `20260723_0007`;
 - read-only catalog plus local authoring lifecycle APIs.
 
-Template-to-session binding and runtime policy integration are not enabled yet.
+Text and voice sessions now resolve an explicit template, project default or legacy
+mode mapping and retain an immutable effective-policy snapshot and fingerprint.
+Planner, conversation, assessment and report integration remain in development.
 The current branch is for development evaluation only.
 
 The first v0.7 increment adds an optional opaque learner identity, explicit memory

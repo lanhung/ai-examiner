@@ -15,6 +15,14 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   API, template health API and packaged-resource verification.
 - Add immutable scenario-template persistence, lifecycle and authoring APIs,
   idempotent built-in seeding and additive Alembic migration `20260723_0006`.
+- Add project default template bindings and optional text/voice session template
+  selection with deterministic override precedence.
+- Persist immutable effective template snapshots, compiler versions, overrides and
+  SHA-256 fingerprints on exam sessions through migration `20260723_0007`.
+- Add session-template inspection with fingerprint verification and preserve
+  template-free compatibility for legacy teaching and interview requests.
+- Add immutable `academic.thesis_defense@1.1.0` with bounded follow-up overrides
+  while retaining the published `1.0.0` artifact.
 
 ## [0.7.0-rc.2] - 2026-07-23
 

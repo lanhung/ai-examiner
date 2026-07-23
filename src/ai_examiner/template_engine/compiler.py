@@ -161,6 +161,7 @@ class TemplateCompiler:
         if issues:
             raise TemplateOverrideError(issues)
 
+        self._refresh_legacy_projection(compiled)
         compiled["override_audit"] = audit
         payload = {
             "compiler_version": TEMPLATE_COMPILER_VERSION,
@@ -176,6 +177,28 @@ class TemplateCompiler:
             fingerprint=fingerprint,
             compiled=compiled,
             override_audit=audit,
+        )
+
+    @staticmethod
+    def _refresh_legacy_projection(compiled: dict[str, Any]) -> None:
+        legacy = compiled["legacy"]
+        legacy.update(
+            {
+                "question_limit": compiled["question_selection"]["question_limit"],
+                "question_strategy": compiled["question_selection"]["strategy"],
+                "allow_hints": compiled["conversation"]["assistance"]["hints"][
+                    "allowed"
+                ],
+                "allow_corrections": compiled["conversation"]["assistance"][
+                    "corrections"
+                ]["allowed"],
+                "allow_interruptions": compiled["conversation"]["interruption"][
+                    "enabled"
+                ],
+                "max_followups_per_question": compiled["conversation"][
+                    "max_followups_per_question"
+                ],
+            }
         )
 
     @staticmethod

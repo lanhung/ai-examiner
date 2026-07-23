@@ -107,6 +107,10 @@ STYLE_IDS = frozenset(
 
 OVERRIDE_TARGETS = {
     "question_limit": ("question_selection", "question_limit"),
+    "max_followups_per_question": (
+        "conversation",
+        "max_followups_per_question",
+    ),
     "difficulty_initial": ("question_selection", "difficulty", "initial"),
     "question_strategy": ("question_selection", "strategy"),
     "hints_allowed": ("conversation", "assistance", "hints", "allowed"),
@@ -117,6 +121,7 @@ OVERRIDE_TARGETS = {
 
 OVERRIDE_VALUE_TYPES = {
     "question_limit": int,
+    "max_followups_per_question": int,
     "difficulty_initial": int,
     "question_strategy": str,
     "hints_allowed": bool,

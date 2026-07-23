@@ -3,13 +3,16 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from sqlalchemy.orm import Session
 
 from ..config import Settings
 from ..models import Blueprint, ExamSession, Project, VoiceEvent, VoiceSession
+
+if TYPE_CHECKING:
+    from .session_templates import ResolvedSessionTemplate
 
 ALLOWED_VOICES = (
     "marin",
@@ -134,6 +137,7 @@ def create_voice_session(
     question_strategy: str = "fixed",
     learner_subject_id: str | None = None,
     analysis_profile: str | None = None,
+    resolved_template: ResolvedSessionTemplate | None = None,
 ) -> VoiceSession:
     provider_config = VOICE_PROVIDERS.get(provider)
     if not provider_config:
@@ -160,8 +164,28 @@ def create_voice_session(
             "question_strategy": question_strategy,
             "profile": analysis_profile
             or f"{settings.model_provider}:{settings.default_model_for(settings.model_provider)}",
+            "template_resolution_source": (
+                resolved_template.resolution_source
+                if resolved_template
+                else None
+            ),
         },
         state="VOICE_READY",
+        template_version_id=(
+            resolved_template.template_version_id if resolved_template else None
+        ),
+        template_snapshot_json=(
+            resolved_template.snapshot if resolved_template else None
+        ),
+        template_fingerprint=(
+            resolved_template.fingerprint if resolved_template else None
+        ),
+        template_compiler_version=(
+            resolved_template.compiler_version if resolved_template else None
+        ),
+        template_overrides_json=(
+            resolved_template.overrides if resolved_template else None
+        ),
         learner_subject_id=learner_subject_id,
         question_strategy=question_strategy,
         policy_version="adaptive-v1" if question_strategy == "adaptive" else "fixed-v1",
@@ -192,6 +216,19 @@ def create_voice_session(
             "question_limit": question_limit,
             "max_followups": max_followups,
             "question_strategy": question_strategy,
+            "template_version_id": (
+                resolved_template.template_version_id
+                if resolved_template
+                else None
+            ),
+            "template_fingerprint": (
+                resolved_template.fingerprint if resolved_template else None
+            ),
+            "template_resolution_source": (
+                resolved_template.resolution_source
+                if resolved_template
+                else None
+            ),
             "instructions": instructions,
         },
         metrics={
