@@ -209,13 +209,33 @@ Delivered:
 - an explicit authoring-context dependency that documents the current
   single-user local boundary and can be replaced by v0.9 RBAC.
 
+## Increment I: structured scenario template studio
+
+Delivered:
+
+- responsive template catalog with search, category, risk and lifecycle filters;
+- visible template version, trust, intended-use and risk metadata before session
+  selection;
+- structured local-draft editing for objectives, questioning, assistance,
+  assessment, report and safety policies;
+- optional advanced JSON editing without making raw YAML/JSON the primary path;
+- effective-policy preview with fingerprint and override audit;
+- validation, compilation, clone, candidate, draft, publish, deprecate,
+  import/export and semantic-diff browser flows;
+- published-template selection shared by blueprint generation, text sessions and
+  realtime voice sessions;
+- read-only built-in and published versions, with local drafts as the only mutable
+  browser artifacts;
+- contract-safe correction timing controls and persistent save feedback;
+- desktop and 390-by-844 mobile browser verification without horizontal overflow.
+
 ## Verification
 
 ```text
-Targeted template tests       30 passed
+WP-11 targeted tests          16 passed
 Targeted Ruff                 passed
 Wheel built-in resource       packaged
-Full pytest                   114 passed
+Full pytest                   118 passed
 Full Ruff                     passed
 JavaScript syntax             passed
 git diff --check              passed

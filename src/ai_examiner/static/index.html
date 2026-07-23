@@ -3,20 +3,79 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI Examiner v0.7.0 Release Candidate</title>
-  <link rel="stylesheet" href="/static/styles.css?v=0.7.0-rc1.1" />
+  <title>AI Examiner v0.8.0 Development</title>
+  <link rel="stylesheet" href="/static/styles.css?v=0.8.0-i1" />
 </head>
 <body>
   <header>
     <div>
-      <span class="eyebrow">Inquiry-first AI · Model panel</span>
-      <h1>AI 答辩官 v0.7 候选版</h1>
-      <p>在多模态证据与自然语音基础上，加入长期认知状态、确认式偏好、用户启动的复测和完整记忆控制。</p>
+      <span class="eyebrow">Inquiry-first AI · Scenario platform</span>
+      <h1>AI Examiner v0.8 开发版</h1>
+      <p>用可审计的场景模板统一目标、提问策略、帮助边界、评分规则、安全约束与报告结构。</p>
     </div>
     <div id="providerBadge" class="badge">检查模型状态…</div>
   </header>
 
   <main>
+    <section id="templateStudio" class="panel template-studio">
+      <div class="conversation-head">
+        <div>
+          <span class="eyebrow">Scenario templates</span>
+          <h2>场景模板库</h2>
+        </div>
+        <span id="templateState" class="badge secondary">正在加载</span>
+      </div>
+      <div class="template-toolbar">
+        <label>搜索<input id="templateSearch" type="search" placeholder="名称、用途或标识" /></label>
+        <label>类别
+          <select id="templateCategoryFilter">
+            <option value="">全部类别</option>
+            <option value="academic">学术</option>
+            <option value="education">教育</option>
+            <option value="engineering">工程</option>
+            <option value="enterprise">企业培训</option>
+            <option value="operations">项目复盘</option>
+            <option value="internal">内部</option>
+          </select>
+        </label>
+        <label>风险
+          <select id="templateRiskFilter">
+            <option value="">全部风险</option>
+            <option value="low">低</option>
+            <option value="moderate">中</option>
+            <option value="high">高</option>
+          </select>
+        </label>
+        <label>状态
+          <select id="templateLifecycleFilter">
+            <option value="">全部状态</option>
+            <option value="published">已发布</option>
+            <option value="draft">草稿</option>
+            <option value="candidate">候选</option>
+            <option value="deprecated">已弃用</option>
+          </select>
+        </label>
+        <button id="refreshTemplates" class="secondary-button" title="刷新模板库">刷新</button>
+      </div>
+      <div class="template-workspace">
+        <aside>
+          <div id="templateCatalogList" class="template-list">
+            <div class="empty compact">正在读取模板目录…</div>
+          </div>
+          <label class="import-control">导入本地草稿
+            <input id="templateImportFile" type="file" accept=".json,.yaml,.yml,application/json,application/yaml,text/yaml" />
+          </label>
+          <label>本地标识<input id="templateImportSlug" placeholder="local.imported_template" /></label>
+          <label>初始版本<input id="templateImportVersion" value="0.1.0" /></label>
+          <button id="importTemplate" class="secondary-button">导入模板</button>
+          <div id="templateImportStatus" class="status"></div>
+        </aside>
+        <div id="templateDetail" class="template-detail">
+          <div class="empty">选择模板后查看版本、用途、风险和有效策略。</div>
+        </div>
+      </div>
+    </section>
+
     <section class="panel setup">
       <div class="step"><span>1</span><div><h2>创建项目</h2><p>当前版本聚焦论文答辩与科研汇报训练。</p></div></div>
       <label>项目名称<input id="projectName" value="我的论文答辩训练" /></label>
@@ -31,6 +90,8 @@
 
       <div class="step"><span>3</span><div><h2>生成答辩蓝图</h2><p>供实时答辩使用的贡献、假设、风险、主问题与追问。</p></div></div>
       <label>蓝图模型<select id="blueprintProfile"></select></label>
+      <label>场景模板<select id="sessionTemplateSelect"><option value="">兼容模式（论文答辩）</option></select></label>
+      <div id="sessionTemplateHint" class="status">模板会同时约束蓝图、文本答辩和语音答辩。</div>
       <button id="generateBlueprint" disabled>生成蓝图</button>
       <div id="blueprintStatus" class="status"></div>
       <div id="blueprintPreview" class="blueprint hidden"></div>
@@ -170,7 +231,7 @@
     </section>
   </main>
 
-  <footer>v0.7 候选版 · 长期认知状态、确认式偏好、用户控制复测与可删除记忆</footer>
-  <script src="/static/app.js?v=0.7.0-rc1.1"></script>
+  <footer>v0.8 开发版 · 场景模板、策略编译、生命周期治理与安全导入导出</footer>
+  <script src="/static/app.js?v=0.8.0-i1"></script>
 </body>
 </html>

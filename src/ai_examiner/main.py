@@ -97,6 +97,7 @@ from .schemas import (
     ScenarioTemplateCloneCreate,
     ScenarioTemplateCreate,
     ScenarioTemplateImport,
+    ScenarioTemplatePreview,
     ScenarioTemplateSourceUpdate,
     ScenarioTemplateStatusUpdate,
     SessionCreate,
@@ -161,6 +162,11 @@ from .services.voice import (
     qwen_realtime_session_config,
     record_voice_event,
     voice_provider_ready,
+)
+from .template_engine.compiler import (
+    TemplateCompiler,
+    TemplateOverrideError,
+    TemplateValidationError,
 )
 
 settings = get_settings()
@@ -438,6 +444,47 @@ def compile_scenario_template_version(
         include_source=False,
         include_compiled=True,
     )
+
+
+@app.post("/api/template-versions/{version_id}/preview")
+def preview_scenario_template_version(
+    version_id: str,
+    payload: ScenarioTemplatePreview,
+    db: Annotated[Session, Depends(get_db)],
+):
+    version = db.get(ScenarioTemplateVersion, version_id)
+    if not version:
+        raise TemplateLifecycleError(
+            "TEMPLATE_VERSION_NOT_FOUND",
+            "Template version not found",
+            status_code=404,
+        )
+    try:
+        preview = TemplateCompiler().compile(
+            version.source_json,
+            overrides=payload.overrides,
+        )
+    except TemplateOverrideError as exc:
+        raise TemplateLifecycleError(
+            "TEMPLATE_OVERRIDE_INVALID",
+            "Template preview overrides are invalid",
+            status_code=422,
+        ) from exc
+    except TemplateValidationError as exc:
+        raise TemplateLifecycleError(
+            "TEMPLATE_VALIDATION_FAILED",
+            "Template preview source failed validation",
+            status_code=422,
+        ) from exc
+    return {
+        "preview_version": "template-preview-v1",
+        "template_version_id": version.id,
+        "fixture": payload.fixture,
+        "fingerprint": preview.fingerprint,
+        "compiler_version": preview.compiler_version,
+        "effective_settings": preview.compiled,
+        "override_audit": preview.override_audit,
+    }
 
 
 @app.post("/api/template-versions/{version_id}/status")

@@ -150,6 +150,44 @@ def test_semantic_diff_groups_behavior_changes_and_is_deterministic(client):
     assert identical["groups"] == []
 
 
+def test_preview_applies_bounded_overrides_without_creating_session(client):
+    versions = thesis_versions(client)
+    preview = client.post(
+        f"/api/template-versions/{versions['1.2.0']['id']}/preview",
+        json={
+            "overrides": {
+                "question_limit": 9,
+                "question_strategy": "adaptive",
+                "hints_allowed": False,
+            },
+            "fixture": "partial_answer",
+        },
+    )
+    assert preview.status_code == 200
+    assert preview.headers["cache-control"] == "no-store"
+    payload = preview.json()
+    assert payload["preview_version"] == "template-preview-v1"
+    assert payload["fixture"] == "partial_answer"
+    assert payload["effective_settings"]["question_selection"]["question_limit"] == 9
+    assert payload["effective_settings"]["question_selection"]["strategy"] == "adaptive"
+    assert payload["effective_settings"]["conversation"]["assistance"]["hints"][
+        "allowed"
+    ] is False
+    accepted = {
+        item["name"]
+        for item in payload["override_audit"]
+        if item["status"] == "accepted"
+    }
+    assert accepted == {"hints_allowed", "question_limit", "question_strategy"}
+
+    invalid = client.post(
+        f"/api/template-versions/{versions['1.2.0']['id']}/preview",
+        json={"overrides": {"question_limit": 500}},
+    )
+    assert invalid.status_code == 422
+    assert invalid.json()["detail"]["code"] == "TEMPLATE_OVERRIDE_INVALID"
+
+
 def test_transfer_endpoints_return_stable_not_found_and_validation_errors(client):
     missing_export = client.get(
         "/api/template-versions/missing/export?format=json"

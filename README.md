@@ -33,6 +33,13 @@ answer disclosure and active interruption. Text and finalized voice answers now 
 the session snapshot's weighted assessment rubric, and reports follow the template's
 objective weights, section order, total-score policy and required disclaimer.
 
+The browser now includes a responsive scenario-template studio. Reviewed templates
+are searchable and inspectable, local drafts have a structured policy editor, and
+preview, validation, compilation, lifecycle, import/export and semantic-diff flows
+are available without making raw YAML the primary authoring interface. A selected
+published template is applied consistently to blueprint, text and realtime voice
+requests.
+
 Reviewed bilingual built-in scenarios now include:
 
 - thesis defense practice;

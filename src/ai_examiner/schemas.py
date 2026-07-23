@@ -147,6 +147,16 @@ class ScenarioTemplateImport(BaseModel):
     )
 
 
+class ScenarioTemplatePreview(BaseModel):
+    overrides: dict[str, Any] = Field(default_factory=dict)
+    fixture: Literal[
+        "unanswered",
+        "partial_answer",
+        "incorrect_answer",
+        "complete_answer",
+    ] = "partial_answer"
+
+
 class ProjectTemplateBindingUpdate(BaseModel):
     template_version_id: str
     default_overrides: dict[str, Any] = Field(default_factory=dict)

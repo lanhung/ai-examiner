@@ -72,6 +72,16 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 - Add deterministic semantic template diff grouped by behavioral policy section.
 - Add stable transfer error contracts and an explicit local-authoring
   authorization dependency seam for the v0.9 identity and RBAC implementation.
+- Add a responsive scenario-template library with category, risk and lifecycle
+  filters, visible trust metadata and published-template session selection.
+- Add a structured local-draft editor for objectives, questioning, assistance,
+  assessment, report and safety policies, with advanced JSON kept optional.
+- Add effective-policy preview, validation, compilation, clone, lifecycle,
+  import/export and semantic-diff workflows to the browser application.
+- Apply the selected published template consistently to blueprint generation,
+  text sessions and realtime voice sessions.
+- Add browser and static regression coverage for mobile layout, contract-safe
+  correction timing and template request wiring.
 
 ## [0.7.0-rc.2] - 2026-07-23
 

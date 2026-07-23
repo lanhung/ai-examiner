@@ -17,7 +17,9 @@ Current package version: `0.8.0.dev0`
 | WP-07 | Increment E complete | Cross-platform action authorization, assistance/disclosure bounds, interruption consent and decision audit |
 | WP-08 | Increment F complete | Deterministic template rubrics, objective/dimension evidence, aggregate policies, section builders and disclaimer registry |
 | WP-09 | Increment G complete | Seven bilingual reviewed scenarios with distinct runtime behavior and explicit safety boundaries |
-| WP-10 to WP-12 | Not started | API/import/export, structured UI, governance, evaluation and release hardening remain held |
+| WP-10 | Increment H complete | Safe import/export, local-authoring seam, stable errors and deterministic semantic diff |
+| WP-11 | Increment I complete | Responsive template library, structured editor, preview, lifecycle actions and session wiring |
+| WP-12 | In progress | Evaluation runner, provider samples, migration/Compose rehearsal and release hardening remain |
 
 Increment A is a compatibility foundation, not a complete v0.8 release. It does
 not change session behavior or authorize production deployment.
@@ -252,6 +254,8 @@ Acceptance:
 ### WP-11: Template library and structured editor
 
 Branch: `feature/v0.8-template-ui`
+
+Status: Increment I complete on `develop/v0.8.0`.
 
 Deliverables:
 

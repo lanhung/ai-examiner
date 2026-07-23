@@ -8,7 +8,7 @@ Implementation status on `develop/v0.8.0`:
   lifecycle status endpoints are implemented;
 - project binding and session snapshots are implemented;
 - semantic template diff, bounded import and source-only export are implemented;
-- preview remains planned;
+- effective-settings preview is implemented;
 - this API is development-only until the v0.8 release gates pass.
 
 - Base path: `/api`
@@ -138,18 +138,20 @@ metadata. Published source and compiled content are immutable.
 
 ```json
 {
-  "language": "zh-CN",
   "overrides": {
     "question_limit": 8,
-    "voice": "disabled"
+    "question_strategy": "adaptive",
+    "hints_allowed": false
   },
   "fixture": "partial_answer"
 }
 ```
 
-Returns effective settings, rejected overrides, sample question plan, expected
-policy action, score behavior and report outline. Preview never creates a real exam
-session or learner-memory event.
+Returns the compiled effective settings, compiler version, fingerprint and
+accepted/rejected override audit under the stable `template-preview-v1` contract.
+The optional fixture label is retained for deterministic UI/evaluation context;
+preview does not synthesize model output, create an exam session or write
+learner-memory events.
 
 ### `GET /api/template-versions/{left_id}/diff/{right_id}`
 

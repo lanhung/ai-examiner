@@ -32,6 +32,15 @@ const state = {
   voiceProvider: "openai",
   voiceClientConfig: null,
   voiceMode: "",
+  templates: [],
+  publishedTemplates: [],
+  selectedTemplate: null,
+  selectedTemplateVersion: null,
+  selectedTemplateSource: null,
+  selectedTemplateVersionId: null,
+  sessionTemplateSource: null,
+  sessionTemplateLabel: "",
+  templateRawDirty: false,
 };
 const $ = (id) => document.getElementById(id);
 
@@ -67,7 +76,13 @@ async function api(path, options = {}) {
   if (raw) {
     try { body = JSON.parse(raw); } catch { body = { detail: raw }; }
   }
-  if (!response.ok) throw new Error(body.detail || `HTTP ${response.status}`);
+  if (!response.ok) {
+    const detail = body.detail;
+    const message = detail && typeof detail === "object"
+      ? `${detail.code ? `${detail.code}: ` : ""}${detail.message || JSON.stringify(detail)}`
+      : detail;
+    throw new Error(message || `HTTP ${response.status}`);
+  }
   return body;
 }
 function escapeHtml(value) {
@@ -81,6 +96,489 @@ function list(items, fallback = "暂无") {
 }
 function selectedProfiles() {
   return [...document.querySelectorAll("input[name='modelProfile']:checked")].map((node) => node.value);
+}
+
+function localized(value) {
+  if (!value || typeof value !== "object") return String(value || "");
+  return value["zh-CN"] || value.en || Object.values(value)[0] || "";
+}
+
+function templateMode() {
+  return state.sessionTemplateSource?.compatibility?.mode || "defense";
+}
+
+function selectedTemplateRequest() {
+  if (!state.selectedTemplateVersionId) return {};
+  return {
+    template_version_id: state.selectedTemplateVersionId,
+    template_overrides: {},
+    mode: templateMode(),
+  };
+}
+
+function templateTag(value, className = "") {
+  return `<span class="template-tag ${className}">${escapeHtml(value || "—")}</span>`;
+}
+
+function renderTemplateCatalog() {
+  const search = $("templateSearch").value.trim().toLowerCase();
+  const category = $("templateCategoryFilter").value;
+  const risk = $("templateRiskFilter").value;
+  const lifecycle = $("templateLifecycleFilter").value;
+  const filtered = state.templates.filter((item) => {
+    const haystack = [
+      item.slug,
+      localized(item.title),
+      localized(item.description),
+      item.intended_use,
+    ].join(" ").toLowerCase();
+    return (!search || haystack.includes(search))
+      && (!category || item.category === category)
+      && (!risk || item.risk_tier === risk)
+      && (!lifecycle || item.lifecycle_status === lifecycle);
+  });
+  $("templateState").textContent = `${filtered.length} / ${state.templates.length} 个模板`;
+  $("templateCatalogList").innerHTML = filtered.length
+    ? filtered.map((item) => `<button class="template-list-item ${state.selectedTemplate?.id === item.id ? "selected" : ""}" data-template-id="${escapeHtml(item.id)}">
+        <strong>${escapeHtml(localized(item.title) || item.slug)}</strong>
+        <span class="template-list-meta">
+          <span>${escapeHtml(item.slug)}</span>
+          <span>v${escapeHtml(item.version)}</span>
+          <span>${escapeHtml(item.lifecycle_status)}</span>
+        </span>
+        <span class="template-list-meta">
+          ${templateTag(item.category)}
+          ${templateTag(item.risk_tier, `risk-${item.risk_tier}`)}
+          ${templateTag(item.trust_level)}
+        </span>
+      </button>`).join("")
+    : "<div class=\"empty compact\">没有匹配的模板。</div>";
+  document.querySelectorAll(".template-list-item").forEach((button) => {
+    button.onclick = () => selectTemplateIdentity(button.dataset.templateId);
+  });
+}
+
+function syncSessionTemplateOptions() {
+  const previous = $("sessionTemplateSelect").value;
+  $("sessionTemplateSelect").innerHTML = [
+    "<option value=\"\">兼容模式（论文答辩）</option>",
+    ...state.publishedTemplates.map((item) =>
+      `<option value="${escapeHtml(item.version_id)}">${escapeHtml(localized(item.title) || item.slug)} · v${escapeHtml(item.version)}</option>`
+    ),
+  ].join("");
+  if ([...$("sessionTemplateSelect").options].some((option) => option.value === previous)) {
+    $("sessionTemplateSelect").value = previous;
+  }
+}
+
+async function loadTemplates() {
+  try {
+    const [allTemplates, publishedTemplates] = await Promise.all([
+      api("/api/templates?include_drafts=true"),
+      api("/api/templates"),
+    ]);
+    state.templates = allTemplates;
+    state.publishedTemplates = publishedTemplates;
+    syncSessionTemplateOptions();
+    renderTemplateCatalog();
+    if (!state.selectedTemplate && allTemplates.length) {
+      await selectTemplateIdentity(allTemplates[0].id);
+    }
+  } catch (error) {
+    $("templateState").textContent = "加载失败";
+    $("templateCatalogList").innerHTML = `<div class="status error">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function objectiveRows(source, editable) {
+  return (source.objectives || []).map((objective, index) => `<div class="template-row">
+    <label>目标标识<input value="${escapeHtml(objective.id)}" disabled /></label>
+    <label>中文标题<input data-objective-title="${index}" value="${escapeHtml(localized(objective.title))}" ${editable ? "" : "disabled"} /></label>
+    <label>权重<input data-objective-weight="${index}" type="number" min="0" max="1" step="0.01" value="${escapeHtml(objective.weight)}" ${editable ? "" : "disabled"} /></label>
+  </div>`).join("");
+}
+
+function dimensionRows(source, editable) {
+  return (source.assessment_policy?.dimensions || []).map((dimension, index) => `<div class="template-row">
+    <label>评分维度<input value="${escapeHtml(dimension.id)}" disabled /></label>
+    <label>中文标题<input data-dimension-title="${index}" value="${escapeHtml(localized(dimension.title))}" ${editable ? "" : "disabled"} /></label>
+    <label>权重<input data-dimension-weight="${index}" type="number" min="0" max="1" step="0.01" value="${escapeHtml(dimension.weight)}" ${editable ? "" : "disabled"} /></label>
+  </div>`).join("");
+}
+
+function checkboxGrid(items, selected, attribute, editable) {
+  return (items || []).map((item) => `<label class="template-check">
+    <input type="checkbox" ${attribute}="${escapeHtml(item)}" ${selected.includes(item) ? "checked" : ""} ${editable ? "" : "disabled"} />
+    <span>${escapeHtml(item)}</span>
+  </label>`).join("");
+}
+
+function templateEditorMarkup(source, editable) {
+  const metadata = source.template || {};
+  const question = source.question_policy || {};
+  const difficulty = question.difficulty || {};
+  const assistance = source.assistance_policy || {};
+  const conversation = source.conversation_policy || {};
+  const assessment = source.assessment_policy || {};
+  const report = source.report_policy || {};
+  const safety = source.safety_policy || {};
+  const knownQuestionTypes = [...new Set(question.allowed_types || [])];
+  const knownReportSections = [...new Set(report.sections || [])];
+  const knownProhibitedUses = [...new Set(safety.prohibited_uses || [])];
+  const disabled = editable ? "" : "disabled";
+  return `
+    <div class="template-tabs" role="tablist">
+      ${[
+        ["overview", "目标"],
+        ["questions", "提问"],
+        ["assistance", "帮助"],
+        ["assessment", "评分"],
+        ["report", "报告"],
+        ["safety", "安全"],
+        ["advanced", "高级"],
+      ].map(([id, label], index) => `<button class="template-tab ${index === 0 ? "active" : ""}" data-template-tab="${id}" type="button">${label}</button>`).join("")}
+    </div>
+    <div class="template-editor-panel" data-template-panel="overview">
+      <div class="template-form-grid">
+        <label>中文名称<input id="templateTitleZh" value="${escapeHtml(metadata.title?.["zh-CN"] || "")}" ${disabled} /></label>
+        <label>English title<input id="templateTitleEn" value="${escapeHtml(metadata.title?.en || "")}" ${disabled} /></label>
+        <label>中文说明<textarea id="templateDescriptionZh" rows="3" ${disabled}>${escapeHtml(metadata.description?.["zh-CN"] || "")}</textarea></label>
+        <label>English description<textarea id="templateDescriptionEn" rows="3" ${disabled}>${escapeHtml(metadata.description?.en || "")}</textarea></label>
+      </div>
+      <h3>目标与权重</h3>
+      <div class="template-rows">${objectiveRows(source, editable)}</div>
+    </div>
+    <div class="template-editor-panel hidden" data-template-panel="questions">
+      <div class="template-form-grid">
+        <label>题目数量<input id="templateQuestionLimit" type="number" min="1" max="20" value="${escapeHtml(question.question_limit ?? 6)}" ${disabled} /></label>
+        <label>选题策略<select id="templateSelectionStrategy" ${disabled}><option value="fixed" ${question.selection_strategy === "fixed" ? "selected" : ""}>固定顺序</option><option value="adaptive" ${question.selection_strategy === "adaptive" ? "selected" : ""}>自适应</option></select></label>
+        <label>最低难度<input id="templateDifficultyMin" type="number" min="1" max="5" value="${escapeHtml(difficulty.minimum ?? 1)}" ${disabled} /></label>
+        <label>初始难度<input id="templateDifficultyInitial" type="number" min="1" max="5" value="${escapeHtml(difficulty.initial ?? 3)}" ${disabled} /></label>
+        <label>最高难度<input id="templateDifficultyMax" type="number" min="1" max="5" value="${escapeHtml(difficulty.maximum ?? 5)}" ${disabled} /></label>
+        <label>每题最多追问<input id="templateMaxFollowups" type="number" min="0" max="5" value="${escapeHtml(conversation.max_followups_per_question ?? 2)}" ${disabled} /></label>
+      </div>
+      <h3>允许的问题类型</h3>
+      <div class="template-check-grid">${checkboxGrid(knownQuestionTypes, question.allowed_types || [], "data-question-type", editable)}</div>
+    </div>
+    <div class="template-editor-panel hidden" data-template-panel="assistance">
+      <div class="template-check-grid">
+        <label class="template-check"><input id="templateHintsAllowed" type="checkbox" ${assistance.hints?.allowed ? "checked" : ""} ${disabled} /><span>允许提示</span></label>
+        <label class="template-check"><input id="templateCorrectionsAllowed" type="checkbox" ${assistance.corrections?.allowed ? "checked" : ""} ${disabled} /><span>允许纠正</span></label>
+        <label class="template-check"><input id="templateDisclosureAllowed" type="checkbox" ${assistance.answer_disclosure?.allowed ? "checked" : ""} ${disabled} /><span>允许直接给出答案</span></label>
+        <label class="template-check"><input id="templateInterruptionEnabled" type="checkbox" ${conversation.interruption?.enabled ? "checked" : ""} ${disabled} /><span>允许主动打断</span></label>
+      </div>
+      <div class="template-form-grid">
+        <label>每题最多提示<input id="templateMaxHints" type="number" min="0" max="5" value="${escapeHtml(assistance.hints?.maximum_per_question ?? 0)}" ${disabled} /></label>
+        <label>纠正时机<select id="templateCorrectionTiming" ${disabled}><option value="never" ${assistance.corrections?.timing === "never" ? "selected" : ""}>不纠正</option><option value="after_independent_attempt" ${assistance.corrections?.timing === "after_independent_attempt" ? "selected" : ""}>独立作答后</option><option value="after_followups" ${assistance.corrections?.timing === "after_followups" ? "selected" : ""}>追问后</option><option value="session_end" ${assistance.corrections?.timing === "session_end" ? "selected" : ""}>会话结束</option></select></label>
+      </div>
+    </div>
+    <div class="template-editor-panel hidden" data-template-panel="assessment">
+      <div class="template-form-grid">
+        <label>汇总方式<select id="templateAggregate" ${disabled}><option value="weighted_dimensions" ${assessment.aggregate === "weighted_dimensions" ? "selected" : ""}>加权总分</option><option value="no_total" ${assessment.aggregate === "no_total" ? "selected" : ""}>不显示总分</option></select></label>
+        <label>辅助表现<select id="templateAssistedPerformance" ${disabled}><option value="ignore" ${assessment.assisted_performance === "ignore" ? "selected" : ""}>忽略</option><option value="report_separately" ${assessment.assisted_performance === "report_separately" ? "selected" : ""}>单独报告</option><option value="blend_with_independent" ${assessment.assisted_performance === "blend_with_independent" ? "selected" : ""}>与独立表现合并</option></select></label>
+      </div>
+      <div class="template-rows">${dimensionRows(source, editable)}</div>
+    </div>
+    <div class="template-editor-panel hidden" data-template-panel="report">
+      <label class="template-check"><input id="templateShowTotal" type="checkbox" ${report.show_total_score ? "checked" : ""} ${disabled} /><span>报告显示总分</span></label>
+      <label>免责声明标识<input id="templateDisclaimer" value="${escapeHtml(report.required_disclaimer || "")}" ${disabled} /></label>
+      <h3>报告章节</h3>
+      <div class="template-check-grid">${checkboxGrid(knownReportSections, report.sections || [], "data-report-section", editable)}</div>
+    </div>
+    <div class="template-editor-panel hidden" data-template-panel="safety">
+      <label class="template-check"><input id="templateHumanReview" type="checkbox" ${safety.human_review_required ? "checked" : ""} ${disabled} /><span>要求人工复核</span></label>
+      <p>受保护属性推断固定为禁止。高风险用途只能收紧，不能通过编辑器解除平台边界。</p>
+      <div class="template-check-grid">${checkboxGrid(knownProhibitedUses, safety.prohibited_uses || [], "data-prohibited-use", editable)}</div>
+    </div>
+    <div class="template-editor-panel hidden" data-template-panel="advanced">
+      <label>原始 JSON<textarea id="templateRawSource" class="template-raw" ${disabled}>${escapeHtml(JSON.stringify(source, null, 2))}</textarea></label>
+      <p>高级编辑仍受结构、语义、能力和安全校验约束。</p>
+    </div>`;
+}
+
+function bindTemplateTabs() {
+  document.querySelectorAll(".template-tab").forEach((button) => {
+    button.onclick = () => {
+      document.querySelectorAll(".template-tab").forEach((item) => item.classList.toggle("active", item === button));
+      document.querySelectorAll("[data-template-panel]").forEach((panel) => {
+        panel.classList.toggle("hidden", panel.dataset.templatePanel !== button.dataset.templateTab);
+      });
+    };
+  });
+}
+
+function templateVersionOption(version) {
+  return `<option value="${escapeHtml(version.id)}">${escapeHtml(version.semantic_version)} · ${escapeHtml(version.status)}</option>`;
+}
+
+function renderEffectivePreview(payload) {
+  const effective = payload.effective_settings;
+  const conversation = effective.conversation || {};
+  const question = effective.question_selection || {};
+  $("templateEffectivePreview").innerHTML = `
+    <div><span>有效指纹</span><strong>${escapeHtml(payload.fingerprint.slice(0, 22))}…</strong></div>
+    <div><span>选题策略</span><strong>${escapeHtml(question.strategy)}</strong></div>
+    <div><span>题目 / 追问</span><strong>${escapeHtml(question.question_limit)} / ${escapeHtml(conversation.max_followups_per_question)}</strong></div>
+    <div><span>评分汇总</span><strong>${escapeHtml(effective.assessment?.aggregate)}</strong></div>`;
+}
+
+function renderTemplateDetail() {
+  const template = state.selectedTemplate;
+  const version = state.selectedTemplateVersion;
+  const source = state.selectedTemplateSource;
+  if (!template || !version || !source) return;
+  const metadata = source.template || {};
+  const editable = template.owner_scope === "local" && version.status === "draft";
+  const canBind = version.status === "published";
+  const canCandidate = editable;
+  const canReturnDraft = template.owner_scope === "local" && version.status === "candidate";
+  const canPublish = canReturnDraft
+    && version.evaluation_summary?.status === "passed"
+    && Number(version.evaluation_summary?.fixture_count || 0) > 0;
+  const canDeprecate = template.owner_scope === "local" && version.status === "published";
+  const cloneSlug = `local.${template.slug.split(".").slice(-1)[0]}_copy`;
+  $("templateDetail").innerHTML = `
+    <div class="template-detail-head">
+      <div>
+        <h3>${escapeHtml(localized(metadata.title) || template.slug)}</h3>
+        <p>${escapeHtml(localized(metadata.description))}</p>
+        <div class="template-meta-row">
+          ${templateTag(template.category)}
+          ${templateTag(metadata.risk_tier, `risk-${metadata.risk_tier}`)}
+          ${templateTag(metadata.intended_use)}
+          ${templateTag(metadata.trust_level)}
+          ${templateTag(version.status)}
+        </div>
+      </div>
+      <label class="template-version-select">版本<select id="templateVersionSelect">${template.versions.map(templateVersionOption).join("")}</select></label>
+    </div>
+    <div class="template-actions">
+      <button id="useTemplate" ${canBind ? "" : "disabled"}>用于下一次会话</button>
+      <button id="bindProjectTemplate" class="secondary-button" ${canBind ? "" : "disabled"}>设为项目默认</button>
+      <button id="previewTemplate" class="secondary-button">预览有效策略</button>
+      <a class="button-link" href="/api/template-versions/${escapeHtml(version.id)}/export?format=yaml">导出 YAML</a>
+      <button id="validateTemplate" class="secondary-button">校验</button>
+      <button id="compileTemplate" class="secondary-button">编译</button>
+      <button id="saveTemplate" ${editable ? "" : "disabled"}>保存草稿</button>
+      <button id="candidateTemplate" ${canCandidate ? "" : "disabled"}>提交候选</button>
+      <button id="returnDraftTemplate" class="secondary-button" ${canReturnDraft ? "" : "disabled"}>退回草稿</button>
+      <button id="publishTemplate" ${canPublish ? "" : "disabled"} title="${canPublish ? "" : "发布需要通过行为评测"}">发布</button>
+      <button id="deprecateTemplate" class="danger-button" ${canDeprecate ? "" : "disabled"}>弃用</button>
+    </div>
+    <div class="template-form-grid">
+      <label>本地副本标识<input id="templateCloneSlug" value="${escapeHtml(cloneSlug)}" /></label>
+      <label>副本版本<input id="templateCloneVersion" value="0.1.0" /></label>
+    </div>
+    <div class="template-actions"><button id="cloneTemplate" class="secondary-button">创建本地副本</button></div>
+    <div id="templateActionStatus" class="status">${editable ? "这是可编辑的本地草稿。" : "此版本不可直接修改；请先创建本地副本。"}</div>
+    <div id="templateEffectivePreview" class="template-preview">
+      <div><span>模板标识</span><strong>${escapeHtml(template.slug)}</strong></div>
+      <div><span>版本</span><strong>${escapeHtml(version.semantic_version)}</strong></div>
+      <div><span>兼容模式</span><strong>${escapeHtml(source.compatibility?.mode || "—")}</strong></div>
+      <div><span>指纹</span><strong>${escapeHtml((version.fingerprint || "未编译").slice(0, 22))}</strong></div>
+    </div>
+    <div class="template-form-grid">
+      <label>比较版本<select id="templateDiffTarget">${template.versions.filter((item) => item.id !== version.id).map(templateVersionOption).join("") || "<option value=\"\">没有其他版本</option>"}</select></label>
+      <div class="template-actions"><button id="compareTemplate" class="secondary-button" ${template.versions.length > 1 ? "" : "disabled"}>比较差异</button></div>
+    </div>
+    <div id="templateDiff" class="template-diff hidden"></div>
+    ${templateEditorMarkup(source, editable)}`;
+  $("templateVersionSelect").value = version.id;
+  $("templateVersionSelect").onchange = () => selectTemplateVersion($("templateVersionSelect").value);
+  bindTemplateTabs();
+  bindTemplateActions();
+  state.templateRawDirty = false;
+  if ($("templateRawSource")) $("templateRawSource").oninput = () => { state.templateRawDirty = true; };
+}
+
+async function selectTemplateIdentity(templateId, preferredVersionId = null) {
+  try {
+    const detail = await api(`/api/templates/${templateId}`);
+    state.selectedTemplate = detail;
+    const selected = detail.versions.find((item) => item.id === preferredVersionId)
+      || detail.versions[0];
+    await selectTemplateVersion(selected.id, false);
+    renderTemplateCatalog();
+  } catch (error) {
+    $("templateDetail").innerHTML = `<div class="status error">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function selectTemplateVersion(versionId, rerenderCatalog = true) {
+  const version = await api(`/api/template-versions/${versionId}`);
+  state.selectedTemplateVersion = version;
+  state.selectedTemplateSource = structuredClone(version.source);
+  if (rerenderCatalog) renderTemplateCatalog();
+  renderTemplateDetail();
+}
+
+function collectTemplateSource() {
+  if (state.templateRawDirty) {
+    try {
+      return JSON.parse($("templateRawSource").value);
+    } catch (error) {
+      throw new Error(`原始 JSON 无法解析：${error.message}`);
+    }
+  }
+  const source = structuredClone(state.selectedTemplateSource);
+  source.template.title["zh-CN"] = $("templateTitleZh").value.trim();
+  source.template.title.en = $("templateTitleEn").value.trim();
+  source.template.description["zh-CN"] = $("templateDescriptionZh").value.trim();
+  source.template.description.en = $("templateDescriptionEn").value.trim();
+  source.objectives.forEach((objective, index) => {
+    objective.title["zh-CN"] = document.querySelector(`[data-objective-title="${index}"]`).value.trim();
+    objective.weight = Number(document.querySelector(`[data-objective-weight="${index}"]`).value);
+  });
+  source.question_policy.question_limit = Number($("templateQuestionLimit").value);
+  source.question_policy.selection_strategy = $("templateSelectionStrategy").value;
+  source.question_policy.difficulty.minimum = Number($("templateDifficultyMin").value);
+  source.question_policy.difficulty.initial = Number($("templateDifficultyInitial").value);
+  source.question_policy.difficulty.maximum = Number($("templateDifficultyMax").value);
+  source.question_policy.allowed_types = [...document.querySelectorAll("[data-question-type]:checked")]
+    .map((item) => item.dataset.questionType);
+  source.conversation_policy.max_followups_per_question = Number($("templateMaxFollowups").value);
+  source.assistance_policy.hints.allowed = $("templateHintsAllowed").checked;
+  source.assistance_policy.hints.maximum_per_question = Number($("templateMaxHints").value);
+  source.assistance_policy.corrections.allowed = $("templateCorrectionsAllowed").checked;
+  source.assistance_policy.corrections.timing = $("templateCorrectionTiming").value;
+  source.assistance_policy.answer_disclosure.allowed = $("templateDisclosureAllowed").checked;
+  source.conversation_policy.interruption.enabled = $("templateInterruptionEnabled").checked;
+  source.assessment_policy.aggregate = $("templateAggregate").value;
+  source.assessment_policy.assisted_performance = $("templateAssistedPerformance").value;
+  source.assessment_policy.dimensions.forEach((dimension, index) => {
+    dimension.title["zh-CN"] = document.querySelector(`[data-dimension-title="${index}"]`).value.trim();
+    dimension.weight = Number(document.querySelector(`[data-dimension-weight="${index}"]`).value);
+  });
+  source.report_policy.show_total_score = $("templateShowTotal").checked;
+  source.report_policy.required_disclaimer = $("templateDisclaimer").value.trim();
+  source.report_policy.sections = [...document.querySelectorAll("[data-report-section]:checked")]
+    .map((item) => item.dataset.reportSection);
+  source.safety_policy.human_review_required = $("templateHumanReview").checked;
+  source.safety_policy.prohibited_uses = [...document.querySelectorAll("[data-prohibited-use]:checked")]
+    .map((item) => item.dataset.prohibitedUse);
+  return source;
+}
+
+async function templateTransition(status) {
+  if (["published", "deprecated"].includes(status)
+      && !window.confirm(`确认将该模板标记为“${status}”？`)) return;
+  const version = await api(`/api/template-versions/${state.selectedTemplateVersion.id}/status`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({status}),
+  });
+  setStatus("templateActionStatus", `模板状态已更新为 ${version.status}`, "success");
+  await loadTemplates();
+  await selectTemplateIdentity(state.selectedTemplate.id, version.id);
+}
+
+function renderTemplateDiff(payload) {
+  const target = $("templateDiff");
+  target.classList.remove("hidden");
+  target.innerHTML = payload.groups.length
+    ? payload.groups.map((group) => `<details class="template-diff-group" open>
+        <summary>${escapeHtml(group.id)} · ${group.change_count} 项</summary>
+        ${group.changes.map((change) => `<div class="template-diff-change">${escapeHtml(change.kind)} ${escapeHtml(change.path)}</div>`).join("")}
+      </details>`).join("")
+    : "<div class=\"template-empty-note\">两个版本没有语义差异。</div>";
+}
+
+function bindTemplateActions() {
+  $("useTemplate").onclick = async () => {
+    state.selectedTemplateVersionId = state.selectedTemplateVersion.id;
+    state.sessionTemplateSource = structuredClone(state.selectedTemplateSource);
+    state.sessionTemplateLabel = localized(state.selectedTemplateSource.template.title);
+    $("sessionTemplateSelect").value = state.selectedTemplateVersionId;
+    $("questionStrategy").value = state.selectedTemplateSource.question_policy?.selection_strategy || "fixed";
+    setStatus("sessionTemplateHint", `${localized(state.selectedTemplateSource.template.title)} v${state.selectedTemplateVersion.semantic_version} 将用于下一次蓝图和会话。`, "success");
+  };
+  $("bindProjectTemplate").onclick = async () => {
+    if (!state.projectId) return setStatus("templateActionStatus", "请先创建项目。", "error");
+    await api(`/api/projects/${state.projectId}/template-binding`, {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({template_version_id: state.selectedTemplateVersion.id, default_overrides: {}}),
+    });
+    setStatus("templateActionStatus", "已设为当前项目的新会话默认模板。", "success");
+  };
+  $("previewTemplate").onclick = async () => {
+    try {
+      const preview = await api(`/api/template-versions/${state.selectedTemplateVersion.id}/preview`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({overrides: {}, fixture: "partial_answer"}),
+      });
+      renderEffectivePreview(preview);
+      setStatus("templateActionStatus", "有效策略预览已更新。", "success");
+    } catch (error) { setStatus("templateActionStatus", error.message, "error"); }
+  };
+  $("validateTemplate").onclick = async () => {
+    try {
+      const result = await api(`/api/template-versions/${state.selectedTemplateVersion.id}/validate`, {method: "POST"});
+      const errors = (result.issues || []).filter((item) => item.severity === "error");
+      setStatus("templateActionStatus", errors.length ? `校验发现 ${errors.length} 个错误。` : "结构、语义和能力校验通过。", errors.length ? "error" : "success");
+    } catch (error) { setStatus("templateActionStatus", error.message, "error"); }
+  };
+  $("compileTemplate").onclick = async () => {
+    try {
+      const result = await api(`/api/template-versions/${state.selectedTemplateVersion.id}/compile`, {method: "POST"});
+      setStatus("templateActionStatus", `编译通过：${result.fingerprint.slice(0, 24)}…`, "success");
+      await selectTemplateVersion(state.selectedTemplateVersion.id);
+    } catch (error) { setStatus("templateActionStatus", error.message, "error"); }
+  };
+  $("saveTemplate").onclick = async () => {
+    try {
+      const source = collectTemplateSource();
+      const result = await api(`/api/template-versions/${state.selectedTemplateVersion.id}`, {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({source}),
+      });
+      await loadTemplates();
+      await selectTemplateIdentity(state.selectedTemplate.id, result.id);
+      setStatus("templateActionStatus", "草稿已保存并重新校验。", "success");
+    } catch (error) { setStatus("templateActionStatus", error.message, "error"); }
+  };
+  $("cloneTemplate").onclick = async () => {
+    try {
+      const slug = $("templateCloneSlug").value.trim();
+      const semanticVersion = $("templateCloneVersion").value.trim();
+      let result;
+      if (state.selectedTemplate.owner_scope === "local") {
+        result = await api(`/api/template-versions/${state.selectedTemplateVersion.id}/clone`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({semantic_version: semanticVersion}),
+        });
+        await loadTemplates();
+        await selectTemplateIdentity(state.selectedTemplate.id, result.id);
+      } else {
+        result = await api("/api/templates/import", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            document: state.selectedTemplateSource,
+            target_slug: slug,
+            semantic_version: semanticVersion,
+          }),
+        });
+        await loadTemplates();
+        await selectTemplateIdentity(result.template.id, result.version.id);
+      }
+      setStatus("templateActionStatus", "本地草稿副本已创建。", "success");
+    } catch (error) { setStatus("templateActionStatus", error.message, "error"); }
+  };
+  $("candidateTemplate").onclick = () => templateTransition("candidate").catch((error) => setStatus("templateActionStatus", error.message, "error"));
+  $("returnDraftTemplate").onclick = () => templateTransition("draft").catch((error) => setStatus("templateActionStatus", error.message, "error"));
+  $("publishTemplate").onclick = () => templateTransition("published").catch((error) => setStatus("templateActionStatus", error.message, "error"));
+  $("deprecateTemplate").onclick = () => templateTransition("deprecated").catch((error) => setStatus("templateActionStatus", error.message, "error"));
+  $("compareTemplate").onclick = async () => {
+    try {
+      const target = $("templateDiffTarget").value;
+      const diff = await api(`/api/template-versions/${state.selectedTemplateVersion.id}/diff/${target}`);
+      renderTemplateDiff(diff);
+    } catch (error) { setStatus("templateActionStatus", error.message, "error"); }
+  };
 }
 
 function selectedVoiceProvider() {
@@ -231,7 +729,11 @@ $("generateBlueprint").onclick = async () => {
     const blueprint = await api(`/api/projects/${state.projectId}/blueprints`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({document_id: state.documentId, profile}),
+      body: JSON.stringify({
+        document_id: state.documentId,
+        profile,
+        ...selectedTemplateRequest(),
+      }),
     });
     state.blueprintId = blueprint.id;
     if ([...$("textProfile").options].some((option) => option.value === profile)) {
@@ -323,18 +825,24 @@ $("startSession").onclick = async () => {
   const profile = $("textProfile").value;
   if (!profile) return window.alert("请选择已就绪的文本答辩模型");
   try {
-    const session = await api("/api/sessions", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        project_id: state.projectId,
-        blueprint_id: state.blueprintId,
-        profile,
+    const sessionPayload = {
+      project_id: state.projectId,
+      blueprint_id: state.blueprintId,
+      profile,
+      learner_subject_key: `browser-${state.projectId}`,
+      ...selectedTemplateRequest(),
+    };
+    if (!state.selectedTemplateVersionId) {
+      Object.assign(sessionPayload, {
         question_limit: 6,
         max_followups_per_question: 2,
         question_strategy: $("questionStrategy").value,
-        learner_subject_key: `browser-${state.projectId}`,
-      }),
+      });
+    }
+    const session = await api("/api/sessions", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(sessionPayload),
     });
     state.sessionId = session.id;
     state.learnerSubjectId = session.learner_subject_id;
@@ -712,8 +1220,64 @@ $("freezeDataset").onclick = async () => {
   } catch (error) { setStatus("benchmarkStatus", error.message, "error"); }
 };
 
+["templateSearch", "templateCategoryFilter", "templateRiskFilter", "templateLifecycleFilter"]
+  .forEach((id) => {
+    $(id).addEventListener(id === "templateSearch" ? "input" : "change", renderTemplateCatalog);
+  });
+
+$("refreshTemplates").onclick = () => loadTemplates();
+
+$("sessionTemplateSelect").onchange = async () => {
+  const versionId = $("sessionTemplateSelect").value;
+  if (!versionId) {
+    state.selectedTemplateVersionId = null;
+    state.sessionTemplateSource = null;
+    state.sessionTemplateLabel = "";
+    setStatus("sessionTemplateHint", "使用兼容论文答辩模式；不会绑定显式模板。");
+    return;
+  }
+  try {
+    const entry = state.publishedTemplates.find((item) => item.version_id === versionId);
+    const version = await api(`/api/template-versions/${versionId}`);
+    state.selectedTemplateVersionId = versionId;
+    state.sessionTemplateSource = structuredClone(version.source);
+    state.sessionTemplateLabel = localized(version.source.template?.title);
+    $("questionStrategy").value = version.source.question_policy?.selection_strategy || "fixed";
+    setStatus("sessionTemplateHint", `${state.sessionTemplateLabel} v${version.semantic_version} 将用于下一次蓝图和会话。`, "success");
+    if (entry) await selectTemplateIdentity(entry.id, versionId);
+  } catch (error) {
+    setStatus("sessionTemplateHint", error.message, "error");
+  }
+};
+
+$("importTemplate").onclick = async () => {
+  const file = $("templateImportFile").files[0];
+  if (!file) return setStatus("templateImportStatus", "请选择 JSON 或 YAML 模板文件。", "error");
+  const slug = $("templateImportSlug").value.trim();
+  if (!slug) return setStatus("templateImportStatus", "请输入 local.* 形式的本地标识。", "error");
+  try {
+    setStatus("templateImportStatus", "正在进行安全解析和模板校验…");
+    const documentText = await file.text();
+    const result = await api("/api/templates/import", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        document: documentText,
+        target_slug: slug,
+        semantic_version: $("templateImportVersion").value.trim(),
+      }),
+    });
+    await loadTemplates();
+    await selectTemplateIdentity(result.template.id, result.version.id);
+    setStatus("templateImportStatus", "模板已作为不受信任的本地草稿导入。", "success");
+  } catch (error) {
+    setStatus("templateImportStatus", error.message, "error");
+  }
+};
+
 ensureVoiceProviderControl();
 loadEnvironment();
+loadTemplates();
 
 function setVoiceVisual(mode, text) {
   state.voiceMode = mode || "";
@@ -981,15 +1545,18 @@ async function connectVoice() {
       project_id: state.projectId,
       blueprint_id: state.blueprintId,
       provider: provider.id,
-      mode: "defense",
       language: "zh-CN",
       voice: $("voiceSelect").value,
       vad_eagerness: $("vadSelect").value,
-      question_limit: 6,
-      max_followups: 2,
-      question_strategy: $("questionStrategy").value,
       learner_subject_key: `browser-${state.projectId}`,
       analysis_profile: $("textProfile").value || null,
+      ...selectedTemplateRequest(),
+      ...(!state.selectedTemplateVersionId ? {
+        mode: "defense",
+        question_limit: 6,
+        max_followups: 2,
+        question_strategy: $("questionStrategy").value,
+      } : {}),
     }),
   });
   state.voiceSessionId = voiceSession.id;
