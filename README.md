@@ -1,6 +1,6 @@
 # AI Examiner v0.7.0 Development
 
-Current development branch: `develop/v0.7.0` (`0.7.0rc1`). The stable production
+Current development branch: `develop/v0.7.0` (`0.7.0rc2`). The stable production
 line remains v0.4.1 and the preserved v0.5 release snapshot remains
 `release/v0.5.0` / `v0.5.0-rc.4` until final acceptance.
 

@@ -2,9 +2,9 @@
 
 ## Current state
 
-- Version: `0.7.0rc1`
+- Version: `0.7.0rc2`
 - Branch: `develop/v0.7.0`
-- Candidate tag: `v0.7.0-rc.1`
+- Candidate tag: `v0.7.0-rc.2`
 - Work packages: `WP-01` through `WP-12` complete
 - Alembic head: `20260721_0005`
 - Stable production line: unchanged
@@ -39,7 +39,7 @@ neither behavior is active.
 ## Verification
 
 ```text
-pytest                                      57 passed
+pytest                                      58 passed
 ruff                                        passed
 JavaScript syntax                           passed
 git diff --check                            passed
@@ -47,7 +47,7 @@ SQLite upgrade -> downgrade -> re-upgrade   passed
 PostgreSQL migration/domain CI              configured
 Browser initialization                      passed
 Dynamic API cache control                    no-store
-Provider badge                              qwen / qwen-plus / 0.7.0rc1
+Provider badge                              qwen / qwen-plus / 0.7.0rc2
 Text model selector                         ready
 Visual model selector                       qwen3-vl-plus ready
 Memory center                               rendered and responsive
@@ -75,7 +75,7 @@ is stored in source control or release artifacts.
 
 The candidate is running on the evaluation host at port `8016` from an isolated
 Python 3.12 virtual environment. The host health endpoint reports
-`0.7.0rc1`, `qwen-plus` and `provider_ready=true`.
+`0.7.0rc2`, `qwen-plus` and `provider_ready=true`.
 
 The SeetaCloud evaluation host does not permit nested Docker image construction
 (`unshare: operation not permitted`). Compose configuration is retained for a

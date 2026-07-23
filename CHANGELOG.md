@@ -4,6 +4,8 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ## [Unreleased]
 
+## [0.7.0-rc.2] - 2026-07-23
+
 ### Added
 
 - Complete the v0.7 long-term learner lifecycle with user-started retests,

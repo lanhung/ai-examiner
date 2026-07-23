@@ -1,4 +1,4 @@
-# AI Examiner v0.7.0 Release Candidate 1
+# AI Examiner v0.7.0 Release Candidate 2
 
 v0.7 adds optional, user-controlled long-term learner intelligence without changing
 the existing document, assessment or realtime voice paths when memory is disabled.
