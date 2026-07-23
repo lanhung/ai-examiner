@@ -73,7 +73,15 @@ def test_complete_text_exam_flow(client):
     assert report_data["questions_answered"] == 2
     assert 0 <= report_data["overall_score"] <= 5
     assert report_data["evidence"]
-    assert report_data["report_version"] == "assessment-report-v2"
+    assert report_data["report_version"] == "assessment-report-v3"
+    assert report_data["template"]["slug"] == "academic.thesis_defense"
+    assert report_data["template"]["fingerprint"].startswith("sha256:")
+    assert report_data["objective_scores"]
+    assert report_data["dimension_scores"]
+    assert report_data["section_order"]
+    assert all(
+        item["dimension_assessments"] for item in report_data["evidence"]
+    )
     assert report_data["questions_answered"] == 2
     assert report_data["evaluated_turns"] == 2
 

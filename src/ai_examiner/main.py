@@ -1044,6 +1044,9 @@ def get_report(session_id: str, db: Annotated[Session, Depends(get_db)]):
         mastery_state=session.mastery_state,
         knowledge_states=knowledge_states,
         mode=session.mode,
+        template_snapshot=session.template_snapshot_json,
+        language=str(session.config.get("language") or "zh-CN"),
+        template_fingerprint=session.template_fingerprint,
     )
     report["session_status"] = session.status
     return report

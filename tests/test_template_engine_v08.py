@@ -212,7 +212,7 @@ def test_builtin_template_health_api_reports_versions(client):
         "expected_builtin_count": 3,
         "persisted_template_count": 1,
         "persisted_version_count": 3,
-        "validator_version": "template-validator-v2",
+        "validator_version": "template-validator-v3",
         "compiler_version": "template-compiler-v1",
         "issues": [],
     }

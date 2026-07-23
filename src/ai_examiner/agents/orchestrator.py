@@ -184,7 +184,11 @@ class ExamOrchestrator:
             analysis_question.get("question_context", "main")
         )
         evaluation = self.evaluator.evaluate(
-            question=analysis_question, answer=answer, analysis=analysis
+            question=analysis_question,
+            answer=answer,
+            analysis=analysis,
+            assessment_policy=self._template_assessment_policy(session),
+            language=str(session.config.get("language") or "zh-CN"),
         )
         user_turn = Turn(
             session_id=session.id,
@@ -387,7 +391,11 @@ class ExamOrchestrator:
                 question=question, answer=turn.content, history=history
             )
             evaluation = self.evaluator.evaluate(
-                question=question, answer=turn.content, analysis=analysis
+                question=question,
+                answer=turn.content,
+                analysis=analysis,
+                assessment_policy=self._template_assessment_policy(session),
+                language=str(session.config.get("language") or "zh-CN"),
             )
             turn.question_id = str(question["id"])
             turn.analysis = {
@@ -474,6 +482,13 @@ class ExamOrchestrator:
         return dict(
             (session.template_snapshot_json or {}).get("question_selection") or {}
         )
+
+    @staticmethod
+    def _template_assessment_policy(
+        session: ExamSession,
+    ) -> dict[str, Any] | None:
+        policy = (session.template_snapshot_json or {}).get("assessment")
+        return dict(policy) if policy else None
 
     def _selector_policy_config(self, session: ExamSession) -> dict[str, Any]:
         policy = self._template_question_policy(session)

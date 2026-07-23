@@ -40,8 +40,20 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   configuration and realtime voice instructions.
 - Require both template permission and user opt-in for proactive examiner
   interruption while preserving learner barge-in.
-- Upgrade template validation to `template-validator-v2`, requiring every
-  conversation policy to include a terminal `END` action.
+- Upgrade template validation through `template-validator-v3`, requiring every
+  conversation policy to include a terminal `END` action and every assessment
+  dimension to use a registered deterministic rubric.
+- Add `template-assessment-v1` with exact weighted score recomputation, localized
+  rubric anchors and answer/source evidence on every dimension score.
+- Apply the immutable session snapshot's assessment scale, dimension weights,
+  assisted-performance policy and aggregate policy to text and finalized voice
+  answers.
+- Add objective-weighted report aggregation, objective evidence, dimension
+  evidence, template identity/fingerprint metadata and registered report sections.
+- Support `no_total` coaching reports without exposing a total score while
+  preserving deterministic internal diagnostics for adaptive selection.
+- Resolve required disclaimers from a reviewed registry and keep interaction,
+  preference, emotion and voice timing signals outside correctness scoring.
 
 ## [0.7.0-rc.2] - 2026-07-23
 

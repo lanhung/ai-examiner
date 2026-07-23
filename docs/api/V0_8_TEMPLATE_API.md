@@ -94,7 +94,7 @@ Runs structural, semantic and capability validation.
 ```json
 {
   "status": "failed",
-  "validator_version": "template-validator-v2",
+  "validator_version": "template-validator-v3",
   "issues": [
     {
       "code": "DIMENSION_WEIGHTS_INVALID",
@@ -302,19 +302,70 @@ stored compiler and template schema metadata; it does not recompile current sour
 
 ### Existing report endpoint
 
-`GET /api/sessions/{session_id}/report` adds:
+For template-bound sessions, `GET /api/sessions/{session_id}/report` returns
+`assessment-report-v3` and adds:
 
 ```json
 {
   "template": {
     "slug": "academic.thesis_defense",
-    "semantic_version": "1.0.0",
+    "version": "1.2.0",
+    "title": "论文答辩训练",
     "fingerprint": "sha256:..."
   },
-  "objective_scores": [],
-  "required_disclaimer_ids": ["practice_not_formal_decision"]
+  "score_policy": {
+    "assisted_performance": "report_separately",
+    "aggregate": "weighted_dimensions",
+    "overall_basis": "objective_weighted",
+    "blend_weights": null
+  },
+  "overall_score": 3.84,
+  "computed_overall_score": 3.84,
+  "show_total_score": true,
+  "objective_scores": [
+    {
+      "id": "methodology",
+      "title": "方法理解",
+      "weight": 0.25,
+      "score": 3.7,
+      "evidence_count": 2,
+      "evidence": []
+    }
+  ],
+  "dimension_scores": [
+    {
+      "id": "correctness",
+      "title": "正确性",
+      "weight": 0.35,
+      "score": 4.1,
+      "evidence_count": 3,
+      "evidence": []
+    }
+  ],
+  "section_order": ["summary", "objective_scores", "dimension_scores", "evidence"],
+  "sections": [
+    {"id": "summary", "data": {}},
+    {"id": "objective_scores", "data": []}
+  ],
+  "disclaimer_id": "practice_not_formal_decision",
+  "disclaimer": "本报告仅用于训练和辅助判断..."
 }
 ```
+
+Every dimension assessment stored on an answer includes the effective weight,
+normalized score, display-scale score, localized rubric anchors, answer quote,
+point-level evidence identifiers and material evidence references. The report
+recomputes totals deterministically from those stored values.
+
+`assessment.aggregate = no_total` or `report.show_total_score = false` produces
+`overall_score = null`, `show_total_score = false` and `risk_level = not_scored`.
+The report remains valid and still includes objective, dimension and evidence
+sections selected by the template.
+
+The assessment runtime only consumes answer-analysis fields registered for the
+dimension. Speech duration, pauses, interruption count, response latency,
+interaction preferences, inferred emotion and other voice signals cannot alter
+correctness scores.
 
 ## 8. Evaluation endpoints
 

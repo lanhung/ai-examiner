@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from .contracts import ScenarioTemplateSource
 from .registries import (
     ALLOWED_ACTIONS,
+    ASSESSMENT_DIMENSIONS,
     CAPABILITIES,
     DISCLAIMER_IDS,
     OVERRIDE_TARGETS,
@@ -20,7 +21,7 @@ from .registries import (
     STYLE_IDS,
 )
 
-TEMPLATE_VALIDATOR_VERSION = "template-validator-v2"
+TEMPLATE_VALIDATOR_VERSION = "template-validator-v3"
 WEIGHT_TOLERANCE = 0.0001
 
 
@@ -105,6 +106,15 @@ def _semantic_issues(
                 f"Assessment dimension id is duplicated: {duplicate}",
             )
         )
+    for dimension_id in dimension_ids:
+        if dimension_id not in ASSESSMENT_DIMENSIONS:
+            issues.append(
+                _issue(
+                    "ASSESSMENT_DIMENSION_UNKNOWN",
+                    "/assessment_policy/dimensions",
+                    f"Assessment dimension has no registered deterministic rubric: {dimension_id}",
+                )
+            )
 
     objective_weight = sum(objective.weight for objective in source.objectives)
     if abs(objective_weight - 1.0) > WEIGHT_TOLERANCE:

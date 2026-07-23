@@ -9,9 +9,9 @@
 - Deployment status: local development only
 - Alembic head: `20260723_0007`
 
-v0.8 is being delivered as reviewable vertical slices. The current increment
-extends the safe, deterministic template foundation into durable session binding
-without yet changing Planner, Policy, Assessment or Report Agent behavior.
+v0.8 is being delivered as reviewable vertical slices. The current implementation
+now carries one immutable template snapshot through planning, selection,
+conversation authorization, assessment and report generation.
 
 ## Increment A: contract and compiler foundation
 
@@ -145,17 +145,40 @@ Delivered:
 - `adaptive-v2`, `adaptive-template-v2`, `fixed-template-v1` and
   `conversation-policy-v1` audit identifiers.
 
+## Increment F: template assessment and report integration
+
+Delivered:
+
+- a registered deterministic rubric for correctness, completeness,
+  evidence/reasoning and boundary-awareness dimensions;
+- exact weighted score recomputation from the immutable session snapshot;
+- localized rubric anchors plus answer, point and document evidence on every
+  dimension assessment;
+- objective scores with weights and evidence linked to the blueprint's objective
+  mappings;
+- independent, report-separately and deterministic 70/30 blended assisted
+  performance policies;
+- weighted-total and `no_total` aggregate policies;
+- registered report section builders and template-controlled section order;
+- reviewed localized disclaimer registry and template identity/fingerprint in
+  reports;
+- browser rendering for template objective scores and score-free coaching reports;
+- explicit tests proving voice timing, interruptions, emotion and interaction
+  signals cannot affect correctness scores;
+- `template-assessment-v1`, `assessment-report-v3` and
+  `template-validator-v3` audit identifiers.
+
 ## Verification
 
 ```text
-Targeted template tests       47 passed
+Targeted assessment tests     41 passed
 Targeted Ruff                 passed
 Wheel built-in resource       packaged
-Full pytest                   99 passed
+Full pytest                   104 passed
 Full Ruff                     passed
 JavaScript syntax             passed
 git diff --check              passed
-Tracked-source secret scan    pending final staged-content gate
+Tracked-source secret scan    no key patterns found
 Alembic single head           20260723_0007
 Alembic metadata drift check  no new upgrade operations
 Docker Compose config         not run (Docker unavailable on this host)
@@ -171,7 +194,6 @@ diagnostic issue.
 The following work remains intentionally disabled or unimplemented:
 
 - no public template import or export;
-- no Evaluator rubric or Reporter section template-policy integration;
 - no database-backed catalog editor;
 - local authoring is demoted to local trust states and cannot claim
   `built_in_reviewed`;

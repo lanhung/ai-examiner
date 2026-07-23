@@ -388,11 +388,15 @@ async function showReport() {
   const report = await api(`/api/sessions/${state.sessionId}/report`);
   const assessmentSummary = report.assessment_summary || {};
   const trajectories = report.question_trajectories || [];
+  const scoreMarkup = report.show_total_score === false
+    ? `<div class="score">—</div><div><strong>本模板不生成总分</strong><p>请查看分维度与目标证据</p></div>`
+    : `<div class="score">${escapeHtml(report.overall_score)}<small>/${escapeHtml(report.max_score || 5)}</small></div><div><strong>风险等级：${escapeHtml(report.risk_level)}</strong><p>已评估 ${report.questions_answered} 次回答</p></div>`;
   $("reportPanel").classList.remove("hidden");
   $("reportContent").innerHTML = `
-    <div class="score-card"><div class="score">${report.overall_score}<small>/5</small></div><div><strong>风险等级：${escapeHtml(report.risk_level)}</strong><p>已评估 ${report.questions_answered} 次回答</p></div></div>
+    <div class="score-card">${scoreMarkup}</div>
     <div class="report-block"><h3>回答轨迹</h3><p>独立回答均分 ${escapeHtml(assessmentSummary.independent_average ?? "—")} · 追问后均分 ${escapeHtml(assessmentSummary.assisted_average ?? "—")} · 平均提升 ${escapeHtml(assessmentSummary.average_learning_gain ?? "—")}</p><ul>${trajectories.map((item) => `<li><strong>${escapeHtml(item.question_id)}</strong>：${escapeHtml(item.independent_score)} → ${escapeHtml(item.final_assisted_score)}，追问 ${escapeHtml(item.followup_count)} 次，提升 ${escapeHtml(item.learning_gain)}</li>`).join("") || "<li>暂无回答轨迹</li>"}</ul></div>
     <div class="report-grid">
+      <div class="report-block"><h3>目标表现</h3><ul>${(report.objective_scores || []).map((item) => `<li><strong>${escapeHtml(item.title || item.id)}</strong>：${item.score == null ? "未考察" : `${escapeHtml(item.score)}/${escapeHtml(report.max_score || 5)}`} · 证据 ${escapeHtml(item.evidence_count || 0)} 条</li>`).join("") || "<li>当前会话未绑定目标评分</li>"}</ul></div>
       <div class="report-block"><h3>优先薄弱点</h3><ul>${list(report.priority_weaknesses, "暂未识别明显薄弱点")}</ul></div>
       <div class="report-block"><h3>建议动作</h3><ul>${list(report.recommended_actions)}</ul></div>
       <div class="report-block"><h3>高分证据</h3><ul>${list(report.strengths, "尚无达到高分阈值的回答")}</ul></div>

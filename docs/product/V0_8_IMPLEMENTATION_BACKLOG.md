@@ -15,7 +15,8 @@ Current package version: `0.8.0.dev0`
 | WP-05 | Increment C complete | Text/voice binding, project defaults, immutable snapshots, fingerprint verification and additive `20260723_0007` migration |
 | WP-06 | Increment D complete | Template-guided Planner, objective coverage audit, bounded taxonomy/difficulty and adaptive coverage priority |
 | WP-07 | Increment E complete | Cross-platform action authorization, assistance/disclosure bounds, interruption consent and decision audit |
-| WP-08 to WP-12 | Not started | Assessment, report, UI, governance, evaluation and release hardening remain held |
+| WP-08 | Increment F complete | Deterministic template rubrics, objective/dimension evidence, aggregate policies, section builders and disclaimer registry |
+| WP-09 to WP-12 | Not started | Built-in scenarios, UI/API completion, governance, evaluation and release hardening remain held |
 
 Increment A is a compatibility foundation, not a complete v0.8 release. It does
 not change session behavior or authorize production deployment.
@@ -181,6 +182,8 @@ Acceptance:
 ### WP-08: Assessment and report integration
 
 Branch: `feature/v0.8-template-assessment`
+
+Status: Increment F complete on `develop/v0.8.0`.
 
 Deliverables:
 

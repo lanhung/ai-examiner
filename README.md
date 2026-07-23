@@ -26,8 +26,9 @@ mode mapping and retain an immutable effective-policy snapshot and fingerprint.
 Planner and adaptive selection now consume template objectives, question taxonomy,
 coverage and difficulty constraints. Text, OpenAI voice and Qwen voice now share a
 bounded effective conversation policy for action authorization, hints, corrections,
-answer disclosure and active interruption. Assessment and report integration
-remain in development.
+answer disclosure and active interruption. Text and finalized voice answers now use
+the session snapshot's weighted assessment rubric, and reports follow the template's
+objective weights, section order, total-score policy and required disclaimer.
 The current branch is for development evaluation only.
 
 The first v0.7 increment adds an optional opaque learner identity, explicit memory
