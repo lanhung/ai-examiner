@@ -17,7 +17,7 @@ This file is the authoritative version and branch status for Codex and other cod
 | Next implementation | 0.7.0rc2 | `develop/v0.7.0` | WP-01 to WP-12 complete; real Qwen, browser and real-audio acceptance passed | Staging only |
 | v0.7 candidate | 0.7.0rc2 | `v0.7.0-rc.2` | Candidate release; Vultr Compose promotion gate remains | Staging only |
 | Upcoming research | 0.8.0 | `research/v0.8.0` | Industry template architecture, API, evaluation and implementation design | Not deployable |
-| Current implementation | 0.8.0.dev0 | `develop/v0.8.0` | WP-06 template-guided Planner and adaptive selector complete; conversation/assessment/report integration remains | Local evaluation only |
+| Current implementation | 0.8.0.dev0 | `develop/v0.8.0` | WP-07 shared conversation/assistance policy complete; assessment/report integration remains | Local evaluation only |
 | Release candidate | 0.5.0rc4 | `v0.5.0-rc.4` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 

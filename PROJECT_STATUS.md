@@ -125,13 +125,33 @@ Delivered:
   audit records;
 - compatibility for old blueprints without template objective metadata.
 
+## Increment E: conversation and assistance policy
+
+Delivered:
+
+- one provider-neutral effective conversation policy for text, OpenAI Realtime and
+  Qwen Realtime sessions;
+- template action allowlist enforcement after deterministic policy selection;
+- safe authorized fallbacks when a requested action is forbidden;
+- per-decision audit of requested/effective action, allowed actions, fallback
+  reason, assistance boundaries, answer disclosure and active interruption;
+- template-controlled follow-up limit, hint availability and correction timing;
+- explicit answer-disclosure prohibition in both realtime voice providers;
+- proactive examiner interruption enabled only when the template declares it and
+  the user opts in;
+- learner barge-in remains independent and always available;
+- `template-validator-v2` terminal-action validation and idempotent revalidation of
+  existing built-in versions;
+- `adaptive-v2`, `adaptive-template-v2`, `fixed-template-v1` and
+  `conversation-policy-v1` audit identifiers.
+
 ## Verification
 
 ```text
-Targeted template tests       42 passed
+Targeted template tests       47 passed
 Targeted Ruff                 passed
 Wheel built-in resource       packaged
-Full pytest                   94 passed
+Full pytest                   99 passed
 Full Ruff                     passed
 JavaScript syntax             passed
 git diff --check              passed
@@ -151,8 +171,7 @@ diagnostic issue.
 The following work remains intentionally disabled or unimplemented:
 
 - no public template import or export;
-- no Policy Controller action allowlist, Evaluator rubric or Reporter section
-  template-policy integration;
+- no Evaluator rubric or Reporter section template-policy integration;
 - no database-backed catalog editor;
 - local authoring is demoted to local trust states and cannot claim
   `built_in_reviewed`;

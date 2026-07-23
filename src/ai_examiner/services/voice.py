@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..config import Settings
 from ..models import Blueprint, ExamSession, Project, VoiceEvent, VoiceSession
+from .conversation_policy import voice_policy_instructions
 
 if TYPE_CHECKING:
     from .session_templates import ResolvedSessionTemplate
@@ -90,6 +91,7 @@ def build_voice_instructions(
     question_limit: int,
     max_followups: int,
     max_chars: int,
+    conversation_policy: dict[str, Any],
 ) -> str:
     blueprint_text = _compact_blueprint(blueprint.data, max_chars=max_chars)
     role = {
@@ -118,6 +120,7 @@ def build_voice_instructions(
 <BLUEPRINT_DATA>
 {blueprint_text}
 </BLUEPRINT_DATA>
+{voice_policy_instructions(conversation_policy)}
 """.strip()
 
 
@@ -138,6 +141,7 @@ def create_voice_session(
     learner_subject_id: str | None = None,
     analysis_profile: str | None = None,
     resolved_template: ResolvedSessionTemplate | None = None,
+    conversation_policy: dict[str, Any] | None = None,
 ) -> VoiceSession:
     provider_config = VOICE_PROVIDERS.get(provider)
     if not provider_config:
@@ -148,6 +152,21 @@ def create_voice_session(
     if provider == "qwen":
         question_limit = min(question_limit, 4)
         max_followups = min(max_followups, 1)
+    policy = conversation_policy or {
+        "allowed_actions": ["ASK_FOLLOWUP", "GIVE_HINT", "MOVE_ON", "END"],
+        "max_followups_per_question": max_followups,
+        "hints": {"allowed": True, "maximum_per_question": 1},
+        "corrections": {
+            "allowed": True,
+            "timing": "after_independent_attempt",
+        },
+        "answer_disclosure": {"allowed": False},
+        "active_interruption": {
+            "enabled": False,
+            "level": "off",
+            "user_can_disable": True,
+        },
+    }
     exam = ExamSession(
         project_id=project.id,
         blueprint_id=blueprint.id,
@@ -155,9 +174,9 @@ def create_voice_session(
         mode=mode,
         config={
             "difficulty": "adaptive",
-            "allow_hints": True,
-            "allow_corrections": True,
-            "allow_interruptions": True,
+            "allow_hints": policy["hints"]["allowed"],
+            "allow_corrections": policy["corrections"]["allowed"],
+            "allow_interruptions": policy["active_interruption"]["enabled"],
             "question_limit": question_limit,
             "max_followups_per_question": max_followups,
             "channel": "realtime_voice",
@@ -169,6 +188,7 @@ def create_voice_session(
                 if resolved_template
                 else None
             ),
+            "conversation_policy": policy,
         },
         state="VOICE_READY",
         template_version_id=(
@@ -188,7 +208,19 @@ def create_voice_session(
         ),
         learner_subject_id=learner_subject_id,
         question_strategy=question_strategy,
-        policy_version="adaptive-v1" if question_strategy == "adaptive" else "fixed-v1",
+        policy_version=(
+            (
+                "adaptive-template-v2"
+                if resolved_template
+                else "adaptive-v1"
+            )
+            if question_strategy == "adaptive"
+            else (
+                "fixed-template-v1"
+                if resolved_template
+                else "fixed-v1"
+            )
+        ),
     )
     db.add(exam)
     db.flush()
@@ -200,6 +232,7 @@ def create_voice_session(
         question_limit=question_limit,
         max_followups=max_followups,
         max_chars=settings.realtime_max_instruction_chars,
+        conversation_policy=policy,
     )
     voice_session = VoiceSession(
         project_id=project.id,
@@ -229,6 +262,7 @@ def create_voice_session(
                 if resolved_template
                 else None
             ),
+            "conversation_policy": policy,
             "instructions": instructions,
         },
         metrics={

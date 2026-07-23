@@ -156,6 +156,7 @@ class VoiceSessionCreate(BaseModel):
     vad_eagerness: str = Field(default="medium", pattern="^(low|medium|high|auto)$")
     question_limit: int = Field(default=6, ge=1, le=20)
     max_followups: int = Field(default=2, ge=0, le=5)
+    allow_active_interruptions: bool = False
     question_strategy: Literal["fixed", "adaptive"] = "fixed"
     learner_subject_key: str | None = Field(default=None, max_length=160)
     analysis_profile: str | None = Field(default=None, max_length=160)

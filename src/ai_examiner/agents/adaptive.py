@@ -48,7 +48,7 @@ class DifficultyController:
 
 class AdaptiveQuestionSelector:
     name = "adaptive_question_selector"
-    version = "adaptive-v1"
+    version = "adaptive-v2"
     weights = {
         "knowledge_gap": 0.30,
         "uncertainty": 0.20,

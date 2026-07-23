@@ -20,7 +20,7 @@ from .registries import (
     STYLE_IDS,
 )
 
-TEMPLATE_VALIDATOR_VERSION = "template-validator-v1"
+TEMPLATE_VALIDATOR_VERSION = "template-validator-v2"
 WEIGHT_TOLERANCE = 0.0001
 
 
@@ -169,6 +169,14 @@ def _semantic_issues(
                     f"Unknown policy action: {action}",
                 )
             )
+    if "END" not in source.conversation_policy.allowed_actions:
+        issues.append(
+            _issue(
+                "TEMPLATE_TERMINAL_ACTION_REQUIRED",
+                "/conversation_policy/allowed_actions",
+                "Conversation policy must allow END",
+            )
+        )
     for section in source.report_policy.sections:
         if section not in REPORT_SECTIONS:
             issues.append(

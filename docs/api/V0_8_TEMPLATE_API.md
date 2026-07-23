@@ -94,7 +94,7 @@ Runs structural, semantic and capability validation.
 ```json
 {
   "status": "failed",
-  "validator_version": "template-validator-v1",
+  "validator_version": "template-validator-v2",
   "issues": [
     {
       "code": "DIMENSION_WEIGHTS_INVALID",
@@ -257,6 +257,40 @@ blueprint response includes:
 Every template-guided question contains `objective_ids`. Output with an undeclared
 question type or out-of-bounds difficulty is rejected rather than silently
 entering a session.
+
+## 6.2 Effective conversation policy
+
+Text and voice session responses include a safe `conversation_policy` in their
+runtime configuration:
+
+```json
+{
+  "policy_version": "conversation-policy-v1",
+  "allowed_actions": ["ASK_FOLLOWUP", "GIVE_HINT", "MOVE_ON", "END"],
+  "max_followups_per_question": 2,
+  "hints": {"allowed": true, "maximum_per_question": 1},
+  "corrections": {
+    "allowed": true,
+    "timing": "after_independent_attempt"
+  },
+  "answer_disclosure": {"allowed": false},
+  "active_interruption": {
+    "declared_enabled": false,
+    "enabled": false,
+    "level": "off",
+    "user_can_disable": true
+  }
+}
+```
+
+The effective policy may tighten but never weaken the compiled template. Proactive
+examiner interruption requires both template permission and user opt-in. Learner
+barge-in, which stops examiner audio, is a separate safety and usability behavior.
+
+Every text policy decision returns `policy_audit` containing requested and
+effective actions, the allowlist and any deterministic fallback reason. Realtime
+providers receive the same assistance, disclosure and interruption boundaries in
+trusted server-side instructions.
 
 ## 7. Session and report inspection
 

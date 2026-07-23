@@ -506,6 +506,23 @@ def seed_builtin_templates(db: Session) -> None:
                     f"Built-in template changed without a semantic version bump: "
                     f"{metadata.slug}@{metadata.version}"
                 )
+            current_validation = db.scalar(
+                select(TemplateValidationRun).where(
+                    TemplateValidationRun.template_version_id == version.id,
+                    TemplateValidationRun.validator_version
+                    == TEMPLATE_VALIDATOR_VERSION,
+                )
+            )
+            if current_validation is None:
+                db.add(
+                    TemplateValidationRun(
+                        template_version_id=version.id,
+                        validator_version=TEMPLATE_VALIDATOR_VERSION,
+                        status="passed",
+                        issues_json=_issues(result),
+                        capability_snapshot_json=sorted(CAPABILITIES),
+                    )
+                )
             continue
         version = ScenarioTemplateVersion(
             template_id=template.id,

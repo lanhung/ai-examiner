@@ -32,6 +32,16 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 - Make adaptive selection honor the session snapshot's allowed types, difficulty
   bounds and unmet objective coverage, with the effective contract recorded in
   decision audit events.
+- Add one effective conversation-policy contract shared by text, OpenAI Realtime
+  and Qwen Realtime sessions.
+- Authorize every text policy action against the template allowlist and record
+  requested actions, effective actions and deterministic fallback reasons.
+- Enforce template hint, correction and answer-disclosure boundaries in runtime
+  configuration and realtime voice instructions.
+- Require both template permission and user opt-in for proactive examiner
+  interruption while preserving learner barge-in.
+- Upgrade template validation to `template-validator-v2`, requiring every
+  conversation policy to include a terminal `END` action.
 
 ## [0.7.0-rc.2] - 2026-07-23
 

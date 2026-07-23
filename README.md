@@ -24,8 +24,10 @@ branch implements that design incrementally and is not a production release.
 Text and voice sessions now resolve an explicit template, project default or legacy
 mode mapping and retain an immutable effective-policy snapshot and fingerprint.
 Planner and adaptive selection now consume template objectives, question taxonomy,
-coverage and difficulty constraints. Conversation, assessment and report
-integration remain in development.
+coverage and difficulty constraints. Text, OpenAI voice and Qwen voice now share a
+bounded effective conversation policy for action authorization, hints, corrections,
+answer disclosure and active interruption. Assessment and report integration
+remain in development.
 The current branch is for development evaluation only.
 
 The first v0.7 increment adds an optional opaque learner identity, explicit memory

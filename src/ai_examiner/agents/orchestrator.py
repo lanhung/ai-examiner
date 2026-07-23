@@ -223,6 +223,7 @@ class ExamOrchestrator:
             question=question,
             config=session.config,
             is_last_question=is_last,
+            policy_contract=session.config.get("conversation_policy"),
         )
 
         next_question = None
@@ -267,7 +268,19 @@ class ExamOrchestrator:
                     "reason_codes": selection.reason_codes if selection else [],
                 }
             else:
-                decision = {"action": "END", "reason": "no_eligible_question"}
+                policy_audit = dict(decision.get("policy_audit") or {})
+                policy_audit.update(
+                    {
+                        "requested_action": "END",
+                        "effective_action": "END",
+                        "fallback_reason": "no_eligible_question",
+                    }
+                )
+                decision = {
+                    "action": "END",
+                    "reason": "no_eligible_question",
+                    "policy_audit": policy_audit,
+                }
                 session.status = "completed"
                 session.state = "COMPLETED"
                 session.completed_at = utcnow()

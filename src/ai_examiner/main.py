@@ -107,6 +107,7 @@ from .schemas import (
 from .services.agreement import agreement_summary
 from .services.benchmark import BenchmarkService
 from .services.cognitive import CognitiveStateService
+from .services.conversation_policy import effective_conversation_policy
 from .services.datasets import dataset_diff, set_dataset_status
 from .services.documents import parse_document, save_upload
 from .services.evidence import create_highlighted_crop, persist_evidence, serialize_asset
@@ -839,6 +840,24 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
                 ),
             }
         )
+    conversation_policy = effective_conversation_policy(
+        resolved_template.snapshot if resolved_template else None,
+        user_allows_active_interruption=payload.allow_interruptions,
+        legacy_config=config,
+    )
+    config.update(
+        {
+            "allow_hints": conversation_policy["hints"]["allowed"],
+            "allow_corrections": conversation_policy["corrections"]["allowed"],
+            "allow_interruptions": conversation_policy["active_interruption"][
+                "enabled"
+            ],
+            "max_followups_per_question": conversation_policy[
+                "max_followups_per_question"
+            ],
+            "conversation_policy": conversation_policy,
+        }
+    )
     config["profile"] = profile
     session = ExamSession(
         project_id=project.id,
@@ -864,7 +883,17 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
         learner_subject_id=subject.id if subject else None,
         question_strategy=question_strategy,
         policy_version=(
-            "adaptive-v1" if question_strategy == "adaptive" else "fixed-v1"
+            (
+                "adaptive-template-v2"
+                if resolved_template
+                else "adaptive-v1"
+            )
+            if question_strategy == "adaptive"
+            else (
+                "fixed-template-v1"
+                if resolved_template
+                else "fixed-v1"
+            )
         ),
     )
     db.add(session)
@@ -2506,6 +2535,15 @@ def start_voice_session(
         question_limit = legacy["question_limit"]
         max_followups = legacy["max_followups_per_question"]
         question_strategy = legacy["question_strategy"]
+    conversation_policy = effective_conversation_policy(
+        resolved_template.snapshot if resolved_template else None,
+        user_allows_active_interruption=payload.allow_active_interruptions,
+        legacy_config={
+            "allow_hints": True,
+            "allow_corrections": True,
+            "max_followups_per_question": max_followups,
+        },
+    )
     try:
         voice = create_voice_session(
             db,
@@ -2523,6 +2561,7 @@ def start_voice_session(
             learner_subject_id=subject.id if subject else None,
             analysis_profile=payload.analysis_profile,
             resolved_template=resolved_template,
+            conversation_policy=conversation_policy,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
