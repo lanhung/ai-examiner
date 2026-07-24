@@ -1,10 +1,15 @@
-.venv/
+.venv*/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
 .coverage
 htmlcov/
 .env
+data/*
+!data/uploads/
+!data/evidence/
+!data/exports/
+!data/backups/
 data/*.db
 data/*.db-*
 data/*.log

@@ -37,6 +37,19 @@ class ParsedDocument:
 
 ALLOWED_SUFFIXES = {".pdf", ".txt", ".md", ".markdown", ".pptx", ".docx"}
 
+CJK_FONT_CANDIDATES = (
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
+    "C:/Windows/Fonts/msyh.ttc",
+    "C:/Windows/Fonts/simhei.ttf",
+    "C:/Windows/Fonts/simsun.ttc",
+    "/System/Library/Fonts/PingFang.ttc",
+    "/System/Library/Fonts/Hiragino Sans GB.ttc",
+)
+FALLBACK_FONT_CANDIDATES = (
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+)
+
 
 def safe_filename(filename: str) -> str:
     name = Path(filename).name
@@ -61,11 +74,9 @@ def _sha(path: Path) -> str:
 
 
 def _font(size: int = 18):
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    ]
-    for candidate in candidates:
+    # Logical previews frequently contain Chinese text. Prefer a CJK font before
+    # DejaVu so vision models receive readable glyphs instead of tofu boxes.
+    for candidate in (*CJK_FONT_CANDIDATES, *FALLBACK_FONT_CANDIDATES):
         try:
             return ImageFont.truetype(candidate, size=size)
         except OSError:

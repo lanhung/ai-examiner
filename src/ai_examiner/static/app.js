@@ -1153,6 +1153,14 @@ async function pollJob(jobId) {
   throw new Error("后台任务等待超时，请稍后在任务接口检查状态");
 }
 
+function latestVisualAnalyses(items) {
+  const latest = new Map();
+  for (const item of items) {
+    if (!latest.has(item.evidence_asset_id)) latest.set(item.evidence_asset_id, item);
+  }
+  return [...latest.values()];
+}
+
 $("loadEvidence").onclick = loadEvidence;
 
 $("analyzeVisual").onclick = async () => {
@@ -1166,7 +1174,8 @@ $("analyzeVisual").onclick = async () => {
       body: JSON.stringify({profile, max_pages: 10, asynchronous: true}),
     });
     if (response.job) await pollJob(response.job.id);
-    const analyses = await api(`/api/documents/${state.documentId}/visual-analyses`);
+    const history = await api(`/api/documents/${state.documentId}/visual-analyses`);
+    const analyses = latestVisualAnalyses(history);
     const box = $("visualResults");
     box.classList.remove("hidden");
     box.innerHTML = `<strong>视觉审查结果</strong>${analyses.slice(0, 10).map((item) => `<div class="report-block">
@@ -1175,7 +1184,7 @@ $("analyzeVisual").onclick = async () => {
       <ul>${list(item.data.potential_issues || [])}</ul>
       <ol>${(item.data.exam_questions || []).map((q) => `<li>${escapeHtml(q.question)}</li>`).join("")}</ol>
     </div>`).join("")}`;
-    setStatus("evidenceStatus", `视觉分析完成：${analyses.length} 页。`, "success");
+    setStatus("evidenceStatus", `视觉分析完成：${analyses.length} 页（仅显示每页最新结果）。`, "success");
   } catch (error) { setStatus("evidenceStatus", error.message, "error"); }
   finally { $("analyzeVisual").disabled = false; }
 };

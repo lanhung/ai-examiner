@@ -7,6 +7,11 @@ from docx import Document as DocxDocument
 from pptx import Presentation
 from pptx.util import Inches
 
+from ai_examiner.agents.base import AgentContext
+from ai_examiner.agents.visual import VisualEvidenceAgent
+from ai_examiner.providers.base import ModelProvider, ProviderResult
+from ai_examiner.services import documents
+
 
 def _project(client, name="v0.3 multimodal"):
     response = client.post("/api/projects", json={"name": name})
@@ -58,6 +63,64 @@ def _docx_bytes() -> bytes:
     output = io.BytesIO()
     document.save(output)
     return output.getvalue()
+
+
+def test_logical_preview_prefers_cjk_font(monkeypatch):
+    attempted = []
+    sentinel = object()
+
+    def fake_truetype(candidate, *, size):
+        attempted.append((candidate, size))
+        return sentinel
+
+    monkeypatch.setattr(documents.ImageFont, "truetype", fake_truetype)
+
+    assert documents._font(24) is sentinel
+    assert attempted == [(documents.CJK_FONT_CANDIDATES[0], 24)]
+    assert "noto" in attempted[0][0].lower()
+
+
+def test_visual_agent_requires_output_in_document_language(tmp_path):
+    class CapturingProvider(ModelProvider):
+        name = "capture"
+        model = "capture"
+
+        def __init__(self):
+            self.instructions = ""
+            self.payload = {}
+
+        def complete_json(self, *, agent, instructions, payload, schema_hint):
+            raise AssertionError("The visual agent must use the image-capable provider method")
+
+        def complete_json_with_images(
+            self, *, agent, instructions, payload, image_paths, schema_hint
+        ):
+            self.instructions = instructions
+            self.payload = payload
+            return ProviderResult(
+                data={"summary": "中文摘要", "exam_questions": [], "confidence": 0.9},
+                provider=self.name,
+                model=self.model,
+            )
+
+        def complete_text(self, *, agent, instructions, payload):
+            raise AssertionError("Text completion is not used")
+
+    image = tmp_path / "page.png"
+    image.write_bytes(b"image")
+    provider = CapturingProvider()
+
+    result = VisualEvidenceAgent(AgentContext(provider=provider)).analyze(
+        image_path=image,
+        page_number=1,
+        label="第一页",
+        nearby_text="中文研究材料",
+        language="zh-CN",
+    )
+
+    assert result["summary"] == "中文摘要"
+    assert provider.payload["language"] == "zh-CN"
+    assert "respond in Simplified Chinese" in provider.instructions
 
 
 def test_pdf_evidence_visual_and_highlight(client):

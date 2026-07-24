@@ -124,6 +124,17 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   sales objection and project review; all three pass relevance, quality, grounding,
   single-question and safety thresholds.
 
+### Fixed
+
+- Prefer CJK-capable fonts for logical document previews and install Noto CJK in
+  the Docker image so Chinese evidence remains readable to users and vision models.
+- Require visual-evidence output to follow the document language, including
+  Simplified Chinese for `zh-CN` projects.
+- Show only the newest visual-analysis result for each evidence asset in the
+  browser while preserving the complete backend audit history.
+- Ignore isolated runtime-data and alternate virtual-environment directories so
+  local acceptance artifacts cannot enter release commits.
+
 ## [0.7.0-rc.2] - 2026-07-23
 
 ### Added

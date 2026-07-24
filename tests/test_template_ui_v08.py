@@ -44,3 +44,14 @@ def test_selected_template_is_wired_into_blueprint_text_and_voice_requests(clien
     assert javascript.count("...selectedTemplateRequest()") >= 3
     assert 'api("/api/sessions"' in javascript
     assert 'api("/api/voice/sessions"' in javascript
+
+
+def test_visual_results_show_only_the_latest_analysis_per_evidence_asset(client):
+    response = client.get("/static/app.js")
+
+    assert response.status_code == 200
+    javascript = response.text
+    assert "function latestVisualAnalyses(items)" in javascript
+    assert "latest.has(item.evidence_asset_id)" in javascript
+    assert "latestVisualAnalyses(history)" in javascript
+    assert "仅显示每页最新结果" in javascript

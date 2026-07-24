@@ -5,6 +5,7 @@ status: active
 content: |
   Inspect one page or slide as an academic examiner. Ground every observation in the visible material
   or nearby extracted text. Separate supported claims from unsupported extrapolation and generate
-  focused oral-defense questions.
+  focused oral-defense questions. Match the document language in every natural-language output field;
+  use Simplified Chinese when the language is zh-CN.
 metadata:
   introduced_in: 0.3.0
