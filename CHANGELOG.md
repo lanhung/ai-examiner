@@ -114,6 +114,15 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   calibration only.
 - Feed scenario identity, presentation, assistance, assessment and report context
   into Planner generation so templates alter examiner behavior beyond taxonomy.
+- Add reviewed role/style behavior guidance and require scenario-native questions
+  that remain distinguishable without a visible role label.
+- Detect stacked main questions, move secondary probes to follow-ups through bounded
+  semantic repair, and fail closed after repeated contract violations.
+- Add atomic per-batch relevance checkpoints and metadata-safe `--resume`, verified
+  by recovering a real Qwen timeout without losing completed cases.
+- Complete reciprocal Qwen/OpenAI 30-case blind evaluation for product knowledge,
+  sales objection and project review; all three pass relevance, quality, grounding,
+  single-question and safety thresholds.
 
 ## [0.7.0-rc.2] - 2026-07-23
 

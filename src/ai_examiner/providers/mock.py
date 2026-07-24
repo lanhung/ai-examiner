@@ -106,7 +106,7 @@ class MockProvider(ModelProvider):
             },
             {
                 "id": "Q6",
-                "text": "作为最严格的审稿人，您认为这项工作最可能被拒稿的理由是什么？如何补强？",
+                "text": "作为最严格的审稿人，您认为最需要优先补强的问题是什么？",
                 "type": "limitation",
                 "difficulty": 5,
                 "expected_points": ["识别核心短板", "给出可执行补强", "区分致命与次要问题"],

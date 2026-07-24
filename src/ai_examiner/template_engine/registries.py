@@ -206,6 +206,83 @@ STYLE_IDS = frozenset(
     }
 )
 
+ROLE_BEHAVIOR_GUIDANCE = {
+    "academic_examiner": (
+        "Test research contribution, methodological validity, evidence strength, "
+        "assumptions, limitations, and defensibility. Frame questions as a thesis "
+        "committee member and require claims to be bounded by the supplied evidence."
+    ),
+    "grant_reviewer": (
+        "Test significance, feasibility, research design, risk mitigation, and value "
+        "for resources. Frame questions as funding-review decisions without promising "
+        "an award or making an automated funding decision."
+    ),
+    "oral_instructor": (
+        "Diagnose course learning rather than research novelty. Ask the learner to "
+        "explain concepts in their own words, apply them to a new case, correct a "
+        "misconception, or reflect on transfer. Use a teaching progression and make "
+        "the follow-up help reveal the learner's reasoning."
+    ),
+    "technical_interviewer": (
+        "Evaluate engineering judgment under explicit requirements and constraints. "
+        "Ask for architecture choices, tradeoffs, failure modes, validation methods, "
+        "and decision rationale. Be concise and challenging; do not turn the question "
+        "into an academic defense or give away the solution."
+    ),
+    "product_trainer": (
+        "Evaluate accurate product explanation, customer fit, supported use cases, "
+        "operational procedure, and capability boundaries. Challenge unsupported "
+        "claims and make the follow-up test how the learner would explain or apply "
+        "the product safely with a customer."
+    ),
+    "sales_customer": (
+        "Role-play a realistic customer with a concrete objection, constraint, and "
+        "decision concern. Test discovery, evidence-based response, boundary honesty, "
+        "and next-step handling rather than academic recall."
+    ),
+    "project_facilitator": (
+        "Facilitate a project review that turns evidence into exactly one concrete "
+        "decision or commitment. Every initial question must require one of: a named "
+        "owner, deadline, measurable trigger, rollback criterion, corrective action, "
+        "or observable process change. Do not stop at classifying facts, explaining "
+        "evidence, or asking whether a conclusion is supported."
+    ),
+}
+
+STYLE_BEHAVIOR_GUIDANCE = {
+    "rigorous_supportive": (
+        "Use precise, demanding questions while remaining constructive."
+    ),
+    "neutral_formal": "Use neutral, formal, decision-relevant language.",
+    "socratic": (
+        "Use one focused question that prompts explanation or reflection before "
+        "providing help."
+    ),
+    "concise_challenging": (
+        "Use compact wording, explicit constraints, and a probing challenge."
+    ),
+    "coaching": (
+        "Use practical, corrective language and identify an actionable improvement."
+    ),
+    "roleplay": (
+        "Stay inside the assigned stakeholder role and react naturally to the answer."
+    ),
+    "facilitative": (
+        "Clarify ownership and evidence, then move toward a concrete next action."
+    ),
+}
+
+
+def presentation_behavior(presentation: dict[str, str]) -> dict[str, str]:
+    role_id = str(presentation.get("role_id") or "")
+    style_id = str(presentation.get("style_id") or "")
+    return {
+        "role_id": role_id,
+        "style_id": style_id,
+        "role_behavior": ROLE_BEHAVIOR_GUIDANCE.get(role_id, ""),
+        "style_behavior": STYLE_BEHAVIOR_GUIDANCE.get(style_id, ""),
+    }
+
 OVERRIDE_TARGETS = {
     "question_limit": ("question_selection", "question_limit"),
     "max_followups_per_question": (

@@ -19,7 +19,7 @@ Current package version: `0.8.0.dev0`
 | WP-09 | Increment G complete | Seven bilingual reviewed scenarios with distinct runtime behavior and explicit safety boundaries |
 | WP-10 | Increment H complete | Safe import/export, local-authoring seam, stable errors and deterministic semantic diff |
 | WP-11 | Increment I complete | Responsive template library, structured editor, preview, lifecycle actions and session wiring |
-| WP-12 | Increment M in progress | Frozen corpus and runtime Planner blind-eval path complete; real two-case correction pilot passes directionally, but full reciprocal three-template and Docker/Vultr gates remain |
+| WP-12 | Increment N deployment gate held | Real reciprocal 30-case relevance passes for three templates; deterministic, provider and AI quality gates pass; Docker Compose and Vultr upgrade/rollback rehearsal remain |
 
 Increment A is a compatibility foundation, not a complete v0.8 release. It does
 not change session behavior or authorize production deployment.

@@ -321,6 +321,31 @@ This remains held because 2 cases cannot substitute for 30, the confidence
 interval is wide, the reciprocal direction is absent and three templates are
 required.
 
+## Increment N: release quality
+
+Delivered:
+
+- explicit role/style behavior guidance in the production Planner;
+- scenario-native question framing that cannot be satisfied by a role-name change;
+- fail-closed detection and bounded repair of stacked main questions;
+- operational blind-judge guidance for scenario behavior and follow-up separation;
+- atomic per-batch checkpoints and metadata-safe `--resume`;
+- a real timeout-and-resume rehearsal at 35/90 completed Qwen cases;
+- reciprocal Qwen/OpenAI 30-case evidence for product knowledge, sales objection
+  and project review.
+
+Final real-provider results:
+
+```text
+Template                      Delta    95% CI             HQ      Ground  Single  Unsafe
+enterprise.product_knowledge  +1.017   [0.772, 1.261]     98.3%   100%    100%    0%
+enterprise.sales_objection    +1.500   [1.186, 1.814]     98.3%   100%    100%    0%
+operations.project_review     +1.667   [1.494, 1.839]     100%    100%    100%    0%
+```
+
+The scenario-relevance gate is passed. The combined release evidence is held only
+by Docker Compose and Vultr upgrade/rollback rehearsal.
+
 ## Verification
 
 ```text
@@ -329,7 +354,7 @@ WP-12 pre-Increment-L tests   32 passed
 Increment L/M focused tests   11 passed
 Targeted Ruff                 passed
 Wheel built-in resource       packaged
-Full pytest                   134 passed
+Full pytest                   137 passed
 Full Ruff                     passed
 JavaScript syntax             passed
 git diff --check              passed
@@ -340,7 +365,7 @@ Wheel build                   ai_examiner_mvp-0.8.0.dev0-py3-none-any.whl
 Qwen template probe           3/3 scenarios passed
 OpenAI template probe         3/3 scenarios passed
 Frozen relevance corpus       210/210 cases valid
-Blind relevance judging       held
+Blind relevance judging       passed (3/3 templates)
 Docker Compose rehearsal      held (no capable Docker host)
 ```
 
@@ -366,5 +391,6 @@ The following work remains intentionally disabled or unimplemented:
 - no public marketplace, organization model or executable plugin;
 - no merge to `main`, final `v0.8.0` tag or production deployment.
 
-The current branch is suitable for contract review and local verification only.
-It is not the completed v0.8 release.
+The current branch has completed its software and AI quality gates, but remains a
+development candidate until deployment rehearsal succeeds. It is not the completed
+v0.8 release.

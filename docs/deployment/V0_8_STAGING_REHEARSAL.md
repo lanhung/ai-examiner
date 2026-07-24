@@ -117,9 +117,11 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 Production remains on `main` or an immutable accepted tag. Promotion is prohibited
 while any of these are held:
 
-- cross-provider blind scenario-relevance judging;
 - isolated Compose rehearsal;
 - Vultr staging upgrade and rollback;
 - backup restore verification against a staging copy.
+
+Cross-provider blind scenario relevance passed in Increment N for three complete
+30-case templates. It is no longer a held promotion gate.
 
 Never use `docker compose down -v` during a normal production upgrade.

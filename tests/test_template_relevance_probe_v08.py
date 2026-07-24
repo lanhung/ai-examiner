@@ -180,3 +180,56 @@ def test_batched_contract_probe_is_calibration_only():
     assert evidence["rejected_reports"][0]["reason"] == (
         "runtime_session_planner_path_required"
     )
+
+
+def test_relevance_probe_checkpoints_and_resumes_without_duplicate_calls():
+    checkpoints = []
+    first = run_relevance_probe(
+        settings=Settings(model_provider="mock"),
+        generator_profile="qwen:qwen-plus",
+        judge_profile="openai:gpt-5.4-mini",
+        template_slugs=["education.course_oral"],
+        batch_size=2,
+        cases_per_template=2,
+        provider_factory=RelevanceProbeProvider,
+        checkpoint_writer=checkpoints.append,
+    )
+    provider_calls = []
+
+    class RecordingProvider(RelevanceProbeProvider):
+        def complete_json(self, **kwargs):
+            provider_calls.append(kwargs["agent"])
+            return super().complete_json(**kwargs)
+
+    resumed = run_relevance_probe(
+        settings=Settings(model_provider="mock"),
+        generator_profile="qwen:qwen-plus",
+        judge_profile="openai:gpt-5.4-mini",
+        template_slugs=["education.course_oral"],
+        batch_size=2,
+        cases_per_template=2,
+        provider_factory=RecordingProvider,
+        resume_report=first,
+    )
+
+    assert checkpoints[-1]["completed_cases"] == 2
+    assert checkpoints[-1]["expected_cases"] == 2
+    assert checkpoints[-1]["complete"] is True
+    assert resumed == first
+    assert provider_calls == []
+
+
+def test_relevance_probe_rejects_incompatible_resume_report():
+    with pytest.raises(ValueError, match="metadata does not match"):
+        run_relevance_probe(
+            settings=Settings(model_provider="mock"),
+            generator_profile="qwen:qwen-plus",
+            judge_profile="openai:gpt-5.4-mini",
+            template_slugs=["education.course_oral"],
+            cases_per_template=2,
+            provider_factory=RelevanceProbeProvider,
+            resume_report={
+                "probe_version": RELEVANCE_PROBE_VERSION,
+                "report_version": "wrong",
+            },
+        )

@@ -7,7 +7,7 @@ from time import perf_counter
 from typing import Any
 
 from ..agents.base import AgentContext
-from ..agents.planner import SessionPlanner
+from ..agents.planner import PLANNER_PROMPT_VERSION, SessionPlanner
 from ..config import Settings
 from ..providers.base import ModelProvider, ProviderResult
 from ..providers.factory import (
@@ -17,6 +17,7 @@ from ..providers.factory import (
 )
 from .compiler import TemplateCompiler
 from .evaluation import latest_builtin_sources
+from .registries import presentation_behavior
 from .relevance import (
     CASES_PER_TEMPLATE,
     RELEVANCE_JUDGE_REPORT_VERSION,
@@ -32,6 +33,7 @@ DEFAULT_RELEVANCE_TEMPLATES = (
 )
 
 ProviderFactory = Callable[[str], ModelProvider]
+CheckpointWriter = Callable[[dict[str, Any]], None]
 
 
 def _contract_summary(contract: dict[str, Any]) -> dict[str, Any]:
@@ -45,7 +47,7 @@ def _contract_summary(contract: dict[str, Any]) -> dict[str, Any]:
         "assistance": contract["conversation"]["assistance"],
         "assessment": contract["assessment"],
         "report": contract["report"],
-        "presentation": contract["presentation"],
+        "presentation": presentation_behavior(contract["presentation"]),
     }
 
 
@@ -366,9 +368,24 @@ Topical overlap with the material is necessary but not sufficient for a high
 relevance score. A generic academic or thesis-style question must not receive a 5
 merely because it mentions the supplied material.
 
+Use the supplied role_behavior and style_behavior as an operational scoring rubric.
+An artifact that only checks generic material comprehension, evidence, or limitations
+without performing the scenario-native task cannot score above 3 for relevance. A
+score of 5 requires unmistakable enactment of the target behavior. For example:
+customer role-play must surface and react to a decision objection; project review
+must seek ownership, a trigger, a decision, or corrective action; product training
+must test supported capability, customer fit, procedure, or boundaries; technical
+interviews must require an engineering decision under constraints; and course oral
+assessment must diagnose explanation, application, misconception, or transfer.
+Score both arms independently and use the full scale. If one arm is clearly
+scenario-native and the other is generic, their relevance scores must differ.
+
 Mark whether each arm is grounded, contains one main question, or includes unsafe or
-prohibited behavior. Evaluate only the supplied artifacts and target scenario. Do not
-infer or reveal arm identity.""",
+prohibited behavior. For single_main_question, inspect only the artifact's `question`
+field. The separately supplied `followup` is reserved for a later turn and must not
+be counted as a second current question. A role-play utterance containing one customer
+question is one main question. Evaluate only the supplied artifacts and target
+scenario. Do not infer or reveal arm identity.""",
         payload={
             "target_scenario": _contract_summary(scenario_contract),
             "blind_pairs": pairs,
@@ -419,6 +436,105 @@ infer or reveal arm identity.""",
     return evaluations, _usage(profile, "template_relevance_blind_judge", result)
 
 
+def _probe_report(
+    *,
+    corpus_fingerprint: str,
+    generator_profile: str,
+    judge_profile: str,
+    generation_path: str,
+    template_slugs: list[str],
+    cases_per_template: int,
+    evaluations: list[dict[str, Any]],
+    artifacts: list[dict[str, Any]],
+    usage: list[dict[str, Any]],
+) -> dict[str, Any]:
+    expected_cases = len(template_slugs) * cases_per_template
+    return {
+        "probe_version": RELEVANCE_PROBE_VERSION,
+        "report_version": RELEVANCE_JUDGE_REPORT_VERSION,
+        "planner_prompt_version": PLANNER_PROMPT_VERSION,
+        "corpus_fingerprint": corpus_fingerprint,
+        "generator_profile": generator_profile,
+        "judge_profile": judge_profile,
+        "blind_judging": True,
+        "generation_path": generation_path,
+        "template_slugs": template_slugs,
+        "cases_per_template": cases_per_template,
+        "completed_cases": len(evaluations),
+        "expected_cases": expected_cases,
+        "complete": len(evaluations) == expected_cases,
+        "evaluations": evaluations,
+        "artifacts": artifacts,
+        "usage": usage,
+        "limitations": [
+            "A partial probe does not satisfy the 30-case release gate.",
+            "One direction of generator/judge assignment can carry model-specific bias.",
+            "Release evidence should include a reciprocal cross-provider run.",
+            *(
+                [
+                    "Batched contract probes are calibration evidence only and "
+                    "cannot clear the release gate."
+                ]
+                if generation_path != "session_planner"
+                else []
+            ),
+        ],
+    }
+
+
+def _restore_probe_progress(
+    *,
+    resume_report: dict[str, Any] | None,
+    corpus_fingerprint: str,
+    generator_profile: str,
+    judge_profile: str,
+    generation_path: str,
+    template_slugs: list[str],
+    cases_per_template: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    if resume_report is None:
+        return [], [], []
+
+    expected_metadata = {
+        "probe_version": RELEVANCE_PROBE_VERSION,
+        "report_version": RELEVANCE_JUDGE_REPORT_VERSION,
+        "planner_prompt_version": PLANNER_PROMPT_VERSION,
+        "corpus_fingerprint": corpus_fingerprint,
+        "generator_profile": generator_profile,
+        "judge_profile": judge_profile,
+        "generation_path": generation_path,
+        "template_slugs": template_slugs,
+        "cases_per_template": cases_per_template,
+    }
+    mismatches = [
+        field
+        for field, expected in expected_metadata.items()
+        if resume_report.get(field) != expected
+    ]
+    if mismatches:
+        raise ValueError(
+            "Resume report metadata does not match this probe: "
+            + ", ".join(mismatches)
+        )
+
+    evaluations = list(resume_report.get("evaluations") or [])
+    artifacts = list(resume_report.get("artifacts") or [])
+    usage = list(resume_report.get("usage") or [])
+    evaluation_ids = [item.get("case_id") for item in evaluations]
+    artifact_ids = [item.get("case_id") for item in artifacts]
+    if (
+        any(not isinstance(case_id, str) for case_id in evaluation_ids)
+        or any(not isinstance(case_id, str) for case_id in artifact_ids)
+        or len(evaluation_ids) != len(set(evaluation_ids))
+        or len(artifact_ids) != len(set(artifact_ids))
+        or set(evaluation_ids) != set(artifact_ids)
+    ):
+        raise ValueError(
+            "Resume report must contain unique, matched evaluation and artifact IDs"
+        )
+    return evaluations, artifacts, usage
+
+
 def run_relevance_probe(
     *,
     settings: Settings,
@@ -429,6 +545,8 @@ def run_relevance_probe(
     cases_per_template: int = CASES_PER_TEMPLATE,
     generation_path: str = "session_planner",
     provider_factory: ProviderFactory | None = None,
+    resume_report: dict[str, Any] | None = None,
+    checkpoint_writer: CheckpointWriter | None = None,
 ) -> dict[str, Any]:
     generator_provider_name, _ = parse_profile(generator_profile)
     judge_provider_name, _ = parse_profile(judge_profile)
@@ -474,9 +592,18 @@ def run_relevance_probe(
         sources["academic.thesis_defense"]
     ).compiled
     corpus = expand_relevance_corpus()
-    all_evaluations: list[dict[str, Any]] = []
-    all_artifacts: list[dict[str, Any]] = []
-    usage: list[dict[str, Any]] = []
+    all_evaluations, all_artifacts, usage = _restore_probe_progress(
+        resume_report=resume_report,
+        corpus_fingerprint=corpus["fingerprint"],
+        generator_profile=generator_profile,
+        judge_profile=judge_profile,
+        generation_path=generation_path,
+        template_slugs=template_slugs,
+        cases_per_template=cases_per_template,
+    )
+    completed_case_ids = {
+        item["case_id"] for item in all_evaluations
+    }
 
     for slug in template_slugs:
         scenario_contract = compiler.compile(sources[slug]).compiled
@@ -485,6 +612,9 @@ def run_relevance_probe(
             for case in corpus["cases"]
             if case["template_slug"] == slug
         ][:cases_per_template]
+        cases = [
+            case for case in cases if case["case_id"] not in completed_case_ids
+        ]
         for start in range(0, len(cases), batch_size):
             batch = cases[start : start + batch_size]
             if generation_path == "session_planner":
@@ -514,38 +644,40 @@ def run_relevance_probe(
             all_artifacts.extend(artifacts)
             all_evaluations.extend(evaluations)
             usage.extend([*generator_usage, judge_usage])
+            completed_case_ids.update(
+                item["case_id"] for item in evaluations
+            )
+            if checkpoint_writer is not None:
+                checkpoint_writer(
+                    _probe_report(
+                        corpus_fingerprint=corpus["fingerprint"],
+                        generator_profile=generator_profile,
+                        judge_profile=judge_profile,
+                        generation_path=generation_path,
+                        template_slugs=template_slugs,
+                        cases_per_template=cases_per_template,
+                        evaluations=all_evaluations,
+                        artifacts=all_artifacts,
+                        usage=usage,
+                    )
+                )
 
-    return {
-        "probe_version": RELEVANCE_PROBE_VERSION,
-        "report_version": RELEVANCE_JUDGE_REPORT_VERSION,
-        "corpus_fingerprint": corpus["fingerprint"],
-        "generator_profile": generator_profile,
-        "judge_profile": judge_profile,
-        "blind_judging": True,
-        "generation_path": generation_path,
-        "template_slugs": template_slugs,
-        "cases_per_template": cases_per_template,
-        "evaluations": all_evaluations,
-        "artifacts": all_artifacts,
-        "usage": usage,
-        "limitations": [
-            "A partial probe does not satisfy the 30-case release gate.",
-            "One direction of generator/judge assignment can carry model-specific bias.",
-            "Release evidence should include a reciprocal cross-provider run.",
-            *(
-                [
-                    "Batched contract probes are calibration evidence only and "
-                    "cannot clear the release gate."
-                ]
-                if generation_path != "session_planner"
-                else []
-            ),
-        ],
-    }
+    return _probe_report(
+        corpus_fingerprint=corpus["fingerprint"],
+        generator_profile=generator_profile,
+        judge_profile=judge_profile,
+        generation_path=generation_path,
+        template_slugs=template_slugs,
+        cases_per_template=cases_per_template,
+        evaluations=all_evaluations,
+        artifacts=all_artifacts,
+        usage=usage,
+    )
 
 
 __all__ = [
     "DEFAULT_RELEVANCE_TEMPLATES",
+    "CheckpointWriter",
     "RELEVANCE_PROBE_VERSION",
     "run_relevance_probe",
 ]

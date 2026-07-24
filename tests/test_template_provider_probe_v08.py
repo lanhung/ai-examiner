@@ -71,12 +71,40 @@ def test_planner_retries_once_when_provider_violates_template_contract():
     assert provider.calls == 2
     assert provider.last_contract["identity"]["slug"] == "education.course_oral"
     assert provider.last_contract["presentation"]["role_id"]
+    assert provider.last_contract["presentation"]["role_behavior"]
+    assert provider.last_contract["presentation"]["style_behavior"]
     assert provider.last_contract["assistance"]["mode"]
     assert provider.last_contract["assessment"]["dimensions"]
     assert provider.last_contract["report"]["sections"]
     assert blueprint["questions"][0]["type"] in contract["question_selection"][
         "allowed_types"
     ]
+
+
+def test_planner_retries_stacked_questions_until_single_issue():
+    class StackedQuestionRepairProvider(RepairingPlannerProvider):
+        def complete_json(self, **kwargs):
+            result = super().complete_json(**kwargs)
+            if self.calls < 3:
+                result.data["questions"][0]["text"] = (
+                    "请说明核心概念是什么？它为什么重要？"
+                )
+            return result
+
+    source = latest_builtin_sources()["education.course_oral"]
+    contract = TemplateCompiler().compile(source).compiled
+    provider = StackedQuestionRepairProvider()
+
+    blueprint = SessionPlanner(AgentContext(provider=provider)).plan(
+        document_text="核心概念及其应用。",
+        filename="course.md",
+        language="zh-CN",
+        template_contract=contract,
+    )
+
+    assert provider.calls == 3
+    text = blueprint["questions"][0]["text"]
+    assert text.count("?") + text.count("？") <= 1
 
 
 def test_provider_probe_uses_real_planner_path_without_claiming_relevance():

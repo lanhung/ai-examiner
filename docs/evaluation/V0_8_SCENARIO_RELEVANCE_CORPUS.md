@@ -170,9 +170,16 @@ provider cannot become the sole arbiter.
 ## Current status
 
 The frozen corpus, expansion, fingerprint, balancing and evidence validator are
-implemented and tested. Small real cross-provider pilots have been produced, but
-no template yet has complete 30-case reciprocal runtime evidence. Therefore
-`scenario_relevance_blind_judging` remains held.
+implemented and tested. Complete reciprocal runtime evidence now passes for product
+knowledge, sales objection and project review, with 30 unique cases and two judge
+providers per template. Therefore:
+
+```text
+scenario_relevance_blind_judging = passed
+```
+
+See `V0_8_INCREMENT_N_RELEASE_QUALITY_RESULTS.md` for the final metrics. Docker
+Compose and Vultr promotion rehearsals remain separate held gates.
 
 This distinction is deliberate: deterministic corpus validity is not evidence
 that a scenario is better.
