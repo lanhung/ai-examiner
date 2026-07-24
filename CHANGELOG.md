@@ -126,6 +126,14 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ### Fixed
 
+- Reject semantically stacked main questions and follow-ups even when a model
+  hides multiple requests behind one question mark.
+- Preserve analytical difficulty during Planner contract repair instead of
+  collapsing a question into page-location or term recall.
+- Scope stacked-request detection to the final explicit request so declarative
+  source phrases do not trigger false positives.
+- Replace the Mock planner's compound assumption question with single-task main
+  and follow-up questions.
 - Prefer CJK-capable fonts for logical document previews and install Noto CJK in
   the Docker image so Chinese evidence remains readable to users and vision models.
 - Require visual-evidence output to follow the document language, including

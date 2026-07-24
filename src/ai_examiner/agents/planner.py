@@ -18,7 +18,42 @@ OBJECTIVE_BY_QUESTION_TYPE = {
     "transfer": "limitations",
 }
 
-PLANNER_PROMPT_VERSION = "session-planner-v08-scenario-native-v4"
+PLANNER_PROMPT_VERSION = "session-planner-v08-scenario-native-v6"
+
+ZH_REQUEST_VERBS = (
+    "说明",
+    "解释",
+    "指出",
+    "明确",
+    "判断",
+    "比较",
+    "列出",
+    "给出",
+    "提出",
+    "分析",
+    "描述",
+    "选择",
+    "设计",
+    "评估",
+    "证明",
+    "界定",
+)
+EN_REQUEST_VERBS = (
+    "identify",
+    "explain",
+    "justify",
+    "compare",
+    "list",
+    "propose",
+    "analyze",
+    "describe",
+    "choose",
+    "design",
+    "evaluate",
+    "prove",
+    "define",
+    "state",
+)
 
 
 class SessionPlanner(BaseAgent):
@@ -104,7 +139,9 @@ Each question must request exactly one judgment, explanation, decision, example,
 action. Put context and constraints in declarative setup sentences, then end with one
 interrogative sentence. Do not use numbered subquestions, multiple question marks, or
 compound prompts such as "identify X and explain Y"; move the second probe into the
-followups list.
+followups list. Every follow-up must follow the same single-task rule. Preserve the
+required difficulty and discrimination: do not replace an analytical question with a
+page-location, term-recall, or yes/no question unless the scenario objective calls for it.
 All user-facing titles, summaries,
 questions, follow-ups, expected points and knowledge-unit descriptions must use the requested language.
 Source excerpts must retain the source language."""
@@ -154,7 +191,10 @@ objective mapping, question count, and coverage decision must follow the contrac
 Do not silently broaden the taxonomy or weaken any bound. If the violation reports
 multiple subquestions, rewrite each question as one interrogative sentence with one
 requested judgment or action. Move every secondary probe into the followups list.
-Never return more than one question mark or a numbered list in question.text.""",
+Every follow-up must also ask exactly one issue. Never return more than one question
+mark, a numbered list, or two request verbs joined by "and", "并", "以及", or "同时".
+Preserve the original difficulty, scenario objective and reasoning demand. Do not
+repair an analytical question into a page-location or recall-only prompt.""",
                         {
                             **payload,
                             "repair_attempt": repair_attempt + 1,
@@ -184,6 +224,51 @@ Never return more than one question mark or a numbered list in question.text."""
             question.setdefault("difficulty", 3)
 
     @staticmethod
+    def _has_stacked_request(text: str) -> bool:
+        compact = re.sub(r"\s+", "", str(text or ""))
+        if compact.count("?") + compact.count("？") > 1:
+            return True
+        if re.search(
+            r"(?:^|\s)(?:\(?[1-9]\)|[①②③④⑤⑥⑦⑧⑨])",
+            str(text or ""),
+        ):
+            return True
+
+        # Ignore declarative setup before the final explicit Chinese request.
+        request_markers = (
+            "请",
+            "你应",
+            "您应",
+            "你会",
+            "您会",
+            "你将",
+            "您将",
+            "你如何",
+            "您如何",
+        )
+        request_start = max(
+            [compact.rfind(marker) for marker in request_markers]
+            + [compact.rfind(separator) for separator in ("。", "；", ";")]
+        )
+        scope = compact[request_start:] if request_start >= 0 else compact
+        zh_matches = list(re.finditer("|".join(ZH_REQUEST_VERBS), scope))
+        for left, right in zip(zh_matches, zh_matches[1:], strict=False):
+            between = scope[left.end() : right.start()]
+            if re.search(r"(?:并(?:且|据此|明确)?|以及|同时|然后|；|;)", between):
+                return True
+
+        english = str(text or "").lower()
+        please_start = english.rfind("please")
+        english_scope = english[please_start:] if please_start >= 0 else english
+        verbs = "|".join(EN_REQUEST_VERBS)
+        if re.search(
+            rf"\b(?:{verbs})\b[^?.;]*\band\b[^?.;]*\b(?:{verbs})\b",
+            english_scope,
+        ):
+            return True
+        return False
+
+    @staticmethod
     def _apply_template_contract(
         data: dict[str, Any],
         template_contract: dict[str, Any],
@@ -202,15 +287,17 @@ Never return more than one question mark or a numbered list in question.text."""
         questions = list(data.get("questions") or [])[:limit]
         for question in questions:
             text = str(question.get("text") or "")
-            question_marks = text.count("?") + text.count("？")
-            if question_marks > 1 or re.search(
-                r"(?:^|\s)(?:\(?[1-9]\)|[①②③④⑤⑥⑦⑧⑨])",
-                text,
-            ):
+            if SessionPlanner._has_stacked_request(text):
                 raise ValueError(
                     "Planner question contains multiple explicit subquestions: "
                     f"{text}"
                 )
+            for followup in question.get("followups") or []:
+                if SessionPlanner._has_stacked_request(str(followup)):
+                    raise ValueError(
+                        "Planner follow-up contains multiple explicit subquestions: "
+                        f"{followup}"
+                    )
             question_type = str(question.get("type") or "")
             if question_type not in allowed_types:
                 raise ValueError(

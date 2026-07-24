@@ -76,13 +76,16 @@ class MockProvider(ModelProvider):
             },
             {
                 "id": "Q3",
-                "text": "请列出该方法成立所依赖的两个关键假设，并说明假设失效时会发生什么。",
+                "text": "该方法成立最关键的前提是什么？",
                 "type": "assumption",
                 "difficulty": 4,
                 "expected_points": ["识别假设", "解释必要性", "讨论失效后果"],
                 "source_excerpt": excerpt,
                 "source_page": 1,
-                "followups": ["哪个假设最脆弱？", "实验中如何验证该假设？"],
+                "followups": [
+                    "如果此前提失效，最先出现的后果是什么？",
+                    "实验中如何验证该假设？",
+                ],
             },
             {
                 "id": "Q4",

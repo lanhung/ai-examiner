@@ -107,6 +107,55 @@ def test_planner_retries_stacked_questions_until_single_issue():
     assert text.count("?") + text.count("？") <= 1
 
 
+def test_planner_repairs_semantically_stacked_main_question_and_followup():
+    class SemanticStackRepairProvider(RepairingPlannerProvider):
+        def complete_json(self, **kwargs):
+            result = super().complete_json(**kwargs)
+            if self.calls == 1:
+                result.data["questions"][0]["text"] = (
+                    "请说明核心依据，并据此判断方案是否成立？"
+                )
+            elif self.calls == 2:
+                result.data["questions"][0]["followups"] = [
+                    "请选择一个替代方案，并解释原因？"
+                ]
+            else:
+                result.data["questions"][0]["text"] = "请说明核心依据？"
+                result.data["questions"][0]["followups"] = ["哪项证据最关键？"]
+            return result
+
+    source = latest_builtin_sources()["education.course_oral"]
+    contract = TemplateCompiler().compile(source).compiled
+    provider = SemanticStackRepairProvider()
+
+    blueprint = SessionPlanner(AgentContext(provider=provider)).plan(
+        document_text="核心概念及其应用。",
+        filename="course.md",
+        language="zh-CN",
+        template_contract=contract,
+    )
+
+    assert provider.calls == 3
+    assert blueprint["questions"][0]["text"] == "请说明核心依据？"
+    assert blueprint["questions"][0]["followups"] == ["哪项证据最关键？"]
+
+
+def test_stacked_request_detection_ignores_declarative_context():
+    assert SessionPlanner._has_stacked_request(
+        "材料说明现象并指出限制。请判断结论是否成立？"
+    ) is False
+    assert SessionPlanner._has_stacked_request(
+        "材料说明论文提出了新流程，但差异只在附录中说明；"
+        "你应如何判断这项差异论证的证据强度？"
+    ) is False
+    assert SessionPlanner._has_stacked_request(
+        "Please identify the constraint and explain its consequence?"
+    ) is True
+    assert SessionPlanner._has_stacked_request(
+        "请说明证据如何支撑价值，并明确结论何时不成立？"
+    ) is True
+
+
 def test_provider_probe_uses_real_planner_path_without_claiming_relevance():
     report = run_provider_probe(
         settings=Settings(
