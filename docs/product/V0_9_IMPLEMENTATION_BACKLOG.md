@@ -28,6 +28,8 @@ Acceptance:
 
 ## WP-01: PostgreSQL parity
 
+Status: completed on `research/v0.9.0`; SQLite and PostgreSQL CI gates pass.
+
 Deliver:
 
 - PostgreSQL Compose test service;
@@ -44,6 +46,9 @@ Acceptance:
 - JSON, datetime and cascade semantics verified.
 
 ## WP-02: Organization and principal foundation
+
+Status: implemented on `research/v0.9.0` in observe-only mode; acceptance requires
+the complete SQLite and PostgreSQL CI gates.
 
 Deliver:
 

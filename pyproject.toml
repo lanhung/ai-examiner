@@ -52,6 +52,7 @@ ai-examiner-evaluate-templates = "ai_examiner.template_eval_cli:run_template_eva
 ai-examiner-probe-template-providers = "ai_examiner.template_provider_probe_cli:run_template_provider_probe"
 ai-examiner-evaluate-template-relevance = "ai_examiner.template_relevance_cli:run_template_relevance_evaluation"
 ai-examiner-probe-template-relevance = "ai_examiner.template_relevance_probe_cli:run_template_relevance_probe"
+ai-examiner-bootstrap-admin = "ai_examiner.enterprise_cli:bootstrap_admin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ai_examiner"]

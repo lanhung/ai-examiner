@@ -18,6 +18,13 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   override and running the complete regression suite against PostgreSQL.
 - Add an isolated Mock-only PostgreSQL Compose rehearsal, dedicated test image and
   Docker build-context exclusions for secrets, runtime data and generated archives.
+- Add the v0.9 organization and principal foundation with deterministic legacy
+  project ownership, external `(issuer, subject)` identity, unique memberships and
+  bounded principal lifecycle.
+- Add an idempotent first-owner bootstrap CLI and `/api/v1/context` observe-only
+  organization context without prematurely enabling authentication or authorization.
+- Add additive migration `20260727_0008` with legacy project backfill, guarded
+  downgrade and SQLite/PostgreSQL verification.
 
 - Add complete Planner v6 reciprocal real-provider evidence for all seven built-in
   templates: 30 unique cases per template, 420 case evaluations and 840 anonymous

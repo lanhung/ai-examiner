@@ -76,10 +76,16 @@ Cross-tenant lookups normally return `resource_not_found`.
 ## 4. Identity and current context
 
 ```text
+GET  /api/v1/context
 GET  /api/v1/me
 GET  /api/v1/me/organizations
 POST /api/v1/auth/logout
 ```
+
+During WP-02 only, `GET /api/v1/context` exposes the resolved legacy organization and
+optional disabled-mode principal/membership observation. It always returns
+`authorization_enforced: false`; request headers do not grant authority. `GET /me`
+replaces this compatibility endpoint after WP-03 and WP-04 are active.
 
 `GET /me`:
 

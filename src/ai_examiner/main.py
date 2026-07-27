@@ -54,6 +54,7 @@ from .models import (
     LearnerPreference,
     LearnerSubject,
     MemoryDeletionAudit,
+    Organization,
     Project,
     PromptVersion,
     RetestPlan,
@@ -112,6 +113,11 @@ from .services.cognitive import CognitiveStateService
 from .services.conversation_policy import effective_conversation_policy
 from .services.datasets import dataset_diff, set_dataset_status
 from .services.documents import parse_document, save_upload
+from .services.enterprise_identity import (
+    OrganizationContext,
+    organization_context,
+    serialize_organization,
+)
 from .services.evidence import create_highlighted_crop, persist_evidence, serialize_asset
 from .services.golden import GoldenDatasetService
 from .services.jobs import JobQueueUnavailable, enqueue_job, serialize_job
@@ -174,6 +180,10 @@ STATIC_DIR = Path(__file__).parent / "static"
 TemplateAuthoringAccess = Annotated[
     TemplateAuthoringContext,
     Depends(template_authoring_context),
+]
+OrganizationContextAccess = Annotated[
+    OrganizationContext,
+    Depends(organization_context),
 ]
 
 
@@ -300,6 +310,20 @@ def providers():
         entry.public_dict(profile_ready(settings, entry.id))
         for entry in CATALOG
     ]
+
+
+@app.get("/api/v1/context")
+def enterprise_context(
+    context: OrganizationContextAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    organization = db.get(Organization, context.organization_id)
+    if organization is None:
+        raise HTTPException(404, "Organization context not found")
+    return {
+        **context.public_dict(),
+        "organization": serialize_organization(organization),
+    }
 
 
 @app.get("/api/templates")
@@ -609,6 +633,7 @@ def create_project(payload: ProjectCreate, db: Annotated[Session, Depends(get_db
     db.refresh(project)
     return {
         "id": project.id,
+        "organization_id": project.organization_id,
         "name": project.name,
         "domain": project.domain,
         "language": project.language,
@@ -621,6 +646,7 @@ def list_projects(db: Annotated[Session, Depends(get_db)]):
     return [
         {
             "id": project.id,
+            "organization_id": project.organization_id,
             "name": project.name,
             "domain": project.domain,
             "language": project.language,

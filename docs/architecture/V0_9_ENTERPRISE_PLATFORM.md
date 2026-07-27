@@ -529,6 +529,28 @@ Local environments without Docker continue to run the complete SQLite suite. The
 PostgreSQL result is authoritative only after GitHub Actions or the isolated Compose
 rehearsal completes.
 
+GitHub Actions run `30243642156` passed both the complete SQLite and PostgreSQL jobs
+for this gate.
+
+### WP-02 organization and principal foundation
+
+The second increment introduces the persistence roots needed by later authentication
+and authorization work:
+
+- `Organization`, `Principal` and `OrganizationMembership`;
+- deterministic legacy organization `00000000-0000-0000-0000-000000000001`;
+- non-null organization ownership on every current project;
+- unique external principal identity by `(issuer, subject)`;
+- bounded principal status transitions;
+- idempotent first-owner bootstrap CLI;
+- `/api/v1/context` organization resolution in explicit observe-only mode.
+
+This increment does not trust organization or principal headers as credentials and
+does not filter existing routes. OIDC, capability enforcement and RLS remain WP-03
+through WP-05. Detailed contract:
+
+- `docs/architecture/V0_9_ORGANIZATION_PRINCIPAL_FOUNDATION.md`.
+
 ## References
 
 - PostgreSQL Row Security:

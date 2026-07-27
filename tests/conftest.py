@@ -36,14 +36,18 @@ os.environ["PROMPT_DIR"] = "./prompts"
 os.environ["CELERY_ALWAYS_EAGER"] = "true"
 os.environ["MEMORY_IDENTITY_SECRET"] = "test-only-memory-identity-secret"
 
-from ai_examiner.db import Base, engine  # noqa: E402
+from ai_examiner.db import Base, SessionLocal, engine  # noqa: E402
 from ai_examiner.main import app  # noqa: E402
+from ai_examiner.services.enterprise_identity import ensure_legacy_organization  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def clean_database():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    with SessionLocal() as db:
+        ensure_legacy_organization(db)
+        db.commit()
     yield
     Base.metadata.drop_all(bind=engine)
 

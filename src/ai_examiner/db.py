@@ -41,10 +41,13 @@ def init_db() -> None:
         alembic_config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
         command.upgrade(alembic_config, "head")
     Base.metadata.create_all(bind=engine)
+    from .services.enterprise_identity import ensure_legacy_organization
     from .services.prompts import seed_prompt_registry
     from .services.templates import seed_builtin_templates
 
     with SessionLocal() as db:
+        ensure_legacy_organization(db)
+        db.commit()
         seed_prompt_registry(db, settings.prompt_dir)
         seed_builtin_templates(db)
 

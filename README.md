@@ -23,6 +23,14 @@ The proposed design adds:
 - append-only audit, retention, export, deletion and human-review evidence;
 - OpenTelemetry operations and recoverable single-host Docker Compose profiles.
 
+Research implementation progress:
+
+- WP-01 complete: full SQLite and PostgreSQL regression/migration gates;
+- WP-02 implemented: organization, principal and membership persistence,
+  deterministic legacy project ownership, bootstrap-owner CLI and observe-only
+  organization context;
+- authentication, capability enforcement and RLS are not active yet.
+
 Authoritative research documents:
 
 - `docs/decisions/ADR-006-ENTERPRISE-TENANCY-AND-IDENTITY.md`;

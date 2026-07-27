@@ -6,6 +6,7 @@ from uuid import uuid4
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -22,6 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
+from .enterprise_constants import LEGACY_ORGANIZATION_ID
 
 
 def new_id() -> str:
@@ -32,15 +34,113 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+class Organization(Base):
+    __tablename__ = "organizations"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active', 'suspended', 'disabled')",
+            name="ck_organization_status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    slug: Mapped[str] = mapped_column(String(100), unique=True)
+    display_name: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(30), default="active")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    projects: Mapped[list[Project]] = relationship(back_populates="organization")
+    memberships: Mapped[list[OrganizationMembership]] = relationship(
+        back_populates="organization", cascade="all, delete"
+    )
+
+
+class Principal(Base):
+    __tablename__ = "principals"
+    __table_args__ = (
+        UniqueConstraint("issuer", "subject", name="uq_principal_issuer_subject"),
+        Index("ix_principal_status", "status"),
+        CheckConstraint(
+            "status IN ('pending', 'active', 'suspended', 'disabled')",
+            name="ck_principal_status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    issuer: Mapped[str] = mapped_column(String(500))
+    subject: Mapped[str] = mapped_column(String(500))
+    display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    disabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    memberships: Mapped[list[OrganizationMembership]] = relationship(
+        back_populates="principal", cascade="all, delete"
+    )
+
+
+class OrganizationMembership(Base):
+    __tablename__ = "organization_memberships"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "principal_id",
+            name="uq_organization_membership_principal",
+        ),
+        Index(
+            "ix_organization_membership_status",
+            "organization_id",
+            "status",
+        ),
+        CheckConstraint(
+            "role IN ('owner', 'admin', 'examiner', 'template_author', "
+            "'reviewer', 'learner', 'auditor')",
+            name="ck_organization_membership_role",
+        ),
+        CheckConstraint(
+            "status IN ('invited', 'active', 'suspended', 'revoked')",
+            name="ck_organization_membership_status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE")
+    )
+    principal_id: Mapped[str] = mapped_column(
+        ForeignKey("principals.id", ondelete="CASCADE")
+    )
+    role: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(30), default="active")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    organization: Mapped[Organization] = relationship(back_populates="memberships")
+    principal: Mapped[Principal] = relationship(back_populates="memberships")
+
+
 class Project(Base):
     __tablename__ = "projects"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
+        default=LEGACY_ORGANIZATION_ID,
+        server_default=LEGACY_ORGANIZATION_ID,
+    )
     name: Mapped[str] = mapped_column(String(200))
     domain: Mapped[str] = mapped_column(String(100), default="research_defense")
     language: Mapped[str] = mapped_column(String(20), default="zh-CN")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
+    organization: Mapped[Organization] = relationship(back_populates="projects")
     documents: Mapped[list[Document]] = relationship(
         back_populates="project", cascade="all, delete"
     )
