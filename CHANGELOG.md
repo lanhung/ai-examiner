@@ -6,6 +6,15 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ### Added
 
+- Add the v0.9 enterprise-platform research package covering organization tenancy,
+  external OIDC identity, scoped service accounts, capability RBAC, PostgreSQL RLS,
+  S3-compatible storage, tenant-aware jobs, audit, model governance, retention,
+  OpenTelemetry, disaster recovery and a staged implementation backlog.
+- Define the v0.9 API authorization contract, threat model, cross-tenant evaluation
+  gates and restartable SQLite/file-to-PostgreSQL/object-storage migration strategy.
+- Inventory every current model and API family by tenant ownership, required
+  capability, resource resolver and migration invariant.
+
 - Add complete Planner v6 reciprocal real-provider evidence for all seven built-in
   templates: 30 unique cases per template, 420 case evaluations and 840 anonymous
   A/B arms across Qwen and OpenAI.

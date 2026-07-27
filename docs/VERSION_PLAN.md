@@ -18,6 +18,7 @@ This file is the authoritative version and branch status for Codex and other cod
 | v0.7 candidate | 0.7.0rc2 | `v0.7.0-rc.2` | Candidate release; Vultr Compose promotion gate remains | Staging only |
 | Upcoming research | 0.8.0 | `research/v0.8.0` | Industry template architecture, API, evaluation and implementation design | Not deployable |
 | Current implementation | 0.8.0.dev0 | `develop/v0.8.0` | Software and AI quality gates pass, including three reciprocal 30-case templates; Docker/Vultr promotion rehearsal remains held | Local evaluation only |
+| Current research | 0.9.0 | `research/v0.9.0` | Enterprise tenancy, identity, authorization, data, operations and recovery design | Not deployable |
 | Release candidate | 0.5.0rc4 | `v0.5.0-rc.4` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 
@@ -45,6 +46,11 @@ This file is the authoritative version and branch status for Codex and other cod
   experiments only. It must not be deployed and must not change the package version.
 - v0.8 implementation begins on `develop/v0.8.0` only after ADR-005 and all research
   gates are accepted. Feature branches use `feature/v0.8-<short-name>`.
+- `research/v0.9.0` contains enterprise architecture, API, security, migration and
+  evaluation design only. It must not be deployed and must keep package version
+  `0.8.0.dev0`.
+- Do not create `develop/v0.9.0` until ADR-006 and the full v0.9 research gate are
+  accepted. Feature branches will use `feature/v0.9-<short-name>`.
 - Feature branches use `feature/v0.5-<short-name>` and branch from `develop/v0.5.0`.
 - Bug fixes for the stable release use `fix/v0.4-<short-name>` and merge into `main`; required fixes are then forward-merged into development.
 - Do not develop unreleased features in the production worktree.
@@ -221,3 +227,43 @@ schema and safe parser
 No v0.8 tag is created during research. This branch remains on package version
 `0.7.0rc2`. The first implementation branch uses `0.8.0.dev0` only after the
 research gate is accepted.
+
+## 12. v0.9 research gate
+
+Do not create `develop/v0.9.0` until all of the following are reviewed:
+
+- `docs/decisions/ADR-006-ENTERPRISE-TENANCY-AND-IDENTITY.md`;
+- `docs/architecture/V0_9_ENTERPRISE_PLATFORM.md`;
+- `docs/api/V0_9_ENTERPRISE_API.md`;
+- `docs/security/V0_9_ENTERPRISE_THREAT_MODEL.md`;
+- `docs/security/V0_9_RESOURCE_AND_CAPABILITY_MATRIX.md`;
+- `docs/evaluation/V0_9_ENTERPRISE_EVALUATION_PLAN.md`;
+- `docs/product/V0_9_IMPLEMENTATION_BACKLOG.md`;
+- `docs/deployment/V0_9_DATA_AND_DEPLOYMENT_MIGRATION.md`;
+- complete model ownership and route/capability matrices;
+- OIDC token validation and key-rotation prototype;
+- PostgreSQL runtime/migration roles and RLS proof tests;
+- restartable SQLite-to-PostgreSQL migration prototype;
+- local/S3 storage contract prototype;
+- cross-tenant API and worker adversarial tests;
+- backup, object restore and disaster-recovery objectives.
+
+v0.9 implementation order is fixed:
+
+```text
+PostgreSQL parity
+-> organization and principal foundation
+-> OIDC authentication
+-> capability authorization
+-> tenant ownership and RLS
+-> object storage abstraction
+-> tenant-aware job hardening
+-> audit, model governance and quota
+-> retention, export, deletion and human review
+-> OpenTelemetry and enterprise Compose
+-> UI, security evaluation and release hardening
+```
+
+No v0.9 tag is created during research. The branch remains on package version
+`0.8.0.dev0`. The first implementation branch uses `0.9.0.dev0` only after this gate
+is accepted.

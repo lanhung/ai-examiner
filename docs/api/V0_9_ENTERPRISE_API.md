@@ -1,0 +1,316 @@
+# v0.9 Enterprise API Contract
+
+Status: Research draft
+Base path: `/api/v1`
+
+## 1. Compatibility policy
+
+The existing unversioned `/api/*` endpoints remain available only for:
+
+- `AUTH_MODE=disabled`;
+- migration tooling;
+- an explicitly bounded compatibility window.
+
+Enterprise clients use `/api/v1`. A request never gains access by sending an
+organization header alone; the authenticated principal must have an active
+membership.
+
+## 2. Common request context
+
+Interactive request:
+
+```http
+Authorization: Bearer <access-token>
+X-AI-Examiner-Organization: <organization-id>
+X-Request-ID: <optional-client-id>
+```
+
+Service client:
+
+```http
+Authorization: Bearer axe_<prefix>_<secret>
+X-AI-Examiner-Organization: <organization-id>
+```
+
+The server returns:
+
+```http
+X-Request-ID: <server-correlation-id>
+```
+
+No endpoint accepts `principal_id`, role or capability from a request body as proof of
+authority.
+
+## 3. Error contract
+
+```json
+{
+  "error": {
+    "code": "authorization_denied",
+    "message": "The requested operation is not permitted.",
+    "request_id": "uuid",
+    "details": {}
+  }
+}
+```
+
+Codes:
+
+```text
+authentication_required
+token_invalid
+organization_context_required
+membership_inactive
+authorization_denied
+resource_not_found
+conflict
+quota_exceeded
+rate_limited
+policy_denied
+retention_hold
+dependency_unavailable
+```
+
+Cross-tenant lookups normally return `resource_not_found`.
+
+## 4. Identity and current context
+
+```text
+GET  /api/v1/me
+GET  /api/v1/me/organizations
+POST /api/v1/auth/logout
+```
+
+`GET /me`:
+
+```json
+{
+  "principal": {
+    "id": "uuid",
+    "display_name": "Example User",
+    "status": "active"
+  },
+  "organization": {
+    "id": "uuid",
+    "name": "Example University",
+    "role": "examiner",
+    "capabilities": ["project.read", "session.conduct"]
+  },
+  "authentication": {
+    "method": "oidc",
+    "issuer": "https://id.example.edu"
+  }
+}
+```
+
+Provider access tokens and raw token claims are never returned.
+
+## 5. Organizations and memberships
+
+```text
+POST   /api/v1/organizations
+GET    /api/v1/organizations/{organization_id}
+PATCH  /api/v1/organizations/{organization_id}
+GET    /api/v1/organizations/{organization_id}/memberships
+POST   /api/v1/organizations/{organization_id}/invitations
+PATCH  /api/v1/organizations/{organization_id}/memberships/{membership_id}
+DELETE /api/v1/organizations/{organization_id}/memberships/{membership_id}
+```
+
+Role changes use optimistic concurrency:
+
+```http
+If-Match: "<membership-version>"
+```
+
+The last active owner cannot be removed or demoted.
+
+## 6. Service accounts
+
+```text
+POST   /api/v1/organizations/{organization_id}/service-accounts
+GET    /api/v1/organizations/{organization_id}/service-accounts
+POST   /api/v1/organizations/{organization_id}/service-accounts/{id}/tokens
+DELETE /api/v1/organizations/{organization_id}/service-accounts/{id}/tokens/{token_id}
+POST   /api/v1/organizations/{organization_id}/service-accounts/{id}/disable
+```
+
+Token creation returns the secret only once. List endpoints return prefix, scopes,
+created time, expiry and last-used time.
+
+## 7. Tenant-scoped resource paths
+
+New project entry points:
+
+```text
+POST /api/v1/organizations/{organization_id}/projects
+GET  /api/v1/organizations/{organization_id}/projects
+GET  /api/v1/organizations/{organization_id}/projects/{project_id}
+```
+
+Nested resources preserve project paths where useful:
+
+```text
+POST /api/v1/organizations/{organization_id}/projects/{project_id}/documents
+POST /api/v1/organizations/{organization_id}/projects/{project_id}/blueprints
+POST /api/v1/organizations/{organization_id}/projects/{project_id}/sessions
+GET  /api/v1/organizations/{organization_id}/projects/{project_id}/usage
+```
+
+Session, evidence and report convenience routes remain available but resolve
+organization from authenticated context and enforce object authorization:
+
+```text
+GET /api/v1/sessions/{session_id}
+GET /api/v1/sessions/{session_id}/report
+GET /api/v1/evidence/{asset_id}/file
+```
+
+## 8. Model policies and quota
+
+```text
+GET /api/v1/organizations/{organization_id}/model-policy
+PUT /api/v1/organizations/{organization_id}/model-policy
+GET /api/v1/organizations/{organization_id}/quota
+PUT /api/v1/organizations/{organization_id}/quota
+GET /api/v1/organizations/{organization_id}/usage
+GET /api/v1/organizations/{organization_id}/usage/export
+```
+
+Model policy example:
+
+```json
+{
+  "version": 4,
+  "allowed_profiles": [
+    {"provider": "qwen", "model_pattern": "qwen-plus", "tasks": ["planner", "analyzer"]},
+    {"provider": "openai", "model_pattern": "gpt-realtime-*", "tasks": ["voice"]}
+  ],
+  "external_provider_max_classification": "confidential",
+  "fallback_mode": "deny",
+  "monthly_budget_usd": 500,
+  "per_session_budget_usd": 4
+}
+```
+
+Policy changes are audited. The server reports the effective model actually used.
+
+## 9. Audit
+
+```text
+GET /api/v1/organizations/{organization_id}/audit-events
+GET /api/v1/organizations/{organization_id}/audit-events/export
+```
+
+Filters:
+
+```text
+actor_id
+action
+resource_type
+resource_id
+outcome
+occurred_after
+occurred_before
+request_id
+cursor
+limit
+```
+
+Audit responses contain redacted metadata only. Reading audit requires `audit.read`.
+
+## 10. Retention, export and deletion
+
+```text
+GET  /api/v1/organizations/{organization_id}/retention-policy
+PUT  /api/v1/organizations/{organization_id}/retention-policy
+POST /api/v1/organizations/{organization_id}/exports
+GET  /api/v1/organization-exports/{export_id}
+GET  /api/v1/organization-exports/{export_id}/file
+POST /api/v1/organizations/{organization_id}/data-subject-requests
+GET  /api/v1/data-subject-requests/{request_id}
+POST /api/v1/data-subject-requests/{request_id}/approve
+POST /api/v1/data-subject-requests/{request_id}/cancel
+POST /api/v1/data-subject-requests/{request_id}/retry
+```
+
+Destructive requests require an idempotency key:
+
+```http
+Idempotency-Key: <client-generated-value>
+```
+
+Deletion status:
+
+```text
+requested -> approved -> running -> verifying -> completed
+                    \-> blocked
+                    \-> failed
+```
+
+## 11. Human review and appeal
+
+```text
+POST  /api/v1/organizations/{organization_id}/review-cases
+GET   /api/v1/organizations/{organization_id}/review-cases
+GET   /api/v1/review-cases/{case_id}
+POST  /api/v1/review-cases/{case_id}/assign
+POST  /api/v1/review-cases/{case_id}/decisions
+POST  /api/v1/review-cases/{case_id}/appeals
+```
+
+AI evidence may initialize a case but cannot write the final human decision field.
+
+## 12. Jobs
+
+```text
+GET  /api/v1/jobs/{job_id}
+POST /api/v1/jobs/{job_id}/cancel
+POST /api/v1/jobs/{job_id}/retry
+```
+
+Job responses include organization, policy snapshot, attempts and sanitized failure
+codes. Celery task IDs and internal exception traces are not exposed.
+
+## 13. Health and readiness
+
+```text
+GET /health
+GET /ready
+GET /api/v1/system/capabilities
+```
+
+`/health` is liveness and contains no provider details. `/ready` checks mandatory
+enterprise dependencies and may require protected operator access for detail.
+
+Readiness components:
+
+```text
+database
+redis
+object_storage
+oidc_discovery
+audit_sink
+migrations
+worker_heartbeat
+```
+
+## 14. Pagination and concurrency
+
+Lists use opaque cursor pagination. Mutable administrative resources return `ETag`.
+Updates use `If-Match` to prevent lost policy and membership changes.
+
+## 15. API security tests
+
+Every route with a resource identifier must test:
+
+- anonymous access;
+- inactive membership;
+- same-role user in another organization;
+- valid membership without capability;
+- capability with a resource from another organization;
+- service token with insufficient scope;
+- suspended organization;
+- stale policy version;
+- deleted or retained resource;
+- audit event generation for success and denial where appropriate.

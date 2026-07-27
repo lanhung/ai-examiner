@@ -1,4 +1,4 @@
-# AI Examiner v0.8.0 Development
+# AI Examiner v0.8.0 Development and v0.9.0 Research
 
 Current development branch: `develop/v0.8.0` (`0.8.0.dev0`). The v0.7 release
 candidate remains available at `develop/v0.7.0` / `v0.7.0-rc.2`. The stable production
@@ -7,6 +7,32 @@ line remains v0.4.1 and the preserved v0.5 release snapshot remains
 
 The accepted template-platform study is preserved on `research/v0.8.0`. The current
 branch implements that design incrementally and is not a production release.
+
+## v0.9 enterprise research
+
+The `research/v0.9.0` branch defines the enterprise-platform gate. It does not change
+the package version or authorize a production release.
+
+The proposed design adds:
+
+- organization tenancy and explicit resource ownership;
+- external OpenID Connect identity and scoped service accounts;
+- capability-based RBAC plus PostgreSQL Row-Level Security;
+- local and S3-compatible storage backends;
+- tenant-aware workers, model allowlists, quotas and cost ownership;
+- append-only audit, retention, export, deletion and human-review evidence;
+- OpenTelemetry operations and recoverable single-host Docker Compose profiles.
+
+Authoritative research documents:
+
+- `docs/decisions/ADR-006-ENTERPRISE-TENANCY-AND-IDENTITY.md`;
+- `docs/architecture/V0_9_ENTERPRISE_PLATFORM.md`;
+- `docs/api/V0_9_ENTERPRISE_API.md`;
+- `docs/security/V0_9_ENTERPRISE_THREAT_MODEL.md`;
+- `docs/security/V0_9_RESOURCE_AND_CAPABILITY_MATRIX.md`;
+- `docs/evaluation/V0_9_ENTERPRISE_EVALUATION_PLAN.md`;
+- `docs/product/V0_9_IMPLEMENTATION_BACKLOG.md`;
+- `docs/deployment/V0_9_DATA_AND_DEPLOYMENT_MIGRATION.md`.
 
 ## v0.8 current implementation
 

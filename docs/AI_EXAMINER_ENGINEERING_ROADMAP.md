@@ -1,8 +1,8 @@
 # AI Examiner Engineering Roadmap
 
-Document version: 2.0  
+Document version: 2.1
 Audience: Codex and other coding agents  
-Current development target: v0.7.0 release validation and v0.8.0 research
+Current development target: v0.8.0 validation and v0.9.0 enterprise research
 
 ## 0. How to use this document
 
@@ -268,6 +268,37 @@ Planned capabilities:
 - single-server and private-cloud Compose profiles.
 
 AI remains decision support in high-stakes academic, hiring, medical or employment contexts. Human review and appeal paths are required.
+
+Proposed research direction:
+
+- make `Organization` the explicit tenant boundary and add direct tenant ownership
+  to every non-global database row;
+- delegate interactive authentication to OpenID Connect Authorization Code with PKCE
+  rather than implementing local passwords;
+- use a central capability registry for application authorization and PostgreSQL
+  `FORCE ROW LEVEL SECURITY` as defense in depth;
+- preserve SQLite for deterministic development while requiring PostgreSQL for
+  enterprise tenant-isolation claims;
+- replace filesystem-path assumptions with a local/S3-compatible storage contract;
+- carry organization, actor, request, policy and idempotency context into every
+  background job;
+- govern provider/model use, quota and cost at organization scope;
+- add append-only administrative audit, retention, export, verified deletion and
+  human-review evidence;
+- export redacted traces and metrics through OpenTelemetry;
+- retain a modular monolith and single-server Docker Compose as the primary first
+  enterprise deployment.
+
+Detailed research specifications:
+
+- `docs/decisions/ADR-006-ENTERPRISE-TENANCY-AND-IDENTITY.md`;
+- `docs/architecture/V0_9_ENTERPRISE_PLATFORM.md`;
+- `docs/api/V0_9_ENTERPRISE_API.md`;
+- `docs/security/V0_9_ENTERPRISE_THREAT_MODEL.md`;
+- `docs/security/V0_9_RESOURCE_AND_CAPABILITY_MATRIX.md`;
+- `docs/evaluation/V0_9_ENTERPRISE_EVALUATION_PLAN.md`;
+- `docs/product/V0_9_IMPLEMENTATION_BACKLOG.md`;
+- `docs/deployment/V0_9_DATA_AND_DEPLOYMENT_MIGRATION.md`.
 
 ## 9. v1.0.0: Commercial product
 
