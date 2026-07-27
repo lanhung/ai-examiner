@@ -1,0 +1,375 @@
+{
+  "evaluation_version": "template-relevance-evaluation-v1",
+  "status": "passed",
+  "corpus": {
+    "status": "passed",
+    "corpus_version": "v0.8-scenario-relevance-v1",
+    "schema_version": "1.0",
+    "fingerprint": "9bf99fb4c71efaa9a47e66360e3ce36048ae082538aa75226f1ce6942116458d",
+    "case_count": 210,
+    "template_count": 7,
+    "counts": {
+      "academic.grant_review": {
+        "total": 30,
+        "languages": {
+          "zh-CN": 15,
+          "en": 15
+        },
+        "difficulties": {
+          "2": 10,
+          "3": 10,
+          "4": 10
+        },
+        "answer_qualities": {
+          "excellent": 6,
+          "partial": 6,
+          "misconception": 6,
+          "evasive": 6,
+          "unsupported_claim": 6
+        }
+      },
+      "academic.thesis_defense": {
+        "total": 30,
+        "languages": {
+          "zh-CN": 15,
+          "en": 15
+        },
+        "difficulties": {
+          "2": 10,
+          "3": 10,
+          "4": 10
+        },
+        "answer_qualities": {
+          "excellent": 6,
+          "partial": 6,
+          "misconception": 6,
+          "evasive": 6,
+          "unsupported_claim": 6
+        }
+      },
+      "education.course_oral": {
+        "total": 30,
+        "languages": {
+          "zh-CN": 15,
+          "en": 15
+        },
+        "difficulties": {
+          "2": 10,
+          "3": 10,
+          "4": 10
+        },
+        "answer_qualities": {
+          "excellent": 6,
+          "partial": 6,
+          "misconception": 6,
+          "evasive": 6,
+          "unsupported_claim": 6
+        }
+      },
+      "engineering.technical_interview": {
+        "total": 30,
+        "languages": {
+          "zh-CN": 15,
+          "en": 15
+        },
+        "difficulties": {
+          "2": 10,
+          "3": 10,
+          "4": 10
+        },
+        "answer_qualities": {
+          "excellent": 6,
+          "partial": 6,
+          "misconception": 6,
+          "evasive": 6,
+          "unsupported_claim": 6
+        }
+      },
+      "enterprise.product_knowledge": {
+        "total": 30,
+        "languages": {
+          "zh-CN": 15,
+          "en": 15
+        },
+        "difficulties": {
+          "2": 10,
+          "3": 10,
+          "4": 10
+        },
+        "answer_qualities": {
+          "excellent": 6,
+          "partial": 6,
+          "misconception": 6,
+          "evasive": 6,
+          "unsupported_claim": 6
+        }
+      },
+      "enterprise.sales_objection": {
+        "total": 30,
+        "languages": {
+          "zh-CN": 15,
+          "en": 15
+        },
+        "difficulties": {
+          "2": 10,
+          "3": 10,
+          "4": 10
+        },
+        "answer_qualities": {
+          "excellent": 6,
+          "partial": 6,
+          "misconception": 6,
+          "evasive": 6,
+          "unsupported_claim": 6
+        }
+      },
+      "operations.project_review": {
+        "total": 30,
+        "languages": {
+          "zh-CN": 15,
+          "en": 15
+        },
+        "difficulties": {
+          "2": 10,
+          "3": 10,
+          "4": 10
+        },
+        "answer_qualities": {
+          "excellent": 6,
+          "partial": 6,
+          "misconception": 6,
+          "evasive": 6,
+          "unsupported_claim": 6
+        }
+      }
+    },
+    "issues": []
+  },
+  "accepted_reports": [
+    {
+      "judge_profile": "qwen:qwen-plus",
+      "generator_profile": "openai:gpt-5.4-mini",
+      "evaluation_count": 30
+    },
+    {
+      "judge_profile": "openai:gpt-5.4-mini",
+      "generator_profile": "qwen:qwen-plus",
+      "evaluation_count": 30
+    },
+    {
+      "judge_profile": "qwen:qwen-plus",
+      "generator_profile": "openai:gpt-5.4-mini",
+      "evaluation_count": 30
+    },
+    {
+      "judge_profile": "openai:gpt-5.4-mini",
+      "generator_profile": "qwen:qwen-plus",
+      "evaluation_count": 30
+    },
+    {
+      "judge_profile": "qwen:qwen-plus",
+      "generator_profile": "openai:gpt-5.4-mini",
+      "evaluation_count": 30
+    },
+    {
+      "judge_profile": "openai:gpt-5.4-mini",
+      "generator_profile": "qwen:qwen-plus",
+      "evaluation_count": 30
+    },
+    {
+      "judge_profile": "qwen:qwen-plus",
+      "generator_profile": "openai:gpt-5.4-mini",
+      "evaluation_count": 30
+    },
+    {
+      "judge_profile": "openai:gpt-5.4-mini",
+      "generator_profile": "qwen:qwen-plus",
+      "evaluation_count": 30
+    },
+    {
+      "judge_profile": "qwen:qwen-plus",
+      "generator_profile": "openai:gpt-5.4-mini",
+      "evaluation_count": 30
+    },
+    {
+      "judge_profile": "openai:gpt-5.4-mini",
+      "generator_profile": "qwen:qwen-plus",
+      "evaluation_count": 30
+    },
+    {
+      "judge_profile": "qwen:qwen-plus",
+      "generator_profile": "openai:gpt-5.4-mini",
+      "evaluation_count": 30
+    },
+    {
+      "judge_profile": "openai:gpt-5.4-mini",
+      "generator_profile": "qwen:qwen-plus",
+      "evaluation_count": 30
+    },
+    {
+      "judge_profile": "qwen:qwen-plus",
+      "generator_profile": "openai:gpt-5.4-mini",
+      "evaluation_count": 30
+    },
+    {
+      "judge_profile": "openai:gpt-5.4-mini",
+      "generator_profile": "qwen:qwen-plus",
+      "evaluation_count": 30
+    }
+  ],
+  "rejected_reports": [],
+  "templates_required_for_release": 3,
+  "templates_passed": 3,
+  "template_results": [
+    {
+      "template_slug": "academic.grant_review",
+      "status": "held",
+      "unique_cases": 30,
+      "judge_observations": 60,
+      "judge_providers": [
+        "openai",
+        "qwen"
+      ],
+      "reciprocal_cross_judging": true,
+      "mean_relevance_improvement": 0.25,
+      "relevance_improvement_ci95": [
+        0.091,
+        0.409
+      ],
+      "high_quality_question_rate": 1.0,
+      "grounded_question_rate": 1.0,
+      "single_main_question_rate": 1.0,
+      "unsafe_or_prohibited_rate": 0.0
+    },
+    {
+      "template_slug": "academic.thesis_defense",
+      "status": "held",
+      "unique_cases": 30,
+      "judge_observations": 60,
+      "judge_providers": [
+        "openai",
+        "qwen"
+      ],
+      "reciprocal_cross_judging": true,
+      "mean_relevance_improvement": -0.083,
+      "relevance_improvement_ci95": [
+        -0.233,
+        0.066
+      ],
+      "high_quality_question_rate": 0.967,
+      "grounded_question_rate": 1.0,
+      "single_main_question_rate": 1.0,
+      "unsafe_or_prohibited_rate": 0.0
+    },
+    {
+      "template_slug": "education.course_oral",
+      "status": "held",
+      "unique_cases": 30,
+      "judge_observations": 60,
+      "judge_providers": [
+        "openai",
+        "qwen"
+      ],
+      "reciprocal_cross_judging": true,
+      "mean_relevance_improvement": 0.217,
+      "relevance_improvement_ci95": [
+        0.036,
+        0.398
+      ],
+      "high_quality_question_rate": 0.967,
+      "grounded_question_rate": 1.0,
+      "single_main_question_rate": 1.0,
+      "unsafe_or_prohibited_rate": 0.0
+    },
+    {
+      "template_slug": "engineering.technical_interview",
+      "status": "held",
+      "unique_cases": 30,
+      "judge_observations": 60,
+      "judge_providers": [
+        "openai",
+        "qwen"
+      ],
+      "reciprocal_cross_judging": true,
+      "mean_relevance_improvement": 0.25,
+      "relevance_improvement_ci95": [
+        0.049,
+        0.451
+      ],
+      "high_quality_question_rate": 0.933,
+      "grounded_question_rate": 1.0,
+      "single_main_question_rate": 1.0,
+      "unsafe_or_prohibited_rate": 0.0
+    },
+    {
+      "template_slug": "enterprise.product_knowledge",
+      "status": "passed",
+      "unique_cases": 30,
+      "judge_observations": 60,
+      "judge_providers": [
+        "openai",
+        "qwen"
+      ],
+      "reciprocal_cross_judging": true,
+      "mean_relevance_improvement": 1.167,
+      "relevance_improvement_ci95": [
+        0.915,
+        1.418
+      ],
+      "high_quality_question_rate": 1.0,
+      "grounded_question_rate": 1.0,
+      "single_main_question_rate": 1.0,
+      "unsafe_or_prohibited_rate": 0.0
+    },
+    {
+      "template_slug": "enterprise.sales_objection",
+      "status": "passed",
+      "unique_cases": 30,
+      "judge_observations": 60,
+      "judge_providers": [
+        "openai",
+        "qwen"
+      ],
+      "reciprocal_cross_judging": true,
+      "mean_relevance_improvement": 1.733,
+      "relevance_improvement_ci95": [
+        1.458,
+        2.008
+      ],
+      "high_quality_question_rate": 0.983,
+      "grounded_question_rate": 1.0,
+      "single_main_question_rate": 1.0,
+      "unsafe_or_prohibited_rate": 0.0
+    },
+    {
+      "template_slug": "operations.project_review",
+      "status": "passed",
+      "unique_cases": 30,
+      "judge_observations": 60,
+      "judge_providers": [
+        "openai",
+        "qwen"
+      ],
+      "reciprocal_cross_judging": true,
+      "mean_relevance_improvement": 1.683,
+      "relevance_improvement_ci95": [
+        1.467,
+        1.899
+      ],
+      "high_quality_question_rate": 1.0,
+      "grounded_question_rate": 1.0,
+      "single_main_question_rate": 1.0,
+      "unsafe_or_prohibited_rate": 0.0
+    }
+  ],
+  "thresholds": {
+    "cases_per_template": 30,
+    "mean_relevance_improvement": 0.5,
+    "high_quality_question_rate": 0.8,
+    "grounded_question_rate": 0.95,
+    "single_main_question_rate": 0.98,
+    "unsafe_or_prohibited_rate": 0.0,
+    "minimum_judge_providers": 2,
+    "reciprocal_cross_judging": true
+  }
+}

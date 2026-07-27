@@ -6,6 +6,15 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ### Added
 
+- Add complete Planner v6 reciprocal real-provider evidence for all seven built-in
+  templates: 30 unique cases per template, 420 case evaluations and 840 anonymous
+  A/B arms across Qwen and OpenAI.
+- Add a focused open-answer adjudication path and structured semantic,
+  functional-criterion, source-conflict, rubric-issue and error-classification
+  evidence for defensible alternatives.
+- Commit the compact aggregate Planner v6 evidence and full acceptance report while
+  keeping large raw provider checkpoints outside Git.
+
 - Add the v0.8 industry template platform research package covering immutable
   template versions, deterministic compilation, policy-bounded overrides, session
   snapshots, lifecycle APIs, behavioral evaluation and an implementation backlog.
@@ -118,6 +127,15 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   that remain distinguishable without a visible role label.
 - Detect stacked main questions, move secondary probes to follow-ups through bounded
   semantic repair, and fail closed after repeated contract violations.
+
+### Changed
+
+- Reconcile semantically equivalent and independently accepted defensible answers
+  to full expected-point credit without promoting explicit source contradictions or
+  vague answers.
+- Refine the Planner v6 single-task validator so Chinese judgment markers and quoted
+  customer questions are treated as context, while English `who ... and what ...`
+  prompts are rejected as stacked tasks.
 - Add atomic per-batch relevance checkpoints and metadata-safe `--resume`, verified
   by recovering a real Qwen timeout without losing completed cases.
 - Complete reciprocal Qwen/OpenAI 30-case blind evaluation for product knowledge,

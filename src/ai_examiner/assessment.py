@@ -53,6 +53,19 @@ POINT_STATUS_VALUES = {
     PointStatus.CONTRADICTED: 0.0,
 }
 
+RUBRIC_ISSUES = {
+    "none",
+    "over_specific",
+    "unsupported_by_context",
+    "ambiguous",
+}
+
+SEMANTIC_MATCHES = {
+    "equivalent",
+    "partial",
+    "none",
+}
+
 ASSESSMENT_WEIGHTS = {
     "correctness": 0.35,
     "coverage": 0.25,
@@ -142,6 +155,20 @@ def normalize_point_assessments(
             raise ValueError(f"Answer Analyzer omitted expected point {record['id']}")
         raw_status = str(raw.get("status") or "")
         status = normalize_point_status(raw_status)
+        rubric_issue = _normalized_label(raw.get("rubric_issue") or "none")
+        if rubric_issue not in RUBRIC_ISSUES:
+            accepted = ", ".join(sorted(RUBRIC_ISSUES))
+            raise ValueError(
+                f"Unknown rubric issue {raw.get('rubric_issue')!r}; "
+                f"expected one of: {accepted}"
+            )
+        semantic_match = _normalized_label(raw.get("semantic_match") or "none")
+        if semantic_match not in SEMANTIC_MATCHES:
+            accepted = ", ".join(sorted(SEMANTIC_MATCHES))
+            raise ValueError(
+                f"Unknown semantic match {raw.get('semantic_match')!r}; "
+                f"expected one of: {accepted}"
+            )
         normalized.append(
             {
                 "point_id": str(record["id"]),
@@ -152,6 +179,15 @@ def normalize_point_assessments(
                 "answer_quote": str(raw.get("answer_quote") or "")[:500],
                 "source_evidence_id": str(raw.get("source_evidence_id") or "")[:160],
                 "reason": str(raw.get("reason") or "")[:1000],
+                "semantic_match": semantic_match,
+                "functional_criterion_satisfied": bool(
+                    raw.get("functional_criterion_satisfied", False)
+                ),
+                "explicit_source_conflict": bool(
+                    raw.get("explicit_source_conflict", False)
+                ),
+                "alternative_accepted": bool(raw.get("alternative_accepted", False)),
+                "rubric_issue": rubric_issue,
             }
         )
     return normalized
@@ -188,4 +224,3 @@ def assessment_components(analysis: dict[str, Any]) -> dict[str, float]:
 def assessment_quality(analysis: dict[str, Any]) -> float:
     components = assessment_components(analysis)
     return sum(ASSESSMENT_WEIGHTS[key] * components[key] for key in ASSESSMENT_WEIGHTS)
-

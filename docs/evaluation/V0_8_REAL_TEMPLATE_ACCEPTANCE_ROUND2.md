@@ -4,6 +4,10 @@ Date: 2026-07-24
 Branch: `develop/v0.8.0`  
 Planner: `session-planner-v08-scenario-native-v6`
 
+> Superseded by
+> `V0_8_PLANNER_V6_FULL_TEMPLATE_ACCEPTANCE.md`, which contains the completed
+> 30-case reciprocal run for all seven templates.
+
 ## 1. Purpose
 
 This round answers whether each reviewed v0.8 scenario template changes real
@@ -172,4 +176,3 @@ stale for a stable release. The full corpus must be regenerated under v6 before 
 5. Continue the separate open-answer assessment calibration described in
    `V0_8_BROWSER_REAL_PROVIDER_ACCEPTANCE.md`.
 6. Run Docker Compose and Vultr migration, backup, restart and rollback gates.
-

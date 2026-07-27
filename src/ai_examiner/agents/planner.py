@@ -226,7 +226,12 @@ repair an analytical question into a page-location or recall-only prompt.""",
     @staticmethod
     def _has_stacked_request(text: str) -> bool:
         compact = re.sub(r"\s+", "", str(text or ""))
-        if compact.count("?") + compact.count("？") > 1:
+        unquoted = re.sub(
+            r"“[^”]*”|‘[^’]*’|\"[^\"]*\"|'[^']*'",
+            "",
+            compact,
+        )
+        if unquoted.count("?") + unquoted.count("？") > 1:
             return True
         if re.search(
             r"(?:^|\s)(?:\(?[1-9]\)|[①②③④⑤⑥⑦⑧⑨])",
@@ -245,12 +250,15 @@ repair an analytical question into a page-location or recall-only prompt.""",
             "您将",
             "你如何",
             "您如何",
+            "是否",
+            "能否",
+            "会否",
         )
         request_start = max(
-            [compact.rfind(marker) for marker in request_markers]
-            + [compact.rfind(separator) for separator in ("。", "；", ";")]
+            [unquoted.rfind(marker) for marker in request_markers]
+            + [unquoted.rfind(separator) for separator in ("。", "；", ";")]
         )
-        scope = compact[request_start:] if request_start >= 0 else compact
+        scope = unquoted[request_start:] if request_start >= 0 else unquoted
         zh_matches = list(re.finditer("|".join(ZH_REQUEST_VERBS), scope))
         for left, right in zip(zh_matches, zh_matches[1:], strict=False):
             between = scope[left.end() : right.start()]
@@ -258,8 +266,23 @@ repair an analytical question into a page-location or recall-only prompt.""",
                 return True
 
         english = str(text or "").lower()
+        english_unquoted = re.sub(
+            r"“[^”]*”|‘[^’]*’|\"[^\"]*\"|'[^']*'",
+            "",
+            english,
+        )
         please_start = english.rfind("please")
-        english_scope = english[please_start:] if please_start >= 0 else english
+        english_scope = (
+            english_unquoted[please_start:]
+            if please_start >= 0
+            else english_unquoted
+        )
+        interrogative = r"(?:who|what|which|when|where|why|how)"
+        if re.search(
+            rf"\b{interrogative}\b[^?;]*,\s*and\s+(?:then\s+)?\b{interrogative}\b",
+            english_scope,
+        ):
+            return True
         verbs = "|".join(EN_REQUEST_VERBS)
         if re.search(
             rf"\b(?:{verbs})\b[^?.;]*\band\b[^?.;]*\b(?:{verbs})\b",
