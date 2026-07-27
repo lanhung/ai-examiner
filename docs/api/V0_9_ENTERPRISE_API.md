@@ -78,14 +78,20 @@ Cross-tenant lookups normally return `resource_not_found`.
 ```text
 GET  /api/v1/context
 GET  /api/v1/me
-GET  /api/v1/me/organizations
+GET  /api/v1/auth/login
+GET  /api/v1/auth/callback
 POST /api/v1/auth/logout
 ```
 
-During WP-02 only, `GET /api/v1/context` exposes the resolved legacy organization and
-optional disabled-mode principal/membership observation. It always returns
-`authorization_enforced: false`; request headers do not grant authority. `GET /me`
-replaces this compatibility endpoint after WP-03 and WP-04 are active.
+WP-03 authenticates `/api/v1/context` and `/api/v1/me` in OIDC mode. The context
+endpoint still returns `authorization_enforced: false` until WP-04, but
+`X-AI-Examiner-Principal` is ignored and cannot replace the verified principal.
+Disabled mode retains the WP-02 observe-only compatibility behavior.
+
+`GET /api/v1/auth/login` begins Authorization Code + PKCE and redirects to the
+configured provider. `GET /api/v1/auth/callback` consumes one-time state, validates
+access and ID tokens, resolves the principal and sets an opaque `HttpOnly` browser
+session cookie. `POST /api/v1/auth/logout` revokes that session and clears the cookie.
 
 `GET /me`:
 
@@ -96,20 +102,25 @@ replaces this compatibility endpoint after WP-03 and WP-04 are active.
     "display_name": "Example User",
     "status": "active"
   },
-  "organization": {
-    "id": "uuid",
-    "name": "Example University",
-    "role": "examiner",
-    "capabilities": ["project.read", "session.conduct"]
-  },
+  "organizations": [
+    {
+      "id": "uuid",
+      "role": "examiner",
+      "membership_id": "uuid"
+    }
+  ],
   "authentication": {
-    "method": "oidc",
+    "method": "oidc_session",
     "issuer": "https://id.example.edu"
   }
 }
 ```
 
 Provider access tokens and raw token claims are never returned.
+
+Operational readiness is exposed at `GET /ready`. It returns `503` when the database,
+static OIDC configuration, discovery or JWKS endpoint is unavailable. `GET /health`
+does not contact the identity provider.
 
 ## 5. Organizations and memberships
 

@@ -196,6 +196,18 @@ presigned URL query
 memory export contents
 ```
 
+WP-03 also enforces:
+
+- exact discovery issuer matching;
+- HTTPS discovery, authorization, token and JWKS endpoints outside localhost tests;
+- explicit JWT algorithm and access-token type allowlists;
+- issuer, audience, expiry, issued-at, not-before, subject and scope validation;
+- no token-controlled `jku` or `x5u` key retrieval;
+- bounded discovery/JWKS/token sizes and one unknown-key refresh;
+- PKCE S256, one-use state and nonce validation;
+- hashed browser session secrets and revocation;
+- no raw token or arbitrary claim persistence.
+
 Error records expose stable error codes to clients. Internal exceptions are correlated
 by request ID.
 

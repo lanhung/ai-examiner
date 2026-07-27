@@ -94,6 +94,20 @@ Cases:
 
 Target: all invalid tokens denied without internal detail leakage.
 
+WP-03 deterministic evidence:
+
+```text
+25 focused OIDC tests
+ephemeral RSA signing keys
+valid token and cache reuse
+unknown-kid JWKS rotation
+10 invalid-token variants
+PKCE, nonce, replay, session hash and revocation
+unavailable-provider readiness
+untrusted principal-header rejection
+migration upgrade and downgrade
+```
+
 ### 3.4 Authorization
 
 Every API route declares:

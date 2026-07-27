@@ -22,9 +22,9 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from . import __version__
@@ -108,14 +108,19 @@ from .schemas import (
     VoiceSessionCreate,
 )
 from .services.agreement import agreement_summary
+from .services.authentication import (
+    CurrentAuthentication,
+    authentication_http_error,
+    get_oidc_authenticator,
+)
 from .services.benchmark import BenchmarkService
 from .services.cognitive import CognitiveStateService
 from .services.conversation_policy import effective_conversation_policy
 from .services.datasets import dataset_diff, set_dataset_status
 from .services.documents import parse_document, save_upload
 from .services.enterprise_identity import (
-    OrganizationContext,
-    organization_context,
+    EnterpriseIdentityError,
+    resolve_organization_context,
     serialize_organization,
 )
 from .services.evidence import create_highlighted_crop, persist_evidence, serialize_asset
@@ -131,6 +136,7 @@ from .services.memory import (
     canonical_token,
 )
 from .services.memory_control import MemoryControlError, MemoryControlService
+from .services.oidc import OIDCError
 from .services.policy_benchmark import PolicyBenchmarkService
 from .services.preferences import PreferencePolicyError, PreferenceService
 from .services.prompts import activate_prompt, create_prompt_version, prompt_manifest
@@ -181,14 +187,13 @@ TemplateAuthoringAccess = Annotated[
     TemplateAuthoringContext,
     Depends(template_authoring_context),
 ]
-OrganizationContextAccess = Annotated[
-    OrganizationContext,
-    Depends(organization_context),
-]
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    auth_issues = settings.auth_configuration_issues()
+    if settings.app_env == "production" and auth_issues:
+        raise RuntimeError(
+            "Unsafe authentication configuration: " + ", ".join(auth_issues)
+        )
     init_db()
     yield
 
@@ -294,6 +299,9 @@ def index():
 @app.get("/health")
 def health():
     profile = f"{settings.model_provider}:{settings.default_model_for(settings.model_provider)}"
+    unsafe_auth_disabled = (
+        settings.app_env == "production" and settings.auth_mode == "disabled"
+    )
     return {
         "status": "ok",
         "app": settings.app_name,
@@ -301,7 +309,48 @@ def health():
         "provider": settings.model_provider,
         "model": settings.default_model_for(settings.model_provider),
         "provider_ready": profile_ready(settings, profile),
+        "authentication": {
+            "mode": settings.auth_mode,
+            "unsafe_disabled_in_production": unsafe_auth_disabled,
+        },
     }
+
+
+@app.get("/ready")
+def readiness(db: Annotated[Session, Depends(get_db)]):
+    checks: dict[str, dict[str, object]] = {}
+    issues = settings.auth_configuration_issues()
+    try:
+        db.execute(text("SELECT 1"))
+        checks["database"] = {"ready": True}
+    except Exception:
+        checks["database"] = {"ready": False, "code": "database_unavailable"}
+
+    authentication_ready = not issues
+    auth_check: dict[str, object] = {
+        "ready": authentication_ready,
+        "mode": settings.auth_mode,
+    }
+    if issues:
+        auth_check["codes"] = issues
+    elif settings.auth_mode == "oidc":
+        try:
+            authenticator = get_oidc_authenticator()
+            authenticator.cache.get_metadata()
+            authenticator.cache.get_jwks()
+        except OIDCError as exc:
+            authentication_ready = False
+            auth_check = {
+                "ready": False,
+                "mode": settings.auth_mode,
+                "codes": [exc.reason_code],
+            }
+    checks["authentication"] = auth_check
+    ready = bool(checks["database"]["ready"]) and authentication_ready
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"status": "ready" if ready else "not_ready", "checks": checks},
+    )
 
 
 @app.get("/api/providers")
@@ -314,9 +363,25 @@ def providers():
 
 @app.get("/api/v1/context")
 def enterprise_context(
-    context: OrganizationContextAccess,
+    request: Request,
+    authentication: CurrentAuthentication,
     db: Annotated[Session, Depends(get_db)],
 ):
+    requested_principal_id = (
+        authentication.principal_id
+        if settings.auth_mode == "oidc"
+        else request.headers.get("X-AI-Examiner-Principal")
+    )
+    try:
+        context = resolve_organization_context(
+            db,
+            requested_organization_id=request.headers.get(
+                "X-AI-Examiner-Organization"
+            ),
+            requested_principal_id=requested_principal_id,
+        )
+    except EnterpriseIdentityError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     organization = db.get(Organization, context.organization_id)
     if organization is None:
         raise HTTPException(404, "Organization context not found")
@@ -324,6 +389,104 @@ def enterprise_context(
         **context.public_dict(),
         "organization": serialize_organization(organization),
     }
+
+
+@app.get("/api/v1/auth/login", include_in_schema=False)
+def oidc_login(db: Annotated[Session, Depends(get_db)]):
+    if settings.auth_mode != "oidc":
+        raise HTTPException(status_code=404, detail="OIDC authentication is disabled")
+    try:
+        login = get_oidc_authenticator().begin_login(db)
+    except OIDCError as exc:
+        raise authentication_http_error(exc) from exc
+    return RedirectResponse(
+        login.authorization_url,
+        status_code=302,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/api/v1/auth/callback", include_in_schema=False)
+def oidc_callback(
+    db: Annotated[Session, Depends(get_db)],
+    code: str | None = Query(default=None, max_length=4000),
+    state: str | None = Query(default=None, max_length=500),
+    error: str | None = Query(default=None, max_length=200),
+):
+    if settings.auth_mode != "oidc":
+        raise HTTPException(status_code=404, detail="OIDC authentication is disabled")
+    if error or not code or not state:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "authentication_failed", "message": "Authentication failed."},
+        )
+    try:
+        completed = get_oidc_authenticator().complete_login(
+            db,
+            code=code,
+            state=state,
+        )
+    except OIDCError as exc:
+        raise authentication_http_error(exc) from exc
+    response = RedirectResponse(
+        settings.oidc_post_login_redirect,
+        status_code=303,
+        headers={"Cache-Control": "no-store"},
+    )
+    max_age = max(0, int((completed.expires_at - datetime.now(UTC)).total_seconds()))
+    response.set_cookie(
+        settings.oidc_session_cookie_name,
+        completed.session_token,
+        max_age=max_age,
+        expires=completed.expires_at,
+        path="/",
+        secure=bool(
+            settings.oidc_redirect_uri
+            and settings.oidc_redirect_uri.startswith("https://")
+        ),
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+
+@app.post("/api/v1/auth/logout")
+def oidc_logout(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+):
+    cookie = request.cookies.get(settings.oidc_session_cookie_name)
+    revoked = (
+        get_oidc_authenticator().revoke_session(db, cookie)
+        if settings.auth_mode == "oidc"
+        else False
+    )
+    response = JSONResponse(
+        {"logged_out": True, "session_revoked": revoked},
+        headers={"Cache-Control": "no-store"},
+    )
+    response.delete_cookie(
+        settings.oidc_session_cookie_name,
+        path="/",
+        secure=bool(
+            settings.oidc_redirect_uri
+            and settings.oidc_redirect_uri.startswith("https://")
+        ),
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+
+@app.get("/api/v1/me")
+def current_principal(
+    authentication: CurrentAuthentication,
+    db: Annotated[Session, Depends(get_db)],
+):
+    try:
+        return get_oidc_authenticator().me(db, authentication)
+    except OIDCError as exc:
+        raise authentication_http_error(exc) from exc
 
 
 @app.get("/api/templates")

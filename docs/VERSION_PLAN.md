@@ -18,7 +18,7 @@ This file is the authoritative version and branch status for Codex and other cod
 | v0.7 candidate | 0.7.0rc2 | `v0.7.0-rc.2` | Candidate release; Vultr Compose promotion gate remains | Staging only |
 | Upcoming research | 0.8.0 | `research/v0.8.0` | Industry template architecture, API, evaluation and implementation design | Not deployable |
 | Current implementation | 0.8.0.dev0 | `develop/v0.8.0` | Software and AI quality gates pass, including three reciprocal 30-case templates; Docker/Vultr promotion rehearsal remains held | Local evaluation only |
-| Current research | 0.9.0 | `research/v0.9.0` | Enterprise design plus WP-01 PostgreSQL parity and WP-02 observe-only identity foundation implemented | Not deployable |
+| Current research | 0.9.0 | `research/v0.9.0` | Enterprise design plus WP-01 PostgreSQL parity, WP-02 identity foundation and WP-03 strict OIDC authentication implemented | Not deployable |
 | Release candidate | 0.5.0rc4 | `v0.5.0-rc.4` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 
@@ -47,7 +47,7 @@ This file is the authoritative version and branch status for Codex and other cod
 - v0.8 implementation begins on `develop/v0.8.0` only after ADR-005 and all research
   gates are accepted. Feature branches use `feature/v0.8-<short-name>`.
 - `research/v0.9.0` contains enterprise architecture plus reversible research
-  prototypes. WP-01 and WP-02 may add tests, migrations and observe-only seams, but
+  prototypes. WP-01 through WP-03 may add tests, migrations and authentication seams, but
   the branch must not be deployed and must keep package version `0.8.0.dev0`.
 - Do not create `develop/v0.9.0` until ADR-006 and the full v0.9 research gate are
   accepted. Feature branches will use `feature/v0.9-<short-name>`.

@@ -23,6 +23,8 @@ def _test_database_url() -> str:
     return candidate
 
 os.environ["MODEL_PROVIDER"] = "mock"
+os.environ["APP_ENV"] = "test"
+os.environ["AUTH_MODE"] = "disabled"
 os.environ["GOLDEN_DEFAULT_PROFILES"] = "mock:heuristic-v2"
 os.environ["BENCHMARK_DEFAULT_PROFILES"] = "mock:heuristic-v2"
 os.environ["VISUAL_DEFAULT_PROFILE"] = "mock:heuristic-v2"

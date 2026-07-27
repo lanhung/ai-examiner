@@ -66,6 +66,9 @@ Acceptance:
 
 ## WP-03: OIDC authentication
 
+Status: implemented on `research/v0.9.0`; deterministic SQLite tests pass and
+PostgreSQL CI parity remains a required branch gate.
+
 Deliver:
 
 - issuer discovery and JWKS cache;

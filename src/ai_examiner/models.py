@@ -83,6 +83,9 @@ class Principal(Base):
     memberships: Mapped[list[OrganizationMembership]] = relationship(
         back_populates="principal", cascade="all, delete"
     )
+    browser_sessions: Mapped[list[BrowserAuthSession]] = relationship(
+        back_populates="principal", cascade="all, delete"
+    )
 
 
 class OrganizationMembership(Base):
@@ -124,6 +127,48 @@ class OrganizationMembership(Base):
 
     organization: Mapped[Organization] = relationship(back_populates="memberships")
     principal: Mapped[Principal] = relationship(back_populates="memberships")
+
+
+class OIDCLoginTransaction(Base):
+    __tablename__ = "oidc_login_transactions"
+    __table_args__ = (
+        Index("ix_oidc_login_expires", "expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    state_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    code_verifier_ciphertext: Mapped[str] = mapped_column(Text)
+    nonce_hash: Mapped[str] = mapped_column(String(64))
+    redirect_uri: Mapped[str] = mapped_column(String(1000))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class BrowserAuthSession(Base):
+    __tablename__ = "browser_auth_sessions"
+    __table_args__ = (
+        Index("ix_browser_auth_session_expires", "expires_at"),
+        Index("ix_browser_auth_session_principal", "principal_id", "revoked_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    principal_id: Mapped[str] = mapped_column(
+        ForeignKey("principals.id", ondelete="CASCADE")
+    )
+    session_token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    scopes_json: Mapped[list] = mapped_column(JSON, default=list)
+    auth_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    principal: Mapped[Principal] = relationship(back_populates="browser_sessions")
 
 
 class Project(Base):

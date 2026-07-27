@@ -29,6 +29,7 @@ dependencies = [
   "websockets>=15.0,<17.0",
   "alembic>=1.16,<2.0",
   "psycopg[binary]>=3.2,<4.0",
+  "pyjwt[crypto]>=2.10,<3.0",
 ]
 
 [project.optional-dependencies]

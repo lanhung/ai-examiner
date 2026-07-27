@@ -1,7 +1,8 @@
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlparse
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,6 +11,35 @@ class Settings(BaseSettings):
 
     app_name: str = "AI Examiner"
     app_env: str = "development"
+    auth_mode: str = Field(default="disabled", pattern="^(disabled|oidc)$")
+    allow_unsafe_auth_disabled_in_production: bool = False
+
+    oidc_issuer_url: str | None = None
+    oidc_audience: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: SecretStr | None = None
+    oidc_redirect_uri: str | None = None
+    oidc_post_login_redirect: str = "/"
+    oidc_scopes: str = "openid profile email"
+    oidc_required_scopes: str = ""
+    oidc_allowed_algorithms: str = "RS256,ES256"
+    oidc_access_token_types: str = "at+jwt"
+    oidc_clock_skew_seconds: int = Field(default=30, ge=0, le=300)
+    oidc_discovery_ttl_seconds: int = Field(default=300, ge=30, le=86_400)
+    oidc_jwks_ttl_seconds: int = Field(default=300, ge=30, le=86_400)
+    oidc_http_timeout_seconds: float = Field(default=5.0, ge=1.0, le=30.0)
+    oidc_login_ttl_minutes: int = Field(default=10, ge=2, le=30)
+    oidc_session_max_minutes: int = Field(default=480, ge=5, le=1440)
+    oidc_session_cookie_name: str = Field(
+        default="axe_session",
+        pattern=r"^[A-Za-z][A-Za-z0-9_-]{2,63}$",
+    )
+    oidc_principal_provisioning: str = Field(
+        default="existing_only",
+        pattern="^(existing_only|auto_pending|auto_active)$",
+    )
+    auth_session_secret: SecretStr | None = None
+    oidc_allow_insecure_http: bool = False
     model_provider: str = Field(
         default="mock", pattern="^(mock|openai|anthropic|gemini|ollama|qwen)$"
     )
@@ -106,6 +136,91 @@ class Settings(BaseSettings):
             "ollama": self.ollama_model,
             "mock": "heuristic-v2",
         }[provider]
+
+    @property
+    def oidc_algorithm_allowlist(self) -> tuple[str, ...]:
+        return tuple(
+            dict.fromkeys(
+                item.strip()
+                for item in self.oidc_allowed_algorithms.split(",")
+                if item.strip()
+            )
+        )
+
+    @property
+    def oidc_access_token_type_allowlist(self) -> tuple[str, ...]:
+        return tuple(
+            dict.fromkeys(
+                item.strip().lower()
+                for item in self.oidc_access_token_types.split(",")
+                if item.strip()
+            )
+        )
+
+    @property
+    def oidc_scope_list(self) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(self.oidc_scopes.split()))
+
+    @property
+    def oidc_required_scope_set(self) -> frozenset[str]:
+        return frozenset(self.oidc_required_scopes.split())
+
+    def auth_configuration_issues(self) -> list[str]:
+        issues: list[str] = []
+        if self.auth_mode == "disabled":
+            if (
+                self.app_env == "production"
+                and not self.allow_unsafe_auth_disabled_in_production
+            ):
+                issues.append("unsafe_auth_disabled_in_production")
+            return issues
+
+        required = {
+            "oidc_issuer_url": self.oidc_issuer_url,
+            "oidc_audience": self.oidc_audience,
+            "oidc_client_id": self.oidc_client_id,
+            "oidc_redirect_uri": self.oidc_redirect_uri,
+            "auth_session_secret": self.auth_session_secret,
+        }
+        issues.extend(
+            f"missing_{name}" for name, value in required.items() if not value
+        )
+        if not self.oidc_algorithm_allowlist:
+            issues.append("missing_oidc_algorithm_allowlist")
+        if not self.oidc_access_token_type_allowlist:
+            issues.append("missing_oidc_access_token_type_allowlist")
+        if "openid" not in self.oidc_scope_list:
+            issues.append("oidc_openid_scope_required")
+        if (
+            not self.oidc_post_login_redirect.startswith("/")
+            or self.oidc_post_login_redirect.startswith("//")
+        ):
+            issues.append("oidc_post_login_redirect_must_be_relative")
+        for name, value in (
+            ("issuer", self.oidc_issuer_url),
+            ("redirect_uri", self.oidc_redirect_uri),
+        ):
+            if not value:
+                continue
+            parsed = urlparse(value)
+            secure = (
+                parsed.scheme == "https"
+                and bool(parsed.netloc)
+                and not parsed.username
+                and not parsed.password
+                and not parsed.fragment
+            )
+            local_test = (
+                self.oidc_allow_insecure_http
+                and parsed.scheme == "http"
+                and parsed.hostname in {"127.0.0.1", "localhost"}
+                and not parsed.username
+                and not parsed.password
+                and not parsed.fragment
+            )
+            if not secure and not local_test:
+                issues.append(f"oidc_{name}_must_use_https")
+        return issues
 
 
 @lru_cache
