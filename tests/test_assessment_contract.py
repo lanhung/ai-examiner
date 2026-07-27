@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from ai_examiner.agents.analyzer import AnswerAnalyzer
+from ai_examiner.agents.analyzer import ANSWER_ANALYZER_VERSION, AnswerAnalyzer
 from ai_examiner.agents.base import AgentContext
 from ai_examiner.agents.evaluator import Evaluator
 from ai_examiner.agents.planner import SessionPlanner
@@ -22,6 +22,8 @@ class RecordedAssessmentProvider(ModelProvider):
     def __init__(self, responses: list[dict[str, Any]]):
         self.responses = list(responses)
         self.calls = 0
+        self.last_instructions = ""
+        self.last_payload: dict[str, Any] = {}
 
     def complete_json(
         self,
@@ -31,8 +33,10 @@ class RecordedAssessmentProvider(ModelProvider):
         payload: dict[str, Any],
         schema_hint: dict[str, Any],
     ) -> ProviderResult:
-        del agent, instructions, payload, schema_hint
+        del agent, schema_hint
         self.calls += 1
+        self.last_instructions = instructions
+        self.last_payload = payload
         return ProviderResult(
             data=self.responses.pop(0), provider=self.name, model=self.model
         )
@@ -67,6 +71,7 @@ def _response(correctness: str = "correct") -> dict[str, Any]:
         "correctness": correctness,
         "claims": ["The answer states the authority boundary."],
         "errors": [],
+        "error_assessments": [],
         "missing_points": [],
         "point_assessments": [
             {
@@ -75,6 +80,9 @@ def _response(correctness: str = "correct") -> dict[str, Any]:
                 "answer_quote": "The cognitive engine remains authoritative.",
                 "source_evidence_id": "page-1",
                 "reason": "Directly covers the expected point.",
+                "semantic_match": "equivalent",
+                "functional_criterion_satisfied": True,
+                "explicit_source_conflict": False,
             }
         ],
         "source_grounding": 1.0,
@@ -121,6 +129,12 @@ def test_real_provider_alias_can_receive_full_score():
     assert analysis["raw_correctness"] == "correct"
     assert analysis["correctness"] == "supported"
     assert analysis["coverage"] == 1.0
+    assert analysis["assessment_version"] == ANSWER_ANALYZER_VERSION
+    assert analysis["point_assessments"][0]["alternative_accepted"] is False
+    assert analysis["point_assessments"][0]["rubric_issue"] == "none"
+    assert analysis["point_assessments"][0]["semantic_match"] == "equivalent"
+    assert analysis["point_assessments"][0]["functional_criterion_satisfied"] is True
+    assert analysis["point_assessments"][0]["explicit_source_conflict"] is False
     assert evaluation["score"] == 5.0
     assert evaluation["dimensions"]["correctness"] == 5.0
 
@@ -147,6 +161,357 @@ def test_invalid_label_fails_after_one_correction_attempt():
             history=[],
         )
     assert provider.calls == 2
+
+
+def test_analyzer_accepts_a_defensible_alternative_and_audits_the_rubric():
+    response = _response("supported")
+    response["claims"] = ["Grounding runs after analysis and before policy."]
+    response["point_assessments"][0].update(
+        {
+            "status": "covered",
+            "answer_quote": "after analysis and before policy",
+            "reason": (
+                "This is a defensible control point that satisfies the same "
+                "grounding objective under the stated failure policy."
+            ),
+            "alternative_accepted": True,
+            "functional_criterion_satisfied": True,
+            "explicit_source_conflict": False,
+            "semantic_match": "none",
+            "rubric_issue": "over_specific",
+        }
+    )
+    response["unverified_claims"] = []
+    provider = RecordedAssessmentProvider([response])
+    analyzer = AnswerAnalyzer(AgentContext(provider=provider))
+    question = {
+        "id": "Q-alt",
+        "text": "Where would you place the grounding control, and why?",
+        "type": "decision",
+        "expected_points": [
+            "Place the grounding checker downstream of the Policy Controller."
+        ],
+        "source_excerpt": "The system requires a grounding control before final evaluation.",
+    }
+
+    analysis = analyzer.analyze(
+        question=question,
+        answer=(
+            "I would run grounding after answer analysis and before Policy and "
+            "Evaluator. This prevents unsupported claims from steering a decision, "
+            "and a failed check routes the turn to clarification."
+        ),
+        history=[],
+    )
+
+    point = analysis["point_assessments"][0]
+    assert analysis["correctness"] == "supported"
+    assert analysis["coverage"] == 1.0
+    assert point["alternative_accepted"] is True
+    assert point["rubric_issue"] == "over_specific"
+    assert analysis["errors"] == []
+    assert provider.last_payload["assessment_contract"] == {
+        "semantic_paraphrases_are_valid": True,
+        "defensible_alternatives_are_valid": True,
+        "semantic_equivalence_requires_full_credit": True,
+        "satisfied_alternatives_require_full_credit": True,
+        "contradiction_requires_explicit_conflict": True,
+        "source_excerpt_may_be_non_exhaustive": True,
+    }
+    normalized_instructions = " ".join(provider.last_instructions.split())
+    assert "functional assessment criteria" in normalized_instructions
+    assert "Reserve contradicted for an explicit factual or logical conflict" in (
+        normalized_instructions
+    )
+
+
+def test_analyzer_keeps_unverified_claims_separate_from_errors():
+    response = _response("partially_supported")
+    response["errors"] = []
+    response["unverified_claims"] = ["The external benchmark improved by 18%."]
+    response["point_assessments"][0].update(
+        {
+            "status": "partial",
+            "semantic_match": "partial",
+            "functional_criterion_satisfied": False,
+            "explicit_source_conflict": False,
+            "alternative_accepted": False,
+            "rubric_issue": "unsupported_by_context",
+        }
+    )
+    provider = RecordedAssessmentProvider([response])
+
+    analysis = AnswerAnalyzer(AgentContext(provider=provider)).analyze(
+        question={
+            "id": "Q-source",
+            "text": "What evidence supports the decision?",
+            "expected_points": ["Use material evidence."],
+            "source_excerpt": "The internal pilot reduced median latency.",
+        },
+        answer=(
+            "The internal pilot reduced median latency. An external benchmark "
+            "also improved by 18%."
+        ),
+        history=[],
+    )
+
+    assert analysis["errors"] == []
+    assert analysis["unverified_claims"] == [
+        "The external benchmark improved by 18%."
+    ]
+    assert analysis["point_assessments"][0]["rubric_issue"] == (
+        "unsupported_by_context"
+    )
+
+
+@pytest.mark.parametrize(
+    ("semantic_match", "alternative_accepted", "functional_criterion_satisfied"),
+    [
+        ("equivalent", False, True),
+        ("none", True, True),
+    ],
+)
+def test_analyzer_reconciles_full_credit_contract(
+    semantic_match: str,
+    alternative_accepted: bool,
+    functional_criterion_satisfied: bool,
+):
+    response = _response("partially_supported")
+    response["point_assessments"][0].update(
+        {
+            "status": "partial",
+            "semantic_match": semantic_match,
+            "functional_criterion_satisfied": functional_criterion_satisfied,
+            "explicit_source_conflict": False,
+            "alternative_accepted": alternative_accepted,
+            "rubric_issue": "over_specific" if alternative_accepted else "none",
+        }
+    )
+    provider = RecordedAssessmentProvider([response])
+
+    analysis = AnswerAnalyzer(AgentContext(provider=provider)).analyze(
+        question={
+            "id": "Q-reconcile",
+            "text": "Give a defensible solution.",
+            "expected_points": ["Meet the reliability objective."],
+        },
+        answer="This solution meets the reliability objective under the stated constraints.",
+        history=[],
+    )
+
+    assert analysis["correctness"] == "supported"
+    assert analysis["coverage"] == 1.0
+    assert analysis["missing_points"] == []
+    assert analysis["contract_reconciled_point_ids"] == ["P1"]
+
+
+def test_analyzer_never_promotes_an_explicit_contradiction():
+    response = _response("unsupported")
+    response["errors"] = ["The answer explicitly reverses the source fact."]
+    response["error_assessments"] = [
+        {
+            "error": "The answer explicitly reverses the source fact.",
+            "kind": "explicit_fact_conflict",
+            "reason": "The supplied source states the opposite.",
+        }
+    ]
+    response["point_assessments"][0].update(
+        {
+            "status": "contradicted",
+            "semantic_match": "equivalent",
+            "functional_criterion_satisfied": True,
+            "explicit_source_conflict": True,
+            "alternative_accepted": True,
+            "rubric_issue": "none",
+        }
+    )
+    provider = RecordedAssessmentProvider([response])
+
+    analysis = AnswerAnalyzer(AgentContext(provider=provider)).analyze(
+        question={
+            "id": "Q-conflict",
+            "text": "State the source fact.",
+            "expected_points": ["The policy layer cannot override evidence."],
+        },
+        answer="The policy layer can override evidence.",
+        history=[],
+    )
+
+    assert analysis["correctness"] == "unsupported"
+    assert analysis["coverage"] == 0.0
+    assert analysis["point_assessments"][0]["status"] == "contradicted"
+    assert analysis["contract_reconciled_point_ids"] == []
+
+
+def test_rubric_mismatch_is_audited_without_becoming_a_factual_error():
+    response = _response("partially_supported")
+    response["errors"] = ["The answer uses a different implementation."]
+    response["error_assessments"] = [
+        {
+            "error": "The answer uses a different implementation.",
+            "kind": "rubric_mismatch",
+            "reason": "The expected point prescribes one of several valid implementations.",
+        }
+    ]
+    response["point_assessments"][0].update(
+        {
+            "status": "partial",
+            "semantic_match": "partial",
+            "functional_criterion_satisfied": True,
+            "explicit_source_conflict": False,
+            "alternative_accepted": True,
+            "rubric_issue": "over_specific",
+        }
+    )
+
+    analysis = AnswerAnalyzer(
+        AgentContext(provider=RecordedAssessmentProvider([response]))
+    ).analyze(
+        question={
+            "id": "Q-audit",
+            "text": "Choose a reliable implementation and justify it.",
+            "expected_points": ["Use implementation A."],
+        },
+        answer="Implementation B meets the same objective with a clear fallback.",
+        history=[],
+    )
+
+    assert analysis["correctness"] == "supported"
+    assert analysis["coverage"] == 1.0
+    assert analysis["errors"] == []
+    assert analysis["raw_errors"] == ["The answer uses a different implementation."]
+    assert analysis["rubric_audit_notes"] == [
+        "The answer uses a different implementation."
+    ]
+
+
+def test_open_answer_adjudicator_recovers_a_valid_unrecognized_alternative():
+    response = _response("partially_supported")
+    response["point_assessments"][0].update(
+        {
+            "status": "partial",
+            "semantic_match": "partial",
+            "functional_criterion_satisfied": False,
+            "explicit_source_conflict": False,
+            "alternative_accepted": False,
+            "rubric_issue": "none",
+        }
+    )
+    adjudication = {
+        "decisions": [
+            {
+                "point_id": "P1",
+                "functionally_satisfied": False,
+                "defensible": True,
+                "explicit_source_conflict": False,
+                "reason": (
+                    "The answer differs from the expected topology but is a "
+                    "defensible way to meet the reliability objective."
+                ),
+            }
+        ]
+    }
+    provider = RecordedAssessmentProvider([response, adjudication])
+
+    analysis = AnswerAnalyzer(AgentContext(provider=provider)).analyze(
+        question={
+            "id": "Q-open",
+            "text": "Where would you place the reliability control, and why?",
+            "type": "decision",
+            "expected_points": ["Place it after the policy layer."],
+            "source_excerpt": "A reliability control is required before final evaluation.",
+        },
+        answer="Place it before policy so unsupported claims cannot steer the next action.",
+        history=[],
+    )
+
+    point = analysis["point_assessments"][0]
+    assert provider.calls == 2
+    assert analysis["correctness"] == "supported"
+    assert analysis["coverage"] == 1.0
+    assert point["status"] == "covered"
+    assert point["alternative_accepted"] is True
+    assert point["open_answer_adjudication"]["defensible"] is True
+
+
+def test_open_answer_adjudicator_does_not_promote_a_vague_answer():
+    response = _response("partially_supported")
+    response["point_assessments"][0].update(
+        {
+            "status": "partial",
+            "semantic_match": "partial",
+            "functional_criterion_satisfied": False,
+            "explicit_source_conflict": False,
+            "alternative_accepted": False,
+            "rubric_issue": "none",
+        }
+    )
+    adjudication = {
+        "decisions": [
+            {
+                "point_id": "P1",
+                "functionally_satisfied": False,
+                "defensible": False,
+                "explicit_source_conflict": False,
+                "reason": "No constraint or rationale is supplied.",
+            }
+        ]
+    }
+    provider = RecordedAssessmentProvider([response, adjudication])
+
+    analysis = AnswerAnalyzer(AgentContext(provider=provider)).analyze(
+        question={
+            "id": "Q-vague",
+            "text": "Choose a reliability control and justify it.",
+            "type": "decision",
+            "expected_points": ["Use a control before final evaluation."],
+        },
+        answer="I would use a better control.",
+        history=[],
+    )
+
+    assert analysis["correctness"] == "partially_supported"
+    assert analysis["coverage"] == 0.5
+    assert analysis["point_assessments"][0]["status"] == "partial"
+
+
+def test_open_answer_adjudication_failure_preserves_initial_assessment():
+    class FailingAdjudicationProvider(RecordedAssessmentProvider):
+        def complete_json(self, **kwargs):
+            if self.calls == 1:
+                raise TimeoutError("adjudication timed out")
+            return super().complete_json(**kwargs)
+
+    response = _response("partially_supported")
+    response["point_assessments"][0].update(
+        {
+            "status": "partial",
+            "semantic_match": "partial",
+            "functional_criterion_satisfied": False,
+            "explicit_source_conflict": False,
+            "alternative_accepted": False,
+            "rubric_issue": "none",
+        }
+    )
+    provider = FailingAdjudicationProvider([response])
+
+    analysis = AnswerAnalyzer(AgentContext(provider=provider)).analyze(
+        question={
+            "id": "Q-timeout",
+            "text": "Choose a reliability control and justify it.",
+            "type": "decision",
+            "expected_points": ["Use a control before final evaluation."],
+        },
+        answer="I would place a control before policy.",
+        history=[],
+    )
+
+    assert analysis["correctness"] == "partially_supported"
+    assert analysis["coverage"] == 0.5
+    assert analysis["open_answer_adjudication"] == {
+        "status": "unavailable",
+        "error_type": "TimeoutError",
+    }
 
 
 def test_report_aggregates_question_trajectories_not_attempts():

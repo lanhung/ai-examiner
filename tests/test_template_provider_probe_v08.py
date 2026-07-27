@@ -107,6 +107,33 @@ def test_planner_retries_stacked_questions_until_single_issue():
     assert text.count("?") + text.count("？") <= 1
 
 
+def test_single_judgment_question_does_not_treat_background_nouns_as_requests():
+    question = (
+        "作为评审人，基于材料中“研究设计依赖样本独立性，并计划使用"
+        "对照实验”这一前提，您是否认为该方案的方法基础足以支持其比较结论？"
+    )
+
+    assert SessionPlanner._has_stacked_request(question) is False
+
+
+def test_quoted_customer_question_is_context_not_a_second_examiner_request():
+    followup = (
+        "如果客户追问“为什么不能支持更大的文件？”，您会如何基于产品"
+        "设计逻辑简要解释，而不透露未公开的技术细节？"
+    )
+
+    assert SessionPlanner._has_stacked_request(followup) is False
+
+
+def test_two_english_interrogative_tasks_are_stacked():
+    question = (
+        "Who will own the first concrete step to contain the regression, "
+        "and what will that step be?"
+    )
+
+    assert SessionPlanner._has_stacked_request(question) is True
+
+
 def test_planner_repairs_semantically_stacked_main_question_and_followup():
     class SemanticStackRepairProvider(RepairingPlannerProvider):
         def complete_json(self, **kwargs):

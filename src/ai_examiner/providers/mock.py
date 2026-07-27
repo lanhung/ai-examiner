@@ -374,6 +374,11 @@ class MockProvider(ModelProvider):
                     "answer_quote": answer[:180] if status in {"covered", "partial"} else "",
                     "source_evidence_id": "mock-source" if evidence else "",
                     "reason": "Deterministic mock point assessment.",
+                    "semantic_match": "equivalent" if status == "covered" else "partial",
+                    "functional_criterion_satisfied": status == "covered",
+                    "explicit_source_conflict": status == "contradicted",
+                    "alternative_accepted": False,
+                    "rubric_issue": "none",
                 }
             )
         return {
@@ -381,6 +386,19 @@ class MockProvider(ModelProvider):
             "correctness": correctness,
             "claims": [answer[:180]] if answer else [],
             "errors": errors,
+            "error_assessments": [
+                {
+                    "error": error,
+                    "kind": (
+                        "explicit_fact_conflict"
+                        if misconception
+                        else "logic_failure"
+                    ),
+                    "reason": "Deterministic mock error classification.",
+                }
+                for error in errors
+            ],
+            "unverified_claims": [],
             "missing_points": expected[1:] if coverage < 0.65 else [],
             "point_assessments": point_assessments,
             "source_grounding": 0.9 if evidence else 0.2,
