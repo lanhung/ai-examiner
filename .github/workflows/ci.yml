@@ -31,6 +31,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://examiner:examiner@127.0.0.1:5432/examiner_test
+      AI_EXAMINER_TEST_DATABASE_URL: postgresql+psycopg://examiner:examiner@127.0.0.1:5432/examiner_test
       MODEL_PROVIDER: mock
       MEMORY_IDENTITY_SECRET: ci-postgres-memory-secret
       CELERY_ALWAYS_EAGER: "true"
@@ -41,8 +42,5 @@ jobs:
           python-version: "3.12"
       - run: uv sync --extra dev
       - run: uv run alembic upgrade head
-      - run: >-
-          uv run pytest
-          tests/test_v07_completion.py
-          tests/test_long_term_memory_v07.py
-          tests/test_template_persistence_v08.py
+      - run: uv run alembic current
+      - run: uv run pytest --cov=ai_examiner --cov-report=term-missing

@@ -18,7 +18,7 @@ This file is the authoritative version and branch status for Codex and other cod
 | v0.7 candidate | 0.7.0rc2 | `v0.7.0-rc.2` | Candidate release; Vultr Compose promotion gate remains | Staging only |
 | Upcoming research | 0.8.0 | `research/v0.8.0` | Industry template architecture, API, evaluation and implementation design | Not deployable |
 | Current implementation | 0.8.0.dev0 | `develop/v0.8.0` | Software and AI quality gates pass, including three reciprocal 30-case templates; Docker/Vultr promotion rehearsal remains held | Local evaluation only |
-| Current research | 0.9.0 | `research/v0.9.0` | Enterprise tenancy, identity, authorization, data, operations and recovery design | Not deployable |
+| Current research | 0.9.0 | `research/v0.9.0` | Enterprise design complete; WP-01 PostgreSQL full-suite parity gate in validation | Not deployable |
 | Release candidate | 0.5.0rc4 | `v0.5.0-rc.4` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 

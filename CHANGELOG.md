@@ -14,6 +14,10 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   gates and restartable SQLite/file-to-PostgreSQL/object-storage migration strategy.
 - Inventory every current model and API family by tenant ownership, required
   capability, resource resolver and migration invariant.
+- Correct the PostgreSQL CI false-positive by allowing a guarded test-only database
+  override and running the complete regression suite against PostgreSQL.
+- Add an isolated Mock-only PostgreSQL Compose rehearsal, dedicated test image and
+  Docker build-context exclusions for secrets, runtime data and generated archives.
 
 - Add complete Planner v6 reciprocal real-provider evidence for all seven built-in
   templates: 30 unique cases per template, 420 case evaluations and 840 anonymous

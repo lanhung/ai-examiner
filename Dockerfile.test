@@ -1,0 +1,16 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . /app
+RUN pip install --upgrade pip && pip install ".[dev,providers]"
+RUN mkdir -p /app/data/test_uploads /app/data/test_evidence /app/data/test_exports
+
+CMD ["pytest", "-q"]

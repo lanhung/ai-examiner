@@ -506,6 +506,29 @@ Do not create `develop/v0.9.0` until:
 - backup and full restore objectives are agreed;
 - release metrics and security gates are accepted.
 
+## 19. Research implementation progress
+
+### WP-01 PostgreSQL parity
+
+The first parity increment corrects an earlier false-positive CI boundary: the
+PostgreSQL job created and migrated a PostgreSQL service, but the shared pytest
+configuration unconditionally replaced `DATABASE_URL` with SQLite before importing
+the application.
+
+The corrected gate:
+
+- uses the dedicated `AI_EXAMINER_TEST_DATABASE_URL` variable;
+- refuses non-SQLite databases whose database name is not explicitly test-scoped;
+- runs the complete regression suite against PostgreSQL rather than three selected
+  files;
+- includes an isolated Mock-only Compose rehearsal with temporary PostgreSQL and
+  application data;
+- excludes `.env`, runtime data, databases and archives from Docker build context.
+
+Local environments without Docker continue to run the complete SQLite suite. The
+PostgreSQL result is authoritative only after GitHub Actions or the isolated Compose
+rehearsal completes.
+
 ## References
 
 - PostgreSQL Row Security:

@@ -1,0 +1,37 @@
+services:
+  postgres-test:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: examiner
+      POSTGRES_PASSWORD: examiner-test-only
+      POSTGRES_DB: examiner_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U examiner -d examiner_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  postgres-tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      DATABASE_URL: postgresql+psycopg://examiner:examiner-test-only@postgres-test:5432/examiner_test
+      AI_EXAMINER_TEST_DATABASE_URL: postgresql+psycopg://examiner:examiner-test-only@postgres-test:5432/examiner_test
+      MODEL_PROVIDER: mock
+      MEMORY_IDENTITY_SECRET: postgres-parity-test-secret
+      CELERY_ALWAYS_EAGER: "true"
+    tmpfs:
+      - /app/data
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    command:
+      - bash
+      - -lc
+      - >-
+        alembic upgrade head
+        && alembic current
+        && pytest --cov=ai_examiner --cov-report=term-missing

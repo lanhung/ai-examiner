@@ -2,6 +2,25 @@ import os
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.engine import make_url
+
+
+def _test_database_url() -> str:
+    candidate = os.environ.get(
+        "AI_EXAMINER_TEST_DATABASE_URL",
+        "sqlite:///./data/test_ai_examiner.db",
+    )
+    url = make_url(candidate)
+    if url.drivername.startswith("sqlite"):
+        return candidate
+    database = (url.database or "").lower()
+    if database != "test" and not (
+        database.startswith("test_") or database.endswith("_test")
+    ):
+        raise RuntimeError(
+            "AI_EXAMINER_TEST_DATABASE_URL must name an explicit test database"
+        )
+    return candidate
 
 os.environ["MODEL_PROVIDER"] = "mock"
 os.environ["GOLDEN_DEFAULT_PROFILES"] = "mock:heuristic-v2"
@@ -9,7 +28,7 @@ os.environ["BENCHMARK_DEFAULT_PROFILES"] = "mock:heuristic-v2"
 os.environ["VISUAL_DEFAULT_PROFILE"] = "mock:heuristic-v2"
 os.environ["OPENAI_API_KEY"] = "test-openai-key"
 os.environ["DASHSCOPE_API_KEY"] = "test-dashscope-key"
-os.environ["DATABASE_URL"] = "sqlite:///./data/test_ai_examiner.db"
+os.environ["DATABASE_URL"] = _test_database_url()
 os.environ["UPLOAD_DIR"] = "./data/test_uploads"
 os.environ["EVIDENCE_DIR"] = "./data/test_evidence"
 os.environ["EXPORT_DIR"] = "./data/test_exports"
