@@ -51,6 +51,18 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 - Separate schema-management and runtime responsibilities: enforced RLS requires
   `DATABASE_SCHEMA_MANAGEMENT=external`, so API and worker startup cannot run DDL or
   global seed writes with the restricted runtime credential.
+- Add WP-06 tenant object storage with one Local/S3-compatible backend contract,
+  canonical organization-prefixed object keys and normalized `StoredObject`
+  locators protected by PostgreSQL FORCE RLS.
+- Route new document, evidence and memory-export writes through checksum-verified
+  storage while retaining nullable legacy paths only for migration compatibility.
+- Add authorized `/api/v1` document, evidence, highlighted evidence and memory
+  export downloads with private streaming or bounded presigned redirects.
+- Add restartable legacy-path migration, atomic checkpoints, source retention,
+  missing-object reconciliation and a downgrade guard that prevents orphaning
+  migrated objects.
+- Add an optional private MinIO Compose profile, storage readiness checks and
+  Local/S3 contract, resume, checksum, authorization and Alembic regression tests.
 
 - Add complete Planner v6 reciprocal real-provider evidence for all seven built-in
   templates: 30 unique cases per template, 420 case evaluations and 840 anonymous

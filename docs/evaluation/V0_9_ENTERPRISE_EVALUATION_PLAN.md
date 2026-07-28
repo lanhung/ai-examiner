@@ -176,6 +176,13 @@ database/object ownership mismatch: 0
 verified deletion completion: 100%
 ```
 
+WP-06 deterministic evidence is implemented in
+`tests/test_storage_backend_v09.py`. It runs one backend contract against local and
+S3-compatible adapters, verifies tenant keys and hashes, exercises authorized
+downloads, resumes an interrupted migration without duplicates and reconciles a
+missing object. PostgreSQL CI remains the authoritative RLS and migration parity
+gate.
+
 ### 3.7 Queue safety
 
 - duplicate task delivery;

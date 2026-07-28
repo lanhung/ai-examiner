@@ -194,6 +194,7 @@ S3_BUCKET=
 S3_ACCESS_KEY_ID=
 S3_SECRET_ACCESS_KEY=
 S3_REQUIRE_TLS=true
+S3_ALLOW_INSECURE_HTTP=false
 S3_PRESIGN_TTL_SECONDS=300
 
 AUDIT_REQUIRED=true
@@ -204,6 +205,46 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
 
 `.env.example` eventually documents names with blank values. Real values remain only
 in deployment secrets.
+
+### 9.1 Implemented WP-06 object migration
+
+The current research branch provides a restartable locator migration:
+
+```bash
+uv run ai-examiner-migrate-storage --dry-run
+uv run ai-examiner-migrate-storage \
+  --checkpoint ./data/storage-migration.json
+uv run ai-examiner-migrate-storage --reconcile-only
+```
+
+For Compose deployments, prefer:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  -f docker-compose.minio.yml \
+  run --rm ai-examiner \
+  ai-examiner-migrate-storage --checkpoint /app/data/storage-migration.json
+```
+
+Use a migration role that can enumerate all tenants. Do not run the inventory with
+the restricted RLS runtime role. The default keeps legacy source files. Add
+`--delete-source` only after object reconciliation, download verification, backup
+and rollback review.
+
+For a single-host MinIO rehearsal:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  -f docker-compose.minio.yml \
+  up -d --build --remove-orphans
+```
+
+See `docs/architecture/V0_9_STORAGE_BACKEND.md` for the exact object and recovery
+contract.
 
 ## 10. Promotion commands
 

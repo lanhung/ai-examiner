@@ -1,13 +1,18 @@
-# AI Examiner v0.8.0 Development Status
+# AI Examiner v0.8.0 Development and v0.9.0 Research Status
 
 ## Current state
 
 - Version: `0.8.0.dev0`
-- Branch: `develop/v0.8.0`
+- Current branch: `research/v0.9.0`
 - Base candidate: `v0.7.0-rc.2`
 - Release tag: not created
-- Deployment status: local development only
-- Alembic head: `20260723_0007`
+- Deployment status: research only; not approved for production
+- Alembic head: `20260728_0012`
+
+v0.9 WP-01 through WP-06 are implemented. WP-06 adds tenant-scoped Local/S3
+storage, normalized object locators, authorized downloads, MinIO evaluation,
+restartable migration and reconciliation. The package version intentionally remains
+`0.8.0.dev0`.
 
 v0.8 is being delivered as reviewable vertical slices. The current implementation
 now carries one immutable template snapshot through planning, selection,

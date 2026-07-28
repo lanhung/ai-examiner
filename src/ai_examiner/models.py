@@ -380,14 +380,64 @@ def _guard_published_template_version_delete(_mapper, _connection, target) -> No
         raise ValueError("Published template version cannot be deleted")
 
 
+class StoredObject(TenantOwnedMixin, Base):
+    __tablename__ = "stored_objects"
+    __table_args__ = (
+        UniqueConstraint(
+            "backend",
+            "bucket",
+            "object_key",
+            name="uq_stored_object_locator",
+        ),
+        Index(
+            "ix_stored_object_resource",
+            "organization_id",
+            "resource_type",
+            "resource_id",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'missing', 'deleted')",
+            name="ck_stored_object_status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    resource_type: Mapped[str] = mapped_column(String(50))
+    resource_id: Mapped[str] = mapped_column(String(36))
+    purpose: Mapped[str] = mapped_column(String(50))
+    backend: Mapped[str] = mapped_column(String(20))
+    bucket: Mapped[str] = mapped_column(String(255), default="")
+    object_key: Mapped[str] = mapped_column(String(900))
+    content_type: Mapped[str] = mapped_column(String(150))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+
 class Document(TenantOwnedMixin, Base):
     __tablename__ = "documents"
+    __table_args__ = (
+        Index("ix_documents_storage_object", "storage_object_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
     filename: Mapped[str] = mapped_column(String(255))
     content_type: Mapped[str] = mapped_column(String(100))
-    storage_path: Mapped[str] = mapped_column(String(500))
+    storage_object_id: Mapped[str | None] = mapped_column(
+        ForeignKey("stored_objects.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    storage_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     content_text: Mapped[str] = mapped_column(Text)
     page_map: Mapped[list] = mapped_column(JSON, default=list)
     parse_warnings: Mapped[list] = mapped_column(JSON, default=list)
@@ -536,6 +586,9 @@ class ExpertRating(TenantOwnedMixin, Base):
 
 class EvidenceAsset(TenantOwnedMixin, Base):
     __tablename__ = "evidence_assets"
+    __table_args__ = (
+        Index("ix_evidence_assets_storage_object", "storage_object_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
@@ -547,6 +600,10 @@ class EvidenceAsset(TenantOwnedMixin, Base):
     text: Mapped[str] = mapped_column(Text, default="")
     bbox: Mapped[list] = mapped_column(JSON, default=list)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    storage_object_id: Mapped[str | None] = mapped_column(
+        ForeignKey("stored_objects.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     storage_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     mime_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     sha256: Mapped[str] = mapped_column(String(64), default="")
@@ -995,13 +1052,18 @@ class MemoryExportArtifact(TenantOwnedMixin, Base):
     __tablename__ = "memory_export_artifacts"
     __table_args__ = (
         Index("ix_memory_export_identity_created", "learner_identity_id", "created_at"),
+        Index("ix_memory_export_artifacts_storage_object", "storage_object_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     learner_identity_id: Mapped[str] = mapped_column(
         ForeignKey("learner_identities.id", ondelete="CASCADE")
     )
-    storage_path: Mapped[str] = mapped_column(String(500))
+    storage_object_id: Mapped[str | None] = mapped_column(
+        ForeignKey("stored_objects.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    storage_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     scope_json: Mapped[dict] = mapped_column(JSON, default=dict)
     record_counts: Mapped[dict] = mapped_column(JSON, default=dict)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

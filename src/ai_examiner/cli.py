@@ -13,6 +13,7 @@ from .providers.factory import parse_profile, profile_ready
 from .services.documents import parse_document
 from .services.evidence import persist_evidence
 from .services.golden import GoldenDatasetService
+from .services.storage import StorageService, document_object_key
 
 SUPPORTED_SUFFIXES = {".pdf", ".pptx", ".docx", ".txt", ".md", ".markdown"}
 
@@ -141,20 +142,49 @@ def build_corpus() -> None:
                     evidence_output_dir=settings.evidence_dir / project.id / paper.stem,
                 )
                 document = Document(
+                    organization_id=project.organization_id,
                     project_id=project.id,
                     filename=paper.name,
                     content_type=mimetypes.guess_type(paper.name)[0]
                     or "application/octet-stream",
-                    storage_path=str(destination),
+                    storage_path=None,
                     content_text=parsed.text,
-                    page_map=parsed.page_map,
+                    page_map=[
+                        {
+                            key: value
+                            for key, value in page.items()
+                            if key != "preview_path"
+                        }
+                        for page in parsed.page_map
+                    ],
                     parse_warnings=parsed.warnings,
                     char_count=len(parsed.text),
                 )
                 db.add(document)
                 db.flush()
+                stored = StorageService(db, settings).store_bytes(
+                    organization_id=project.organization_id,
+                    project_id=project.id,
+                    resource_type="document",
+                    resource_id=document.id,
+                    purpose="source",
+                    object_key=document_object_key(
+                        project.organization_id,
+                        project.id,
+                        document.id,
+                        filename=document.filename,
+                        content_type=document.content_type,
+                    ),
+                    data=raw,
+                    content_type=document.content_type,
+                )
+                document.storage_object_id = stored.id
                 persist_evidence(
-                    db, project_id=project.id, document=document, drafts=parsed.evidence
+                    db,
+                    project_id=project.id,
+                    document=document,
+                    drafts=parsed.evidence,
+                    settings=settings,
                 )
                 db.commit()
                 db.refresh(document)

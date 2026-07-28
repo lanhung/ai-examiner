@@ -88,6 +88,25 @@ class Settings(BaseSettings):
         default="off",
         pattern="^(off|observe|enforce)$",
     )
+    storage_backend: str = Field(default="local", pattern="^(local|s3)$")
+    storage_local_root: Path = Path("./data/objects")
+    storage_download_mode: str = Field(
+        default="stream",
+        pattern="^(stream|redirect)$",
+    )
+    s3_endpoint_url: str | None = None
+    s3_region: str = "us-east-1"
+    s3_bucket: str | None = None
+    s3_access_key_id: SecretStr | None = None
+    s3_secret_access_key: SecretStr | None = None
+    s3_require_tls: bool = True
+    s3_allow_insecure_http: bool = False
+    s3_server_side_encryption: str = Field(
+        default="AES256",
+        pattern="^(AES256|aws:kms|none)$",
+    )
+    s3_kms_key_id: str | None = None
+    s3_presign_ttl_seconds: int = Field(default=300, ge=30, le=900)
     upload_dir: Path = Path("./data/uploads")
     evidence_dir: Path = Path("./data/evidence")
     export_dir: Path = Path("./data/exports")
@@ -241,6 +260,24 @@ class Settings(BaseSettings):
                 issues.append("postgres_rls_requires_external_schema_management")
         return issues
 
+    def storage_configuration_issues(self) -> list[str]:
+        if self.storage_backend != "s3":
+            return []
+        issues: list[str] = []
+        if not self.s3_bucket:
+            issues.append("missing_s3_bucket")
+        if not self.s3_require_tls and not self.s3_allow_insecure_http:
+            issues.append("s3_insecure_http_not_allowed")
+        if self.s3_server_side_encryption == "aws:kms" and not self.s3_kms_key_id:
+            issues.append("missing_s3_kms_key_id")
+        if self.s3_endpoint_url:
+            parsed = urlparse(self.s3_endpoint_url)
+            if not parsed.netloc or parsed.scheme not in {"http", "https"}:
+                issues.append("invalid_s3_endpoint_url")
+            elif self.s3_require_tls and parsed.scheme != "https":
+                issues.append("s3_endpoint_requires_https")
+        return issues
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -250,6 +287,7 @@ def get_settings() -> Settings:
         settings.evidence_dir,
         settings.export_dir,
         settings.backup_dir,
+        settings.storage_local_root,
         settings.prompt_dir,
     ):
         directory.mkdir(parents=True, exist_ok=True)

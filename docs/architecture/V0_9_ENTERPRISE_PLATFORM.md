@@ -267,9 +267,9 @@ Implementations:
 Canonical object keys:
 
 ```text
-org/{organization_id}/project/{project_id}/document/{document_id}/source
-org/{organization_id}/project/{project_id}/evidence/{asset_id}
-org/{organization_id}/exports/{export_id}
+org/{organization_id}/project/{project_id}/documents/{document_id}/source.{ext}
+org/{organization_id}/project/{project_id}/evidence/{asset_id}/{asset-name}.{ext}
+org/{organization_id}/exports/{artifact_id}.json
 ```
 
 Database rows store backend, bucket and object key, not host filesystem paths. Object
@@ -284,6 +284,17 @@ Requirements:
 - content type and extension validation;
 - no user-controlled object key;
 - bounded presigned URL duration;
+
+### WP-06 storage implementation
+
+WP-06 implements the backend protocol, local and S3-compatible adapters, tenant
+locator schema, authorized downloads, physical deletion, restartable migration and
+object reconciliation. New writes no longer persist host paths. Legacy paths remain
+nullable for transition only.
+
+Detailed contract:
+
+- `docs/architecture/V0_9_STORAGE_BACKEND.md`.
 - deletion queue with retry and orphan reconciliation;
 - optional bucket versioning for recovery, governed by retention policy.
 

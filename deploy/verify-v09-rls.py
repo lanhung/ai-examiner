@@ -10,6 +10,7 @@ from ai_examiner.enterprise_constants import LEGACY_ORGANIZATION_ID
 
 REQUIRED_TENANT_TABLES = (
     "projects",
+    "stored_objects",
     "project_template_bindings",
     "documents",
     "blueprints",

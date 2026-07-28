@@ -8,8 +8,10 @@ from PIL import Image, ImageDraw
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from ..config import Settings
 from ..models import Document, EvidenceAsset
 from .documents import EvidenceDraft
+from .storage import StorageService, evidence_object_key
 
 
 def persist_evidence(
@@ -18,11 +20,14 @@ def persist_evidence(
     project_id: str,
     document: Document,
     drafts: Iterable[EvidenceDraft],
+    settings: Settings | None = None,
 ) -> list[EvidenceAsset]:
     db.execute(delete(EvidenceAsset).where(EvidenceAsset.document_id == document.id))
+    storage = StorageService(db, settings) if settings is not None else None
     assets: list[EvidenceAsset] = []
     for draft in drafts:
         asset = EvidenceAsset(
+            organization_id=document.organization_id,
             project_id=project_id,
             document_id=document.id,
             kind=draft.kind,
@@ -37,6 +42,32 @@ def persist_evidence(
             sha256=draft.sha256,
         )
         db.add(asset)
+        db.flush()
+        if storage is not None and draft.storage_path:
+            source = Path(draft.storage_path)
+            if source.is_file():
+                data = source.read_bytes()
+                stored = storage.store_bytes(
+                    organization_id=document.organization_id,
+                    project_id=project_id,
+                    resource_type="evidence_asset",
+                    resource_id=asset.id,
+                    purpose=draft.kind,
+                    object_key=evidence_object_key(
+                        document.organization_id,
+                        project_id,
+                        asset.id,
+                        kind=draft.kind,
+                        page_number=draft.page_number,
+                        sequence=draft.sequence,
+                        filename=source.name,
+                        content_type=draft.mime_type,
+                    ),
+                    data=data,
+                    content_type=draft.mime_type or "application/octet-stream",
+                )
+                asset.storage_object_id = stored.id
+                asset.storage_path = None
         assets.append(asset)
     db.flush()
     return assets
@@ -54,8 +85,18 @@ def serialize_asset(asset: EvidenceAsset) -> dict:
         "bbox": asset.bbox,
         "metadata": asset.metadata_json,
         "mime_type": asset.mime_type,
-        "has_file": bool(asset.storage_path),
-        "file_url": f"/api/evidence/{asset.id}/file" if asset.storage_path else None,
+        "has_file": bool(asset.storage_object_id or asset.storage_path),
+        "file_url": (
+            f"/api/evidence/{asset.id}/file"
+            if asset.storage_object_id or asset.storage_path
+            else None
+        ),
+        "authorized_file_url": (
+            f"/api/v1/evidence/{asset.id}/file"
+            if asset.storage_object_id or asset.storage_path
+            else None
+        ),
+        "authorized_highlight_url": f"/api/v1/evidence/{asset.id}/highlight",
         "created_at": asset.created_at.isoformat(),
     }
 

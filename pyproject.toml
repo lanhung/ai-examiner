@@ -30,6 +30,7 @@ dependencies = [
   "alembic>=1.16,<2.0",
   "psycopg[binary]>=3.2,<4.0",
   "pyjwt[crypto]>=2.10,<3.0",
+  "boto3>=1.40,<2.0",
 ]
 
 [project.optional-dependencies]
@@ -54,6 +55,7 @@ ai-examiner-probe-template-providers = "ai_examiner.template_provider_probe_cli:
 ai-examiner-evaluate-template-relevance = "ai_examiner.template_relevance_cli:run_template_relevance_evaluation"
 ai-examiner-probe-template-relevance = "ai_examiner.template_relevance_probe_cli:run_template_relevance_probe"
 ai-examiner-bootstrap-admin = "ai_examiner.enterprise_cli:bootstrap_admin"
+ai-examiner-migrate-storage = "ai_examiner.storage_cli:run_storage_migration"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ai_examiner"]

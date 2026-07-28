@@ -135,6 +135,9 @@ Acceptance:
 
 ## WP-06: Storage backend
 
+Status: implemented on `research/v0.9.0`; PostgreSQL CI evidence pending at the
+time of this document update.
+
 Deliver:
 
 - `StorageBackend` protocol;
@@ -150,6 +153,17 @@ Acceptance:
 - source and evidence hashes preserved;
 - no public object access;
 - interrupted migration resumes safely.
+
+Implementation evidence:
+
+- `src/ai_examiner/services/storage.py`;
+- `src/ai_examiner/services/storage_migration.py`;
+- `src/ai_examiner/storage_cli.py`;
+- migration `20260728_0012`;
+- `docker-compose.minio.yml`;
+- authorized `/api/v1` document, evidence, highlight and memory-export downloads;
+- `tests/test_storage_backend_v09.py`;
+- `docs/architecture/V0_9_STORAGE_BACKEND.md`.
 
 ## WP-07: Job hardening
 

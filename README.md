@@ -29,7 +29,11 @@ Research implementation progress:
 - WP-02 implemented: organization, principal and membership persistence,
   deterministic legacy project ownership, bootstrap-owner CLI and observe-only
   organization context;
-- authentication, capability enforcement and RLS are not active yet.
+- WP-03 through WP-05 implemented: OIDC, capability RBAC, direct tenant ownership
+  and PostgreSQL FORCE RLS;
+- WP-06 implemented: tenant-scoped Local/S3 storage, authorized downloads and
+  restartable object migration/reconciliation;
+- the v0.9 research branch remains non-deployable until the complete gate passes.
 
 Authoritative research documents:
 

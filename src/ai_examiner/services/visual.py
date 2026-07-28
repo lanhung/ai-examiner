@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from time import perf_counter
 
 from sqlalchemy import select
@@ -14,6 +13,7 @@ from ..models import Document, EvidenceAsset, UsageEvent, VisualAnalysis
 from ..providers.factory import build_provider
 from .budget import assert_budget
 from .prompts import prompt_contents
+from .storage import StorageObjectMissing, materialize_resource
 
 
 class VisualEvidenceService:
@@ -38,8 +38,6 @@ class VisualEvidenceService:
         )
 
     def analyze_asset(self, asset: EvidenceAsset, profile: str, language: str) -> VisualAnalysis:
-        if not asset.storage_path or not Path(asset.storage_path).exists():
-            raise ValueError("Evidence asset has no readable image")
         assert_budget(self.db, self.settings, self.project_id)
         provider = build_provider(self.settings, profile)
         agent = VisualEvidenceAgent(
@@ -50,13 +48,23 @@ class VisualEvidenceService:
             )
         )
         started = perf_counter()
-        data = agent.analyze(
-            image_path=Path(asset.storage_path),
-            page_number=asset.page_number,
-            label=asset.label,
-            nearby_text=asset.text,
-            language=language,
-        )
+        try:
+            with materialize_resource(
+                self.db,
+                self.settings,
+                organization_id=asset.organization_id,
+                storage_object_id=asset.storage_object_id,
+                legacy_path=asset.storage_path,
+            ) as image_path:
+                data = agent.analyze(
+                    image_path=image_path,
+                    page_number=asset.page_number,
+                    label=asset.label,
+                    nearby_text=asset.text,
+                    language=language,
+                )
+        except StorageObjectMissing as exc:
+            raise ValueError("Evidence asset has no readable image") from exc
         data["latency_ms"] = int((perf_counter() - started) * 1000)
         analysis = VisualAnalysis(
             project_id=self.project_id,

@@ -121,6 +121,21 @@ ROUTE_POLICIES: dict[tuple[str, str], RoutePolicy] = {
         "organization_membership",
         "administrative",
     ),
+    ("GET", "/api/v1/documents/{document_id}/file"): RoutePolicy(
+        "required", "document.read", "document", "read_sensitive"
+    ),
+    ("GET", "/api/v1/evidence/{asset_id}/file"): RoutePolicy(
+        "required", "document.read", "evidence_asset", "read_sensitive"
+    ),
+    ("GET", "/api/v1/evidence/{asset_id}/highlight"): RoutePolicy(
+        "required", "document.read", "evidence_asset", "read_sensitive"
+    ),
+    ("GET", "/api/v1/memory-exports/{artifact_id}/file"): RoutePolicy(
+        "required",
+        "learner_memory.admin",
+        "memory_export_artifact",
+        "read_sensitive",
+    ),
 }
 
 

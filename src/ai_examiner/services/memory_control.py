@@ -18,9 +18,16 @@ from ..models import (
     MemoryExportArtifact,
     RetestItem,
     RetestPlan,
+    StoredObject,
 )
 from .longitudinal import LongitudinalStateService
 from .preferences import PreferenceService
+from .storage import (
+    StorageError,
+    StorageObjectMissing,
+    StorageService,
+    export_object_key,
+)
 
 
 class MemoryControlError(ValueError):
@@ -153,21 +160,35 @@ class MemoryControlService:
             "preferences": len(preferences),
             "retest_plans": len(plans),
         }
-        export_root = (self.settings.export_dir / "memory").resolve()
-        export_root.mkdir(parents=True, exist_ok=True)
         artifact = MemoryExportArtifact(
+            organization_id=identity.organization_id,
             learner_identity_id=identity.id,
-            storage_path="",
+            storage_path=None,
             scope_json={"include_source_quotes": include_source_quotes},
             record_counts=counts,
             expires_at=utcnow() + timedelta(hours=24),
         )
         self.db.add(artifact)
         self.db.flush()
-        path = (export_root / f"{artifact.id}.json").resolve()
-        self._assert_under_export_root(path)
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        artifact.storage_path = str(path)
+        data = json.dumps(
+            payload,
+            ensure_ascii=False,
+            indent=2,
+        ).encode("utf-8")
+        stored = StorageService(self.db, self.settings).store_bytes(
+            organization_id=identity.organization_id,
+            project_id=None,
+            resource_type="memory_export",
+            resource_id=artifact.id,
+            purpose="export",
+            object_key=export_object_key(
+                identity.organization_id,
+                artifact.id,
+            ),
+            data=data,
+            content_type="application/json",
+        )
+        artifact.storage_object_id = stored.id
         self.db.flush()
         return self.serialize_artifact(artifact)
 
@@ -312,10 +333,21 @@ class MemoryControlService:
             self.db.delete(artifact)
             self.db.flush()
             raise MemoryControlError("Memory export has expired")
-        path = Path(artifact.storage_path).resolve()
-        self._assert_under_export_root(path)
-        if not path.exists():
-            raise MemoryControlError("Memory export file is unavailable")
+        if artifact.storage_object_id:
+            stored = self.db.get(StoredObject, artifact.storage_object_id)
+            if stored is None or stored.status != "active":
+                raise MemoryControlError("Memory export file is unavailable")
+            try:
+                StorageService(self.db, self.settings).verify(stored)
+            except (StorageError, StorageObjectMissing) as exc:
+                raise MemoryControlError(
+                    "Memory export file is unavailable"
+                ) from exc
+        else:
+            path = Path(artifact.storage_path or "").resolve()
+            self._assert_under_export_root(path)
+            if not path.exists():
+                raise MemoryControlError("Memory export file is unavailable")
         return artifact
 
     @staticmethod
@@ -405,7 +437,12 @@ class MemoryControlService:
         return len(artifacts)
 
     def _remove_artifact_file(self, artifact: MemoryExportArtifact) -> None:
-        path = Path(artifact.storage_path).resolve()
+        if artifact.storage_object_id:
+            stored = self.db.get(StoredObject, artifact.storage_object_id)
+            if stored is not None and stored.status != "deleted":
+                StorageService(self.db, self.settings).delete(stored)
+            return
+        path = Path(artifact.storage_path or "").resolve()
         self._assert_under_export_root(path)
         if path.exists() and path.is_file():
             path.unlink()

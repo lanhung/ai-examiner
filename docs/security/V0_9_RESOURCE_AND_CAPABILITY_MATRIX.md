@@ -76,6 +76,7 @@ New enterprise models:
 | `RetentionPolicy` | organization | bounded by deployment minimums |
 | `DataSubjectRequest` | organization/learner | export/delete workflow |
 | `ReviewCase` | organization/project | human review and appeal |
+| `StoredObject` | organization/project | private backend locator; never user-selected |
 
 ## 3. Capability registry
 
@@ -218,6 +219,17 @@ revoke owner memberships.
 
 Evidence file routes resolve the asset inside organization context before opening any
 storage backend.
+
+Implemented enterprise object routes:
+
+| Route | Capability |
+|---|---|
+| document file | `document.read` |
+| evidence file/highlight | `document.read` |
+| memory export file | `learner_memory.admin` |
+
+The database resource is authorized before a stream or bounded presigned redirect is
+created. The object key alone is never an authorization credential.
 
 ### Dataset and evaluation
 

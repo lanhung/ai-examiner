@@ -271,6 +271,20 @@ requested -> approved -> running -> verifying -> completed
                     \-> failed
 ```
 
+### 10.1 Implemented WP-06 private object downloads
+
+```text
+GET /api/v1/documents/{document_id}/file
+GET /api/v1/evidence/{asset_id}/file
+GET /api/v1/evidence/{asset_id}/highlight
+GET /api/v1/memory-exports/{artifact_id}/file
+```
+
+Each route requires an authenticated organization context and the capability defined
+in the resource matrix. The response either streams verified private bytes or
+redirects to a bounded S3-compatible presigned URL. Object keys are not accepted as
+request parameters.
+
 ## 11. Human review and appeal
 
 ```text

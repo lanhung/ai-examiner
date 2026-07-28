@@ -6,6 +6,7 @@ import shutil
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Annotated
 from urllib.parse import urlencode
 
@@ -60,6 +61,7 @@ from .models import (
     LearnerPreference,
     LearnerSubject,
     MemoryDeletionAudit,
+    MemoryExportArtifact,
     Organization,
     OrganizationMembership,
     Principal,
@@ -68,6 +70,7 @@ from .models import (
     RetestPlan,
     ScenarioTemplate,
     ScenarioTemplateVersion,
+    StoredObject,
     Turn,
     UsageEvent,
     VisualAnalysis,
@@ -127,6 +130,7 @@ from .services.authorization import (
     AuthorizationContext,
     AuthorizationError,
     authorization_http_error,
+    authorize_resource_organization,
     bind_and_validate_route_policies,
     require_authenticated_principal,
     require_capability,
@@ -169,6 +173,14 @@ from .services.retest import RetestLifecycleError, RetestLifecycleService
 from .services.session_templates import (
     SessionTemplateService,
     serialize_project_template_binding,
+)
+from .services.storage import (
+    StorageError,
+    StorageObjectMissing,
+    StorageService,
+    build_storage_backend,
+    document_object_key,
+    materialize_resource,
 )
 from .services.template_access import (
     TemplateAuthoringContext,
@@ -228,6 +240,14 @@ MemberManageAccess = Annotated[
     AuthorizationContext,
     Depends(require_capability("member.manage")),
 ]
+DocumentReadAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("document.read")),
+]
+MemoryExportReadAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("learner_memory.admin")),
+]
 
 
 @asynccontextmanager
@@ -235,6 +255,7 @@ async def lifespan(app: FastAPI):
     configuration_issues = (
         settings.auth_configuration_issues()
         + settings.rls_configuration_issues()
+        + settings.storage_configuration_issues()
     )
     if settings.app_env == "production" and configuration_issues:
         raise RuntimeError(
@@ -433,6 +454,65 @@ def serialize_benchmark(run: BenchmarkRun) -> dict:
     }
 
 
+def stored_object_response(
+    db: Session,
+    stored: StoredObject,
+    *,
+    filename: str | None = None,
+) -> Response:
+    storage = StorageService(db, settings)
+    if settings.storage_download_mode == "redirect":
+        try:
+            url = storage.presigned_get(stored)
+        except StorageError:
+            url = None
+        if url:
+            return RedirectResponse(url=url, status_code=307)
+    try:
+        content = storage.read_bytes(stored)
+    except StorageObjectMissing as exc:
+        raise HTTPException(404, "Stored object is unavailable") from exc
+    except StorageError as exc:
+        raise HTTPException(503, "Storage backend is unavailable") from exc
+    headers = {
+        "Content-Length": str(len(content)),
+        "ETag": f'"sha256:{stored.sha256}"',
+        "Cache-Control": "private, no-store",
+    }
+    if filename:
+        safe_name = filename.replace('"', "_").replace("\r", "").replace("\n", "")
+        headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+    return Response(
+        content=content,
+        media_type=stored.content_type,
+        headers=headers,
+    )
+
+
+def located_resource_response(
+    db: Session,
+    *,
+    organization_id: str,
+    storage_object_id: str | None,
+    legacy_path: str | None,
+    media_type: str,
+    filename: str | None = None,
+) -> Response:
+    if storage_object_id:
+        stored = db.get(StoredObject, storage_object_id)
+        if (
+            stored is None
+            or stored.organization_id != organization_id
+            or stored.status != "active"
+        ):
+            raise HTTPException(404, "Stored object is unavailable")
+        return stored_object_response(db, stored, filename=filename)
+    path = Path(legacy_path or "").resolve()
+    if not legacy_path or not path.is_file():
+        raise HTTPException(404, "Legacy object is unavailable")
+    return FileResponse(path, media_type=media_type, filename=filename)
+
+
 @app.get("/", include_in_schema=False)
 def index():
     return FileResponse(STATIC_DIR / "index.html")
@@ -459,6 +539,10 @@ def health():
             "postgres_rls_mode": settings.postgres_rls_mode,
             "schema_management": settings.database_schema_management,
         },
+        "storage": {
+            "backend": settings.storage_backend,
+            "download_mode": settings.storage_download_mode,
+        },
     }
 
 
@@ -467,6 +551,8 @@ def readiness(db: Annotated[Session, Depends(get_db)]):
     checks: dict[str, dict[str, object]] = {}
     auth_issues = settings.auth_configuration_issues()
     rls_issues = settings.rls_configuration_issues()
+    storage_issues = settings.storage_configuration_issues()
+    storage_ready = not storage_issues
     try:
         db.execute(text("SELECT 1"))
         checks["database"] = {"ready": True}
@@ -499,10 +585,27 @@ def readiness(db: Annotated[Session, Depends(get_db)]):
         "schema_management": settings.database_schema_management,
         **({"codes": rls_issues} if rls_issues else {}),
     }
+    storage_check: dict[str, object] = {
+        "ready": storage_ready,
+        "backend": settings.storage_backend,
+        **({"codes": storage_issues} if storage_issues else {}),
+    }
+    if storage_ready:
+        try:
+            build_storage_backend(settings).check_ready()
+        except StorageError:
+            storage_ready = False
+            storage_check = {
+                "ready": False,
+                "backend": settings.storage_backend,
+                "codes": ["storage_unavailable"],
+            }
+    checks["storage"] = storage_check
     ready = (
         bool(checks["database"]["ready"])
         and authentication_ready
         and not rls_issues
+        and storage_ready
     )
     return JSONResponse(
         status_code=200 if ready else 503,
@@ -1167,22 +1270,50 @@ async def upload_document(
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     document = Document(
+        organization_id=project.organization_id,
         project_id=project_id,
         filename=file.filename or path.name,
         content_type=file.content_type or "application/octet-stream",
-        storage_path=str(path),
+        storage_path=None,
         content_text=parsed.text,
-        page_map=parsed.page_map,
+        page_map=[
+            {key: value for key, value in page.items() if key != "preview_path"}
+            for page in parsed.page_map
+        ],
         parse_warnings=parsed.warnings,
         char_count=len(parsed.text),
     )
     db.add(document)
     db.flush()
+    storage = StorageService(db, settings)
+    stored = storage.store_bytes(
+        organization_id=project.organization_id,
+        project_id=project.id,
+        resource_type="document",
+        resource_id=document.id,
+        purpose="source",
+        object_key=document_object_key(
+            project.organization_id,
+            project.id,
+            document.id,
+            filename=document.filename,
+            content_type=document.content_type,
+        ),
+        data=raw,
+        content_type=document.content_type,
+    )
+    document.storage_object_id = stored.id
     assets = persist_evidence(
-        db, project_id=project_id, document=document, drafts=parsed.evidence
+        db,
+        project_id=project_id,
+        document=document,
+        drafts=parsed.evidence,
+        settings=settings,
     )
     db.commit()
     db.refresh(document)
+    path.unlink(missing_ok=True)
+    shutil.rmtree(evidence_output, ignore_errors=True)
     return {
         "id": document.id,
         "filename": document.filename,
@@ -2382,8 +2513,37 @@ def download_memory_export(
         artifact = MemoryControlService(db, settings).artifact_or_error(artifact_id)
     except MemoryControlError as exc:
         raise HTTPException(404, str(exc)) from exc
-    return FileResponse(
-        artifact.storage_path,
+    return located_resource_response(
+        db,
+        organization_id=artifact.organization_id,
+        storage_object_id=artifact.storage_object_id,
+        legacy_path=artifact.storage_path,
+        media_type="application/json",
+        filename=f"ai-examiner-memory-{artifact.id}.json",
+    )
+
+
+@app.get("/api/v1/memory-exports/{artifact_id}/file", include_in_schema=False)
+def download_memory_export_v1(
+    artifact_id: str,
+    context: MemoryExportReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    artifact = db.get(MemoryExportArtifact, artifact_id)
+    if artifact is None:
+        raise HTTPException(404, "Memory export not found")
+    try:
+        authorize_resource_organization(context, artifact.organization_id)
+        artifact = MemoryControlService(db, settings).artifact_or_error(artifact_id)
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    except MemoryControlError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return located_resource_response(
+        db,
+        organization_id=artifact.organization_id,
+        storage_object_id=artifact.storage_object_id,
+        legacy_path=artifact.storage_path,
         media_type="application/json",
         filename=f"ai-examiner-memory-{artifact.id}.json",
     )
@@ -2628,6 +2788,20 @@ def delete_project(project_id: str, db: Annotated[Session, Depends(get_db)]):
             select(GoldenDataset).where(GoldenDataset.project_id == project_id)
         ).all():
             db.delete(dataset)
+    storage = StorageService(db, settings)
+    for stored in db.scalars(
+        select(StoredObject).where(
+            StoredObject.project_id == project_id,
+            StoredObject.status != "deleted",
+        )
+    ).all():
+        try:
+            storage.delete(stored)
+        except StorageError as exc:
+            raise HTTPException(
+                503,
+                "Project objects could not be deleted; project data was retained",
+            ) from exc
     db.delete(project)
     db.flush()
     longitudinal = LongitudinalStateService(db)
@@ -2706,12 +2880,60 @@ def get_document_evidence(
 @app.get("/api/evidence/{asset_id}/file", include_in_schema=False)
 def get_evidence_file(asset_id: str, db: Annotated[Session, Depends(get_db)]):
     asset = db.get(EvidenceAsset, asset_id)
-    if not asset or not asset.storage_path:
+    if not asset or not (asset.storage_object_id or asset.storage_path):
         raise HTTPException(404, "Evidence file not found")
-    path = Path(asset.storage_path)
-    if not path.exists():
-        raise HTTPException(404, "Evidence file is missing on disk")
-    return FileResponse(path, media_type=asset.mime_type or "application/octet-stream")
+    return located_resource_response(
+        db,
+        organization_id=asset.organization_id,
+        storage_object_id=asset.storage_object_id,
+        legacy_path=asset.storage_path,
+        media_type=asset.mime_type or "application/octet-stream",
+    )
+
+
+@app.get("/api/v1/documents/{document_id}/file", include_in_schema=False)
+def get_document_file_v1(
+    document_id: str,
+    context: DocumentReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    document = db.get(Document, document_id)
+    if document is None:
+        raise HTTPException(404, "Document not found")
+    try:
+        authorize_resource_organization(context, document.organization_id)
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    return located_resource_response(
+        db,
+        organization_id=document.organization_id,
+        storage_object_id=document.storage_object_id,
+        legacy_path=document.storage_path,
+        media_type=document.content_type,
+        filename=document.filename,
+    )
+
+
+@app.get("/api/v1/evidence/{asset_id}/file", include_in_schema=False)
+def get_evidence_file_v1(
+    asset_id: str,
+    context: DocumentReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    asset = db.get(EvidenceAsset, asset_id)
+    if asset is None:
+        raise HTTPException(404, "Evidence file not found")
+    try:
+        authorize_resource_organization(context, asset.organization_id)
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    return located_resource_response(
+        db,
+        organization_id=asset.organization_id,
+        storage_object_id=asset.storage_object_id,
+        legacy_path=asset.storage_path,
+        media_type=asset.mime_type or "application/octet-stream",
+    )
 
 
 @app.get("/api/evidence/{asset_id}/highlight", include_in_schema=False)
@@ -2719,6 +2941,29 @@ def get_evidence_highlight(asset_id: str, db: Annotated[Session, Depends(get_db)
     asset = db.get(EvidenceAsset, asset_id)
     if not asset:
         raise HTTPException(404, "Evidence asset not found")
+    return evidence_highlight_response(db, asset)
+
+
+@app.get("/api/v1/evidence/{asset_id}/highlight", include_in_schema=False)
+def get_evidence_highlight_v1(
+    asset_id: str,
+    context: DocumentReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    asset = db.get(EvidenceAsset, asset_id)
+    if not asset:
+        raise HTTPException(404, "Evidence asset not found")
+    try:
+        authorize_resource_organization(context, asset.organization_id)
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    return evidence_highlight_response(db, asset)
+
+
+def evidence_highlight_response(
+    db: Session,
+    asset: EvidenceAsset,
+) -> Response:
     page_asset = db.scalar(
         select(EvidenceAsset).where(
             EvidenceAsset.document_id == asset.document_id,
@@ -2729,10 +2974,32 @@ def get_evidence_highlight(asset_id: str, db: Annotated[Session, Depends(get_db)
     if not page_asset:
         raise HTTPException(404, "Page preview not found")
     try:
-        output = create_highlighted_crop(asset, page_asset, settings.evidence_dir / "crops")
-    except ValueError as exc:
+        with materialize_resource(
+            db,
+            settings,
+            organization_id=page_asset.organization_id,
+            storage_object_id=page_asset.storage_object_id,
+            legacy_path=page_asset.storage_path,
+        ) as page_path, TemporaryDirectory(
+            prefix="ai-examiner-highlight-"
+        ) as output_dir:
+            page_asset.storage_path = str(page_path)
+            output = create_highlighted_crop(
+                asset,
+                page_asset,
+                Path(output_dir),
+            )
+            content = output.read_bytes()
+    except (ValueError, StorageObjectMissing) as exc:
         raise HTTPException(400, str(exc)) from exc
-    return FileResponse(output, media_type="image/png")
+    finally:
+        if page_asset.storage_object_id:
+            page_asset.storage_path = None
+    return Response(
+        content=content,
+        media_type="image/png",
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 @app.post("/api/documents/{document_id}/visual-analyses", status_code=202)
