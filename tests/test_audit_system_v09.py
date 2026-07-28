@@ -172,21 +172,24 @@ def test_audit_events_are_immutable_in_orm_and_database():
             db.commit()
         db.rollback()
 
-        with pytest.raises(DBAPIError, match="append-only"):
-            db.execute(
-                text(
-                    "UPDATE audit_events SET action = 'tampered' "
-                    "WHERE id = :event_id"
-                ),
-                {"event_id": event_id},
-            )
-        db.rollback()
-        with pytest.raises(DBAPIError, match="append-only"):
-            db.execute(
-                text("DELETE FROM audit_events WHERE id = :event_id"),
-                {"event_id": event_id},
-            )
-        db.rollback()
+        # PostgreSQL's native controls are installed by Alembic and exercised
+        # before pytest recreates its isolated schema in verify-v09-rls.py.
+        if db.bind.dialect.name == "sqlite":
+            with pytest.raises(DBAPIError, match="append-only"):
+                db.execute(
+                    text(
+                        "UPDATE audit_events SET action = 'tampered' "
+                        "WHERE id = :event_id"
+                    ),
+                    {"event_id": event_id},
+                )
+            db.rollback()
+            with pytest.raises(DBAPIError, match="append-only"):
+                db.execute(
+                    text("DELETE FROM audit_events WHERE id = :event_id"),
+                    {"event_id": event_id},
+                )
+            db.rollback()
 
 
 def test_administrative_success_and_authorization_denial_are_audited(client):
