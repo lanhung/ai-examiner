@@ -9,6 +9,33 @@ class ProjectCreate(BaseModel):
     language: str = "zh-CN"
 
 
+class MembershipCreate(BaseModel):
+    principal_id: str = Field(min_length=1, max_length=36)
+    role: Literal[
+        "owner",
+        "admin",
+        "examiner",
+        "template_author",
+        "reviewer",
+        "learner",
+        "auditor",
+    ]
+    status: Literal["invited", "active"] = "active"
+
+
+class MembershipUpdate(BaseModel):
+    role: Literal[
+        "owner",
+        "admin",
+        "examiner",
+        "template_author",
+        "reviewer",
+        "learner",
+        "auditor",
+    ] | None = None
+    status: Literal["active", "suspended", "revoked"] | None = None
+
+
 class SessionCreate(BaseModel):
     project_id: str
     blueprint_id: str

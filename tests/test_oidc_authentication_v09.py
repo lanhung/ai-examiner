@@ -20,7 +20,12 @@ from sqlalchemy import create_engine, inspect, select, text
 from ai_examiner import main as main_module
 from ai_examiner.config import Settings
 from ai_examiner.db import SessionLocal
-from ai_examiner.models import BrowserAuthSession, Principal
+from ai_examiner.enterprise_constants import LEGACY_ORGANIZATION_ID
+from ai_examiner.models import (
+    BrowserAuthSession,
+    OrganizationMembership,
+    Principal,
+)
 from ai_examiner.services.authentication import authentication_http_error, current_authentication
 from ai_examiner.services.oidc import (
     AuthenticationContext,
@@ -551,6 +556,15 @@ def test_oidc_context_ignores_untrusted_principal_header(client, monkeypatch):
             status="active",
         )
         db.add_all([authenticated, attacker])
+        db.flush()
+        db.add(
+            OrganizationMembership(
+                organization_id=LEGACY_ORGANIZATION_ID,
+                principal_id=authenticated.id,
+                role="owner",
+                status="active",
+            )
+        )
         db.commit()
         authenticated_id = authenticated.id
         attacker_id = attacker.id
@@ -568,7 +582,10 @@ def test_oidc_context_ignores_untrusted_principal_header(client, monkeypatch):
     try:
         response = client.get(
             "/api/v1/context",
-            headers={"X-AI-Examiner-Principal": attacker_id},
+            headers={
+                "X-AI-Examiner-Organization": LEGACY_ORGANIZATION_ID,
+                "X-AI-Examiner-Principal": attacker_id,
+            },
         )
     finally:
         main_module.app.dependency_overrides.pop(current_authentication, None)

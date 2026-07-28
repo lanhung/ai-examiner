@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import Settings
+from ..enterprise_constants import ROLE_CAPABILITIES
 from ..models import (
     BrowserAuthSession,
     OIDCLoginTransaction,
@@ -759,6 +760,9 @@ class OIDCAuthenticator:
                     "id": membership.organization_id,
                     "role": membership.role,
                     "membership_id": membership.id,
+                    "capabilities": sorted(
+                        ROLE_CAPABILITIES.get(membership.role, frozenset())
+                    ),
                 }
                 for membership in memberships
             ],

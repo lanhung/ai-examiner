@@ -130,6 +130,11 @@ owner/admin invariant violations: 0
 cross-organization membership use: 0
 ```
 
+WP-04 deterministic evidence adds 24 focused tests covering the role matrix, complete
+route-policy inventory, OpenAPI policy metadata, cross-organization actor/resource
+substitution, inactive subjects, ETags, stale updates, owner escalation and the
+OIDC-protected template-authoring seam.
+
 ### 3.5 PostgreSQL migration
 
 Dataset:

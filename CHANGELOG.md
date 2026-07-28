@@ -32,6 +32,14 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   authentication checks and fail-closed production configuration validation.
 - Add additive migration `20260727_0009` and an ephemeral-RSA invalid-token,
   key-rotation, PKCE, session, readiness and rollback test matrix.
+- Add WP-04 centralized capability RBAC with reviewed role bundles, fail-closed
+  organization membership resolution and cross-organization resource protection.
+- Add complete `/api/v1` route policy registration with startup validation and
+  generated `x-ai-examiner-policy` OpenAPI metadata.
+- Add organization membership list/create/update/revoke APIs with strong ETags,
+  bounded lifecycle transitions, owner-only owner mutation and last-owner protection.
+- Replace the OIDC template-authoring compatibility seam with real author, reviewer
+  and publisher capabilities while retaining disabled-mode deterministic tests.
 
 - Add complete Planner v6 reciprocal real-provider evidence for all seven built-in
   templates: 30 unique cases per template, 420 case evaluations and 840 anonymous

@@ -15,6 +15,7 @@ from fastapi import (
     Depends,
     FastAPI,
     File,
+    Header,
     HTTPException,
     Query,
     Request,
@@ -31,6 +32,11 @@ from . import __version__
 from .agents.orchestrator import ExamOrchestrator
 from .config import get_settings
 from .db import SessionLocal, get_db, init_db
+from .enterprise_constants import (
+    CAPABILITIES,
+    HIGH_RISK_CAPABILITIES,
+    ROLE_CAPABILITIES,
+)
 from .model_catalog import CATALOG
 from .models import (
     AdaptiveDecision,
@@ -55,6 +61,8 @@ from .models import (
     LearnerSubject,
     MemoryDeletionAudit,
     Organization,
+    OrganizationMembership,
+    Principal,
     Project,
     PromptVersion,
     RetestPlan,
@@ -81,6 +89,8 @@ from .schemas import (
     LearnerIdentityCreate,
     LearnerIdentityLinkCreate,
     LongitudinalRebuildCreate,
+    MembershipCreate,
+    MembershipUpdate,
     MemoryCorrectionCreate,
     MemoryDeletionCreate,
     MemoryExportCreate,
@@ -113,6 +123,15 @@ from .services.authentication import (
     authentication_http_error,
     get_oidc_authenticator,
 )
+from .services.authorization import (
+    AuthorizationContext,
+    AuthorizationError,
+    authorization_http_error,
+    bind_and_validate_route_policies,
+    require_authenticated_principal,
+    require_capability,
+    resolve_authorization_context,
+)
 from .services.benchmark import BenchmarkService
 from .services.cognitive import CognitiveStateService
 from .services.conversation_policy import effective_conversation_policy
@@ -121,7 +140,9 @@ from .services.documents import parse_document, save_upload
 from .services.enterprise_identity import (
     EnterpriseIdentityError,
     resolve_organization_context,
+    serialize_membership,
     serialize_organization,
+    serialize_principal,
 )
 from .services.evidence import create_highlighted_crop, persist_evidence, serialize_asset
 from .services.golden import GoldenDatasetService
@@ -129,6 +150,10 @@ from .services.jobs import JobQueueUnavailable, enqueue_job, serialize_job
 from .services.joint import JointAnalysisService
 from .services.longitudinal import LongitudinalStateError, LongitudinalStateService
 from .services.longitudinal_evaluation import LongitudinalEvaluationService
+from .services.membership_admin import (
+    MembershipAdministrationError,
+    MembershipAdministrationService,
+)
 from .services.memory import (
     LearnerMemoryService,
     MemoryConflictError,
@@ -187,6 +212,24 @@ TemplateAuthoringAccess = Annotated[
     TemplateAuthoringContext,
     Depends(template_authoring_context),
 ]
+AuthenticatedPrincipalAccess = Annotated[
+    Principal,
+    Depends(require_authenticated_principal),
+]
+OrganizationReadAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("organization.read")),
+]
+MemberReadAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("member.read")),
+]
+MemberManageAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("member.manage")),
+]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     auth_issues = settings.auth_configuration_issues()
@@ -194,6 +237,7 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(
             "Unsafe authentication configuration: " + ", ".join(auth_issues)
         )
+    bind_and_validate_route_policies(app)
     init_db()
     yield
 
@@ -245,6 +289,100 @@ def _profiles(raw: list[str], fallback: str) -> list[str]:
         if not profile_ready(settings, profile):
             raise HTTPException(503, f"Model profile is not configured: {profile}")
     return list(dict.fromkeys(profiles))
+
+
+def _membership_http_error(exc: MembershipAdministrationError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={"code": exc.code, "message": exc.public_message},
+    )
+
+
+def _membership_version(if_match: str | None) -> int:
+    if if_match is None:
+        raise HTTPException(
+            status_code=428,
+            detail={
+                "code": "precondition_required",
+                "message": "If-Match is required.",
+            },
+        )
+    value = if_match.strip()
+    if value.startswith("W/"):
+        raise HTTPException(
+            status_code=412,
+            detail={
+                "code": "membership_version_conflict",
+                "message": "A strong membership version is required.",
+            },
+        )
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        value = value[1:-1]
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=412,
+            detail={
+                "code": "membership_version_conflict",
+                "message": "The membership version is invalid.",
+            },
+        ) from exc
+    if parsed < 1:
+        raise HTTPException(
+            status_code=412,
+            detail={
+                "code": "membership_version_conflict",
+                "message": "The membership version is invalid.",
+            },
+        )
+    return parsed
+
+
+def _require_owner_management(
+    context: AuthorizationContext,
+    *,
+    current_role: str | None = None,
+    target_role: str | None = None,
+) -> None:
+    if "owner" not in {current_role, target_role}:
+        return
+    if not context.can("member.grant_owner"):
+        raise authorization_http_error(
+            AuthorizationError(
+                "authorization_denied",
+                status_code=403,
+                message="The requested operation is not permitted.",
+            )
+        )
+
+
+def _require_template_capability(
+    access: TemplateAuthoringContext,
+    *capabilities: str,
+) -> None:
+    if not access.authorization_enforced:
+        return
+    if any(access.can(capability) for capability in capabilities):
+        return
+    raise authorization_http_error(
+        AuthorizationError(
+            "authorization_denied",
+            status_code=403,
+            message="The requested operation is not permitted.",
+        )
+    )
+
+
+def _serialize_membership_with_principal(
+    db: Session,
+    membership: OrganizationMembership,
+) -> dict:
+    principal = db.get(Principal, membership.principal_id)
+    return {
+        **serialize_membership(membership),
+        "principal": serialize_principal(principal) if principal is not None else None,
+    }
 
 
 def serialize_turn(turn: Turn) -> dict:
@@ -367,6 +505,25 @@ def enterprise_context(
     authentication: CurrentAuthentication,
     db: Annotated[Session, Depends(get_db)],
 ):
+    requested_organization_id = request.headers.get("X-AI-Examiner-Organization")
+    if settings.auth_mode == "oidc":
+        try:
+            authorized = resolve_authorization_context(
+                db,
+                authentication=authentication,
+                organization_id=requested_organization_id,
+                required_capability="organization.read",
+            )
+        except AuthorizationError as exc:
+            raise authorization_http_error(exc) from exc
+        organization = db.get(Organization, authorized.organization_id)
+        if organization is None:
+            raise HTTPException(404, "Organization context not found")
+        return {
+            **authorized.public_dict(),
+            "organization": serialize_organization(organization),
+        }
+
     requested_principal_id = (
         authentication.principal_id
         if settings.auth_mode == "oidc"
@@ -375,9 +532,7 @@ def enterprise_context(
     try:
         context = resolve_organization_context(
             db,
-            requested_organization_id=request.headers.get(
-                "X-AI-Examiner-Organization"
-            ),
+            requested_organization_id=requested_organization_id,
             requested_principal_id=requested_principal_id,
         )
     except EnterpriseIdentityError as exc:
@@ -489,6 +644,151 @@ def current_principal(
         raise authentication_http_error(exc) from exc
 
 
+@app.get("/api/v1/system/capabilities")
+def system_capabilities(_principal: AuthenticatedPrincipalAccess):
+    return {
+        "capabilities": sorted(CAPABILITIES),
+        "roles": {
+            role: sorted(capabilities)
+            for role, capabilities in sorted(ROLE_CAPABILITIES.items())
+        },
+        "high_risk": sorted(HIGH_RISK_CAPABILITIES),
+    }
+
+
+@app.get("/api/v1/organizations/{organization_id}")
+def get_organization(
+    organization_id: str,
+    context: OrganizationReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    organization = db.get(Organization, organization_id)
+    if organization is None or organization.id != context.organization_id:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "resource_not_found",
+                "message": "The requested resource was not found.",
+            },
+        )
+    return {
+        "organization": serialize_organization(organization),
+        "authorization": context.public_dict(),
+    }
+
+
+@app.get("/api/v1/organizations/{organization_id}/memberships")
+def list_organization_memberships(
+    organization_id: str,
+    _context: MemberReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    memberships = MembershipAdministrationService(db).list(organization_id)
+    return {
+        "items": [
+            _serialize_membership_with_principal(db, membership)
+            for membership in memberships
+        ],
+        "count": len(memberships),
+    }
+
+
+@app.post(
+    "/api/v1/organizations/{organization_id}/memberships",
+    status_code=201,
+)
+def create_organization_membership(
+    organization_id: str,
+    payload: MembershipCreate,
+    response: Response,
+    context: MemberManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    _require_owner_management(context, target_role=payload.role)
+    try:
+        membership = MembershipAdministrationService(db).create(
+            organization_id=organization_id,
+            principal_id=payload.principal_id,
+            role=payload.role,
+            status=payload.status,
+        )
+    except MembershipAdministrationError as exc:
+        raise _membership_http_error(exc) from exc
+    response.headers["ETag"] = f'"{membership.version}"'
+    return _serialize_membership_with_principal(db, membership)
+
+
+@app.patch(
+    "/api/v1/organizations/{organization_id}/memberships/{membership_id}"
+)
+def update_organization_membership(
+    organization_id: str,
+    membership_id: str,
+    payload: MembershipUpdate,
+    response: Response,
+    context: MemberManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+):
+    if payload.role is None and payload.status is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "membership_update_empty",
+                "message": "At least one membership field is required.",
+            },
+        )
+    service = MembershipAdministrationService(db)
+    try:
+        membership = service.get_in_organization(
+            organization_id=organization_id,
+            membership_id=membership_id,
+        )
+        _require_owner_management(
+            context,
+            current_role=membership.role,
+            target_role=payload.role,
+        )
+        membership = service.update(
+            membership,
+            expected_version=_membership_version(if_match),
+            role=payload.role,
+            status=payload.status,
+        )
+    except MembershipAdministrationError as exc:
+        raise _membership_http_error(exc) from exc
+    response.headers["ETag"] = f'"{membership.version}"'
+    return _serialize_membership_with_principal(db, membership)
+
+
+@app.delete(
+    "/api/v1/organizations/{organization_id}/memberships/{membership_id}"
+)
+def revoke_organization_membership(
+    organization_id: str,
+    membership_id: str,
+    response: Response,
+    context: MemberManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+):
+    service = MembershipAdministrationService(db)
+    try:
+        membership = service.get_in_organization(
+            organization_id=organization_id,
+            membership_id=membership_id,
+        )
+        _require_owner_management(context, current_role=membership.role)
+        membership = service.revoke(
+            membership,
+            expected_version=_membership_version(if_match),
+        )
+    except MembershipAdministrationError as exc:
+        raise _membership_http_error(exc) from exc
+    response.headers["ETag"] = f'"{membership.version}"'
+    return _serialize_membership_with_principal(db, membership)
+
+
 @app.get("/api/templates")
 def templates(
     db: Annotated[Session, Depends(get_db)],
@@ -511,8 +811,9 @@ def template_health(db: Annotated[Session, Depends(get_db)]):
 def create_scenario_template(
     payload: ScenarioTemplateCreate,
     db: Annotated[Session, Depends(get_db)],
-    _access: TemplateAuthoringAccess,
+    access: TemplateAuthoringAccess,
 ):
+    _require_template_capability(access, "template.author")
     template, version = TemplateLifecycleService(db).create_local(
         slug=payload.slug,
         category=payload.category,
@@ -531,6 +832,7 @@ def import_scenario_template(
     db: Annotated[Session, Depends(get_db)],
     access: TemplateAuthoringAccess,
 ):
+    _require_template_capability(access, "template.author")
     template, version = import_template_document(
         db,
         document=payload.document,
@@ -576,8 +878,9 @@ def clone_scenario_template_version(
     version_id: str,
     payload: ScenarioTemplateCloneCreate,
     db: Annotated[Session, Depends(get_db)],
-    _access: TemplateAuthoringAccess,
+    access: TemplateAuthoringAccess,
 ):
+    _require_template_capability(access, "template.author")
     version = db.get(ScenarioTemplateVersion, version_id)
     if not version:
         raise HTTPException(404, "Template version not found")
@@ -593,8 +896,9 @@ def replace_scenario_template_version(
     version_id: str,
     payload: ScenarioTemplateSourceUpdate,
     db: Annotated[Session, Depends(get_db)],
-    _access: TemplateAuthoringAccess,
+    access: TemplateAuthoringAccess,
 ):
+    _require_template_capability(access, "template.author")
     version = db.get(ScenarioTemplateVersion, version_id)
     if not version:
         raise HTTPException(404, "Template version not found")
@@ -606,8 +910,9 @@ def replace_scenario_template_version(
 def validate_scenario_template_version(
     version_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _access: TemplateAuthoringAccess,
+    access: TemplateAuthoringAccess,
 ):
+    _require_template_capability(access, "template.author", "template.review")
     version = db.get(ScenarioTemplateVersion, version_id)
     if not version:
         raise HTTPException(404, "Template version not found")
@@ -619,8 +924,9 @@ def validate_scenario_template_version(
 def compile_scenario_template_version(
     version_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _access: TemplateAuthoringAccess,
+    access: TemplateAuthoringAccess,
 ):
+    _require_template_capability(access, "template.author", "template.review")
     version = db.get(ScenarioTemplateVersion, version_id)
     if not version:
         raise HTTPException(404, "Template version not found")
@@ -679,8 +985,12 @@ def transition_scenario_template_version(
     version_id: str,
     payload: ScenarioTemplateStatusUpdate,
     db: Annotated[Session, Depends(get_db)],
-    _access: TemplateAuthoringAccess,
+    access: TemplateAuthoringAccess,
 ):
+    if payload.status in {"published", "deprecated"}:
+        _require_template_capability(access, "template.publish")
+    else:
+        _require_template_capability(access, "template.author", "template.review")
     version = db.get(ScenarioTemplateVersion, version_id)
     if not version:
         raise HTTPException(404, "Template version not found")

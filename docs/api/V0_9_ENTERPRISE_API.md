@@ -129,6 +129,7 @@ POST   /api/v1/organizations
 GET    /api/v1/organizations/{organization_id}
 PATCH  /api/v1/organizations/{organization_id}
 GET    /api/v1/organizations/{organization_id}/memberships
+POST   /api/v1/organizations/{organization_id}/memberships
 POST   /api/v1/organizations/{organization_id}/invitations
 PATCH  /api/v1/organizations/{organization_id}/memberships/{membership_id}
 DELETE /api/v1/organizations/{organization_id}/memberships/{membership_id}
@@ -141,6 +142,11 @@ If-Match: "<membership-version>"
 ```
 
 The last active owner cannot be removed or demoted.
+
+WP-04 implements direct administration of pre-provisioned principals through
+`POST /memberships`. Invitation delivery and acceptance remain deferred. Every
+membership mutation requires `If-Match`; owner creation or mutation additionally
+requires `member.grant_owner`, which is not included in the default admin role.
 
 ## 6. Service accounts
 
@@ -331,3 +337,16 @@ Every route with a resource identifier must test:
 - stale policy version;
 - deleted or retained resource;
 - audit event generation for success and denial where appropriate.
+
+WP-04 publishes each route's declared contract in OpenAPI:
+
+```json
+{
+  "x-ai-examiner-policy": {
+    "authentication": "required",
+    "capability": "member.manage",
+    "resource_resolver": "organization_membership",
+    "audit": "administrative"
+  }
+}
+```

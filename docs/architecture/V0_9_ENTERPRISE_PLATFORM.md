@@ -546,10 +546,28 @@ and authorization work:
 - `/api/v1/context` organization resolution in explicit observe-only mode.
 
 This increment does not trust organization or principal headers as credentials and
-does not filter existing routes. OIDC, capability enforcement and RLS remain WP-03
-through WP-05. Detailed contract:
+does not filter existing routes. OIDC, capability enforcement and RLS are delivered
+incrementally by WP-03 through WP-05. Detailed contract:
 
 - `docs/architecture/V0_9_ORGANIZATION_PRINCIPAL_FOUNDATION.md`.
+
+### WP-03 and WP-04 security foundation
+
+The next increments add strict OIDC authentication and centralized capability RBAC:
+
+- discovery/JWKS validation, Authorization Code + PKCE and revocable browser sessions;
+- active organization/principal/membership authorization context;
+- explicit role capability bundles;
+- `/api/v1` route policy inventory and OpenAPI metadata;
+- optimistic membership administration and last-owner protection;
+- real capability checks on template authoring in OIDC mode.
+
+Detailed contracts:
+
+- `docs/architecture/V0_9_OIDC_AUTHENTICATION.md`;
+- `docs/architecture/V0_9_CAPABILITY_RBAC.md`.
+
+Tenant ownership propagation and PostgreSQL RLS remain WP-05.
 
 ## References
 

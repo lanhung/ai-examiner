@@ -86,6 +86,9 @@ Acceptance:
 
 ## WP-04: Capability RBAC
 
+Status: implemented on `research/v0.9.0`; deterministic authorization tests pass and
+the complete SQLite/PostgreSQL CI gate remains required.
+
 Deliver:
 
 - capability registry;

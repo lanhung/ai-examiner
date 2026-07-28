@@ -232,16 +232,16 @@ transport. It covers:
 - untrusted principal-header rejection;
 - migration upgrade/downgrade preservation.
 
-## 11. Deferred to WP-04 and later
+## 11. Integration with WP-04
 
-WP-03 authenticates identity. It intentionally does not:
+WP-04 now converts this authenticated identity into organization capability decisions
+for `/api/v1` administration and the template-authoring seam. It still does not:
 
 - assign organization roles from token claims;
-- authorize business operations;
 - protect every legacy unversioned route;
-- enforce organization membership capability checks;
+- propagate tenant ownership across all business resources;
 - add service accounts;
 - enable PostgreSQL RLS.
 
-Those controls are separate work packages so authentication can be tested without
-claiming tenant isolation prematurely.
+Those controls remain separate work packages so authentication and authorization can
+be tested without claiming complete tenant isolation prematurely.

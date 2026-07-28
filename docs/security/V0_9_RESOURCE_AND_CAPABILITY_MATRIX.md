@@ -87,6 +87,7 @@ organization.update
 organization.delete
 member.read
 member.manage
+member.grant_owner
 service_account.read
 service_account.manage
 policy.read
@@ -171,6 +172,10 @@ system_backup.run
 | destructive organization action | yes | no | no | no | no | no | no |
 
 The table defines defaults. The capability registry remains authoritative.
+
+WP-04 encodes the exact bundles in `enterprise_constants.py`. Only `owner` receives
+`member.grant_owner`; ordinary `member.manage` cannot create, demote, suspend or
+revoke owner memberships.
 
 ## 5. Existing route authorization map
 
