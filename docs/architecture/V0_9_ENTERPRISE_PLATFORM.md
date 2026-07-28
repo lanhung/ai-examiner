@@ -304,13 +304,15 @@ Task envelope:
 
 ```json
 {
+  "version": 1,
   "organization_id": "uuid",
-  "actor": {"type": "principal", "id": "uuid"},
-  "request_id": "uuid",
+  "actor_principal_id": "uuid",
   "job_id": "uuid",
+  "kind": "golden_dataset",
   "idempotency_key": "stable-key",
-  "policy_snapshot_id": "uuid",
-  "payload": {}
+  "required_capability": "dataset.manage",
+  "authorization_mode": "membership",
+  "payload_digest": "sha256"
 }
 ```
 
@@ -325,6 +327,19 @@ Workers:
 - write terminal failure and audit evidence.
 
 Redis is not the authoritative job ledger. PostgreSQL remains authoritative.
+
+### WP-07 job hardening implementation
+
+WP-07 persists the complete canonical envelope and its digest, atomically claims a
+bounded lease, renews it by heartbeat and rechecks current membership capability
+before loading a protected resource. Duplicate deliveries replay terminal state
+without invoking the handler. Transient failures use bounded exponential backoff;
+exhausted deliveries enter `dead_letter`. Cancellation is cooperative and stale
+leases can be recovered only within one explicit organization context.
+
+Detailed contract:
+
+- `docs/architecture/V0_9_JOB_DELIVERY_HARDENING.md`.
 
 ## 10. Model governance and quotas
 

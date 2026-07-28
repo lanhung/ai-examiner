@@ -278,8 +278,8 @@ ID supplied alone.
 
 | Current route group | Capability |
 |---|---|
-| job read | `job.read` in same tenant |
-| job retry/cancel | `job.manage` |
+| job list/read | `job.read` in same tenant; broker and lease internals omitted |
+| job retry/cancel/recover | `job.manage`; execution rechecks current capability |
 | cost view | `usage.read` |
 | application metrics | `system_metrics.read`; public scrape uses network auth |
 

@@ -7,12 +7,12 @@
 - Base candidate: `v0.7.0-rc.2`
 - Release tag: not created
 - Deployment status: research only; not approved for production
-- Alembic head: `20260728_0012`
+- Alembic head: `20260728_0013`
 
-v0.9 WP-01 through WP-06 are implemented. WP-06 adds tenant-scoped Local/S3
-storage, normalized object locators, authorized downloads, MinIO evaluation,
-restartable migration and reconciliation. The package version intentionally remains
-`0.8.0.dev0`.
+v0.9 WP-01 through WP-07 are implemented. WP-07 adds tenant-scoped immutable task
+envelopes, idempotency, atomic leases, heartbeats, execution-time authorization,
+bounded retry, cancellation, dead-letter state and stale-worker recovery. The
+package version intentionally remains `0.8.0.dev0`.
 
 v0.8 is being delivered as reviewable vertical slices. The current implementation
 now carries one immutable template snapshot through planning, selection,

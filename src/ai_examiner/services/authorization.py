@@ -136,6 +136,24 @@ ROUTE_POLICIES: dict[tuple[str, str], RoutePolicy] = {
         "memory_export_artifact",
         "read_sensitive",
     ),
+    ("GET", "/api/v1/jobs/{job_id}"): RoutePolicy(
+        "required", "job.read", "background_job", "read_sensitive"
+    ),
+    ("POST", "/api/v1/jobs/{job_id}/cancel"): RoutePolicy(
+        "required", "job.manage", "background_job", "administrative"
+    ),
+    ("POST", "/api/v1/jobs/{job_id}/retry"): RoutePolicy(
+        "required", "job.manage", "background_job", "administrative"
+    ),
+    ("GET", "/api/v1/organizations/{organization_id}/jobs"): RoutePolicy(
+        "required", "job.read", "organization", "read_sensitive"
+    ),
+    (
+        "POST",
+        "/api/v1/organizations/{organization_id}/jobs/recover",
+    ): RoutePolicy(
+        "required", "job.manage", "organization", "administrative"
+    ),
 }
 
 

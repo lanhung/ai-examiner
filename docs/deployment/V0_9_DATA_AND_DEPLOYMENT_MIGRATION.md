@@ -156,6 +156,16 @@ manifest with hashes and timestamps
 Redis is not backed up for business recovery. Queued/running jobs are reconciled from
 PostgreSQL after restore.
 
+WP-07 reconciliation treats PostgreSQL as authoritative. For each organization an
+operator with `job.manage` calls:
+
+```text
+POST /api/v1/organizations/{organization_id}/jobs/recover
+```
+
+Only expired leases are recovered. Active leases are not duplicated, pending
+cancellations become terminal, and exhausted attempts enter `dead_letter`.
+
 ## 8. Restore rehearsal
 
 Restore into a different Compose project name and empty volumes. Verify:
@@ -188,6 +198,11 @@ DATABASE_SCHEMA_MANAGEMENT=external
 POSTGRES_RLS_MODE=enforce
 
 STORAGE_BACKEND=s3
+JOB_LEASE_SECONDS=300
+JOB_HEARTBEAT_SECONDS=30
+JOB_MAX_ATTEMPTS=3
+JOB_RETRY_BASE_SECONDS=10
+JOB_RECOVERY_BATCH_SIZE=100
 S3_ENDPOINT_URL=
 S3_REGION=
 S3_BUCKET=

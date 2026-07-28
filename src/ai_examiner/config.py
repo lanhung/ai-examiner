@@ -123,6 +123,11 @@ class Settings(BaseSettings):
     celery_result_backend: str | None = None
     celery_always_eager: bool = False
     job_stale_minutes: int = 90
+    job_lease_seconds: int = Field(default=300, ge=30, le=3600)
+    job_heartbeat_seconds: int = Field(default=30, ge=5, le=300)
+    job_max_attempts: int = Field(default=3, ge=1, le=10)
+    job_retry_base_seconds: int = Field(default=10, ge=1, le=600)
+    job_recovery_batch_size: int = Field(default=100, ge=1, le=1000)
 
     daily_model_budget_usd: float = Field(default=20.0, ge=0)
     project_model_budget_usd: float = Field(default=10.0, ge=0)
@@ -143,6 +148,12 @@ class Settings(BaseSettings):
     @property
     def result_backend(self) -> str:
         return self.celery_result_backend or self.redis_url
+
+    def job_configuration_issues(self) -> list[str]:
+        issues: list[str] = []
+        if self.job_heartbeat_seconds >= self.job_lease_seconds:
+            issues.append("job_heartbeat_must_be_shorter_than_lease")
+        return issues
 
     def api_key_for(self, provider: str) -> str | None:
         return {

@@ -63,6 +63,16 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   migrated objects.
 - Add an optional private MinIO Compose profile, storage readiness checks and
   Local/S3 contract, resume, checksum, authorization and Alembic regression tests.
+- Add WP-07 durable tenant-aware job delivery with strict persisted task envelopes,
+  organization-scoped idempotency keys and atomic lease ownership.
+- Recheck active organization, principal, membership and required capability in the
+  worker before loading any protected resource.
+- Add bounded transient retries, cooperative cancellation, terminal/dead-letter
+  states, heartbeat renewal and expired-worker recovery.
+- Add authorized enterprise job list, read, cancel, retry and recovery APIs that
+  omit broker identifiers, lease owners and raw exception details.
+- Add migration `20260728_0013` and deterministic duplicate-delivery,
+  authorization-revocation, cancellation, recovery and migration tests.
 
 - Add complete Planner v6 reciprocal real-provider evidence for all seven built-in
   templates: 30 unique cases per template, 420 case evaluations and 840 anonymous

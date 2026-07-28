@@ -304,10 +304,35 @@ AI evidence may initialize a case but cannot write the final human decision fiel
 GET  /api/v1/jobs/{job_id}
 POST /api/v1/jobs/{job_id}/cancel
 POST /api/v1/jobs/{job_id}/retry
+GET  /api/v1/organizations/{organization_id}/jobs
+POST /api/v1/organizations/{organization_id}/jobs/recover
 ```
 
 Job responses include organization, policy snapshot, attempts and sanitized failure
 codes. Celery task IDs and internal exception traces are not exposed.
+
+Job reads require `job.read`; cancellation, manual retry and stale-worker recovery
+require `job.manage`. Job IDs from another organization return 404. Retry is allowed
+only for `failed`, `dead_letter` or `cancelled` jobs.
+
+Asynchronous creation endpoints accept:
+
+```http
+Idempotency-Key: <1-to-160-character-client-key>
+```
+
+Reusing a key with the same organization, job kind, actor and payload returns the
+existing job. Reusing it with another actor or payload is rejected.
+
+Lifecycle:
+
+```text
+queued -> running -> completed
+                 \-> retry_scheduled -> running
+                 \-> failed
+                 \-> dead_letter
+                 \-> cancelling -> cancelled
+```
 
 ## 13. Health and readiness
 

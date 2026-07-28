@@ -130,6 +130,29 @@ owner/admin invariant violations: 0
 cross-organization membership use: 0
 ```
 
+### 3.5 Job delivery and recovery
+
+Required cases:
+
+- the same broker delivery is received twice;
+- two workers race to claim one job;
+- the actor loses capability after enqueue;
+- an envelope carries a foreign organization or changed payload digest;
+- a worker stops heartbeating while running;
+- cancellation arrives before and during execution;
+- transient failures exhaust the configured attempt budget;
+- a manual retry rebuilds a legacy envelope.
+
+Targets:
+
+```text
+duplicate billable result: 0
+foreign-tenant resource load: 0
+execution after capability revocation: 0
+running job without a bounded lease: 0
+unclassified terminal job: 0
+```
+
 WP-04 deterministic evidence adds 24 focused tests covering the role matrix, complete
 route-policy inventory, OpenAPI policy metadata, cross-organization actor/resource
 substitution, inactive subjects, ETags, stale updates, owner escalation and the

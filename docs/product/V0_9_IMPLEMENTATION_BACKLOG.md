@@ -135,8 +135,7 @@ Acceptance:
 
 ## WP-06: Storage backend
 
-Status: implemented on `research/v0.9.0`; PostgreSQL CI evidence pending at the
-time of this document update.
+Status: completed on `research/v0.9.0`; SQLite and PostgreSQL CI gates pass.
 
 Deliver:
 
@@ -167,6 +166,9 @@ Implementation evidence:
 
 ## WP-07: Job hardening
 
+Status: implemented on `research/v0.9.0`; deterministic SQLite gates pass.
+PostgreSQL CI and Linux Redis/Celery process-restart rehearsal remain required.
+
 Deliver:
 
 - organization/actor task envelope;
@@ -182,6 +184,15 @@ Acceptance:
 - duplicate delivery creates one billable result;
 - foreign-tenant payload fails before resource access;
 - worker restart recovery passes.
+
+Implementation evidence:
+
+- `src/ai_examiner/services/job_control.py`;
+- unified execution in `src/ai_examiner/jobs.py`;
+- additive migration `20260728_0013`;
+- authorized job read, cancel, retry and recovery APIs;
+- `tests/test_job_hardening_v09.py`;
+- `docs/architecture/V0_9_JOB_DELIVERY_HARDENING.md`.
 
 ## WP-08: Audit system
 

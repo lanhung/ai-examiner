@@ -659,6 +659,31 @@ class PromptVersion(GlobalOrTenantOwnedMixin, Base):
 
 class BackgroundJob(TenantOwnedMixin, Base):
     __tablename__ = "background_jobs"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "kind",
+            "idempotency_key",
+            name="uq_background_job_idempotency",
+        ),
+        Index(
+            "ix_background_job_lease",
+            "organization_id",
+            "status",
+            "lease_expires_at",
+        ),
+        CheckConstraint(
+            "status IN ("
+            "'queued', 'running', 'retry_scheduled', 'cancelling', "
+            "'completed', 'failed', 'cancelled', 'dead_letter'"
+            ")",
+            name="ck_background_job_status",
+        ),
+        CheckConstraint(
+            "authorization_mode IN ('membership', 'legacy_local')",
+            name="ck_background_job_authorization_mode",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     project_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
@@ -667,14 +692,54 @@ class BackgroundJob(TenantOwnedMixin, Base):
         nullable=True,
     )
     kind: Mapped[str] = mapped_column(String(80))
+    idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    envelope_version: Mapped[int] = mapped_column(Integer, default=1)
+    envelope_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    envelope_digest: Mapped[str] = mapped_column(String(64), default="")
+    required_capability: Mapped[str] = mapped_column(String(100), default="")
+    authorization_mode: Mapped[str] = mapped_column(
+        String(30),
+        default="legacy_local",
+    )
     status: Mapped[str] = mapped_column(String(30), default="queued")
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     message: Mapped[str] = mapped_column(Text, default="")
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     result: Mapped[dict] = mapped_column(JSON, default=dict)
     error: Mapped[str] = mapped_column(Text, default="")
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3)
+    retry_class: Mapped[str] = mapped_column(String(30), default="")
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    lease_owner: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    lease_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    cancel_requested_by: Mapped[str | None] = mapped_column(
+        String(36),
+        nullable=True,
+    )
+    dead_lettered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    terminal_reason: Mapped[str] = mapped_column(String(120), default="")
     celery_task_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

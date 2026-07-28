@@ -111,6 +111,14 @@ class VisualAnalyzeCreate(BaseModel):
     asynchronous: bool = True
 
 
+class JobCancelCreate(BaseModel):
+    reason: str = Field(default="cancelled_by_operator", min_length=1, max_length=120)
+
+
+class JobRetryCreate(BaseModel):
+    reason: str = Field(default="retried_by_operator", min_length=1, max_length=120)
+
+
 class JointAnalysisCreate(BaseModel):
     document_ids: list[str] = Field(min_length=2, max_length=8)
     profile: str | None = None

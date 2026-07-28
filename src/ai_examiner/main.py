@@ -88,6 +88,8 @@ from .schemas import (
     DatasetStatusUpdate,
     ExpertRatingCreate,
     GoldenDatasetCreate,
+    JobCancelCreate,
+    JobRetryCreate,
     JointAnalysisCreate,
     LearnerIdentityCreate,
     LearnerIdentityLinkCreate,
@@ -150,7 +152,14 @@ from .services.enterprise_identity import (
 )
 from .services.evidence import create_highlighted_crop, persist_evidence, serialize_asset
 from .services.golden import GoldenDatasetService
-from .services.jobs import JobQueueUnavailable, enqueue_job, serialize_job
+from .services.jobs import (
+    JobQueueUnavailable,
+    cancel_persisted_job,
+    enqueue_job,
+    recover_and_dispatch_jobs,
+    retry_persisted_job,
+    serialize_job,
+)
 from .services.joint import JointAnalysisService
 from .services.longitudinal import LongitudinalStateError, LongitudinalStateService
 from .services.longitudinal_evaluation import LongitudinalEvaluationService
@@ -248,6 +257,14 @@ MemoryExportReadAccess = Annotated[
     AuthorizationContext,
     Depends(require_capability("learner_memory.admin")),
 ]
+JobReadAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("job.read")),
+]
+JobManageAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("job.manage")),
+]
 
 
 @asynccontextmanager
@@ -256,6 +273,7 @@ async def lifespan(app: FastAPI):
         settings.auth_configuration_issues()
         + settings.rls_configuration_issues()
         + settings.storage_configuration_issues()
+        + settings.job_configuration_issues()
     )
     if settings.app_env == "production" and configuration_issues:
         raise RuntimeError(
@@ -2490,6 +2508,10 @@ def export_learner_memory(
     identity_id: str,
     payload: MemoryExportCreate,
     db: Annotated[Session, Depends(get_db)],
+    idempotency_key: Annotated[
+        str | None,
+        Header(alias="Idempotency-Key", min_length=1, max_length=160),
+    ] = None,
 ):
     identity = learner_identity_or_404(db, identity_id)
     memory_service(db)
@@ -2501,6 +2523,7 @@ def export_learner_memory(
             "identity_id": identity.id,
             "include_source_quotes": payload.include_source_quotes,
         },
+        idempotency_key=idempotency_key,
     )
     return serialize_job(job)
 
@@ -3007,6 +3030,10 @@ def analyze_document_visuals(
     document_id: str,
     payload: VisualAnalyzeCreate,
     db: Annotated[Session, Depends(get_db)],
+    idempotency_key: Annotated[
+        str | None,
+        Header(alias="Idempotency-Key", min_length=1, max_length=160),
+    ] = None,
 ):
     document = db.get(Document, document_id)
     if not document:
@@ -3025,6 +3052,7 @@ def analyze_document_visuals(
                 "profile": profile,
                 "max_pages": payload.max_pages,
             },
+            idempotency_key=idempotency_key,
         )
         return {"mode": "async", "job": serialize_job(job)}
     analyses = VisualEvidenceService(db, settings, project.id).analyze_document(
@@ -3205,6 +3233,10 @@ def generate_golden_dataset_async(
     project_id: str,
     payload: GoldenDatasetCreate,
     db: Annotated[Session, Depends(get_db)],
+    idempotency_key: Annotated[
+        str | None,
+        Header(alias="Idempotency-Key", min_length=1, max_length=160),
+    ] = None,
 ):
     project = db.get(Project, project_id)
     document = db.get(Document, payload.document_id)
@@ -3225,6 +3257,7 @@ def generate_golden_dataset_async(
             "consensus_profile": consensus_profile,
             "question_count": payload.question_count,
         },
+        idempotency_key=idempotency_key,
     )
     return serialize_job(job)
 
@@ -3234,6 +3267,10 @@ def run_benchmark_async(
     dataset_id: str,
     payload: BenchmarkCreate,
     db: Annotated[Session, Depends(get_db)],
+    idempotency_key: Annotated[
+        str | None,
+        Header(alias="Idempotency-Key", min_length=1, max_length=160),
+    ] = None,
 ):
     dataset = db.get(GoldenDataset, dataset_id)
     if not dataset:
@@ -3250,6 +3287,7 @@ def run_benchmark_async(
             "run_planner": payload.run_planner,
             "run_analyzer": payload.run_analyzer,
         },
+        idempotency_key=idempotency_key,
     )
     return serialize_job(job)
 
@@ -3271,6 +3309,127 @@ def list_jobs(project_id: str, db: Annotated[Session, Depends(get_db)]):
         .limit(100)
     ).all()
     return [serialize_job(job) for job in jobs]
+
+
+def _authorized_job_or_404(
+    db: Session,
+    context: AuthorizationContext,
+    job_id: str,
+) -> BackgroundJob:
+    job = db.get(BackgroundJob, job_id)
+    if job is None:
+        raise HTTPException(404, "Job not found")
+    try:
+        authorize_resource_organization(context, job.organization_id)
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    return job
+
+
+@app.get("/api/v1/jobs/{job_id}")
+def get_enterprise_job(
+    job_id: str,
+    context: JobReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    return serialize_job(
+        _authorized_job_or_404(db, context, job_id),
+        include_internal=False,
+    )
+
+
+@app.get("/api/v1/organizations/{organization_id}/jobs")
+def list_enterprise_jobs(
+    organization_id: str,
+    context: JobReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+    status: str | None = Query(default=None, max_length=30),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    try:
+        authorize_resource_organization(context, organization_id)
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    query = select(BackgroundJob).where(
+        BackgroundJob.organization_id == organization_id
+    )
+    if status:
+        query = query.where(BackgroundJob.status == status)
+    jobs = db.scalars(
+        query.order_by(BackgroundJob.created_at.desc()).limit(limit)
+    ).all()
+    return [serialize_job(job, include_internal=False) for job in jobs]
+
+
+@app.post("/api/v1/jobs/{job_id}/cancel")
+def cancel_enterprise_job(
+    job_id: str,
+    payload: JobCancelCreate,
+    context: JobManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    job = _authorized_job_or_404(db, context, job_id)
+    return serialize_job(
+        cancel_persisted_job(
+            db,
+            job,
+            principal_id=context.principal_id,
+            reason=payload.reason,
+        ),
+        include_internal=False,
+    )
+
+
+@app.post("/api/v1/jobs/{job_id}/retry", status_code=202)
+def retry_enterprise_job(
+    job_id: str,
+    payload: JobRetryCreate,
+    context: JobManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    job = _authorized_job_or_404(db, context, job_id)
+    try:
+        job = retry_persisted_job(db, job, reason=payload.reason)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except JobQueueUnavailable as exc:
+        raise HTTPException(
+            503,
+            detail={"code": "queue_unavailable", "message": str(exc)},
+        ) from exc
+    return serialize_job(job, include_internal=False)
+
+
+@app.post(
+    "/api/v1/organizations/{organization_id}/jobs/recover",
+    status_code=202,
+)
+def recover_enterprise_jobs(
+    organization_id: str,
+    context: JobManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    try:
+        authorize_resource_organization(context, organization_id)
+        jobs = recover_and_dispatch_jobs(
+            db,
+            organization_id=organization_id,
+        )
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    except JobQueueUnavailable as exc:
+        raise HTTPException(
+            503,
+            detail={"code": "queue_unavailable", "message": str(exc)},
+        ) from exc
+    return {
+        "organization_id": organization_id,
+        "recovered_count": len(jobs),
+        "jobs": [
+            serialize_job(job, include_internal=False)
+            for job in jobs
+        ],
+    }
 
 
 @app.get("/api/provider-health")

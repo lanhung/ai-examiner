@@ -33,12 +33,15 @@ Research implementation progress:
   and PostgreSQL FORCE RLS;
 - WP-06 implemented: tenant-scoped Local/S3 storage, authorized downloads and
   restartable object migration/reconciliation;
+- WP-07 implemented: tamper-evident task envelopes, idempotency, leases,
+  heartbeats, execution-time capability checks, cancellation and recovery;
 - the v0.9 research branch remains non-deployable until the complete gate passes.
 
 Authoritative research documents:
 
 - `docs/decisions/ADR-006-ENTERPRISE-TENANCY-AND-IDENTITY.md`;
 - `docs/architecture/V0_9_ENTERPRISE_PLATFORM.md`;
+- `docs/architecture/V0_9_JOB_DELIVERY_HARDENING.md`;
 - `docs/api/V0_9_ENTERPRISE_API.md`;
 - `docs/security/V0_9_ENTERPRISE_THREAT_MODEL.md`;
 - `docs/security/V0_9_RESOURCE_AND_CAPABILITY_MATRIX.md`;

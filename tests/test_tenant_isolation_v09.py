@@ -168,7 +168,12 @@ def test_job_envelope_carries_tenant_and_actor(monkeypatch):
 
     assert job.organization_id == organization.id
     assert job.actor_principal_id == actor.id
-    assert calls == [(job.id, organization.id, actor.id)]
+    assert len(calls) == 1
+    assert calls[0][0] == job.envelope_json
+    assert calls[0][0]["job_id"] == job.id
+    assert calls[0][0]["organization_id"] == organization.id
+    assert calls[0][0]["actor_principal_id"] == actor.id
+    assert calls[0][0]["required_capability"] == "dataset.manage"
 
 
 def test_job_rejects_project_outside_transaction_tenant(monkeypatch):
