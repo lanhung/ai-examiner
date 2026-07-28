@@ -239,6 +239,8 @@ Implementation contract:
 
 ## WP-10: Retention, export, deletion and review
 
+Implementation status: complete on `research/v0.9.0`.
+
 Deliver:
 
 - retention policies;
@@ -252,6 +254,11 @@ Acceptance:
 - export authorization checked at download;
 - deletion includes relational and object verification;
 - AI cannot set final human-review decision.
+
+Implementation contract:
+
+- `docs/architecture/V0_9_DATA_LIFECYCLE_AND_REVIEW.md`.
+- `docs/evaluation/V0_9_WP10_DATA_LIFECYCLE_RESULTS.md`.
 
 ## WP-11: OpenTelemetry and operations
 

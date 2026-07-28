@@ -320,6 +320,9 @@ metadata.
 ```text
 GET  /api/v1/organizations/{organization_id}/retention-policy
 PUT  /api/v1/organizations/{organization_id}/retention-policy
+GET  /api/v1/organizations/{organization_id}/legal-holds
+POST /api/v1/organizations/{organization_id}/legal-holds
+POST /api/v1/legal-holds/{hold_id}/release
 POST /api/v1/organizations/{organization_id}/exports
 GET  /api/v1/organization-exports/{export_id}
 GET  /api/v1/organization-exports/{export_id}/file
@@ -330,7 +333,7 @@ POST /api/v1/data-subject-requests/{request_id}/cancel
 POST /api/v1/data-subject-requests/{request_id}/retry
 ```
 
-Destructive requests require an idempotency key:
+Export creation, request creation, approval and retry require an idempotency key:
 
 ```http
 Idempotency-Key: <client-generated-value>
@@ -343,6 +346,38 @@ requested -> approved -> running -> verifying -> completed
                     \-> blocked
                     \-> failed
 ```
+
+`OrganizationExportCreate`:
+
+```json
+{
+  "scope_type": "organization | project | learner_identity",
+  "scope_id": null,
+  "include_objects": false
+}
+```
+
+Exports are ZIP packages containing a canonical manifest and tenant-scoped NDJSON
+records. `include_objects=true` additionally includes checksum-verified controlled
+objects up to `ORGANIZATION_EXPORT_MAX_BYTES`. Artifact lookup never accepts a
+storage key from the caller. Expiry and authorization are rechecked on download.
+
+`DataSubjectRequestCreate`:
+
+```json
+{
+  "request_type": "export | delete",
+  "target_type": "project | learner_identity",
+  "target_id": "uuid",
+  "reason": "bounded human explanation",
+  "include_objects": false
+}
+```
+
+Project deletion requires a different approving principal. Organization, target and
+request legal holds are evaluated in the worker before storage mutation. Completed
+deletion responses contain relation/object counts and convergence evidence, not
+deleted content. Immutable audit and model-usage evidence remains protected.
 
 ### 10.1 Implemented WP-06 private object downloads
 
@@ -370,6 +405,9 @@ POST  /api/v1/review-cases/{case_id}/appeals
 ```
 
 AI evidence may initialize a case but cannot write the final human decision field.
+Review events are append-only. A database guard rejects any `decision` event whose
+actor type is not `human`; API decisions derive the actor from the authenticated
+principal.
 
 ## 12. Jobs
 

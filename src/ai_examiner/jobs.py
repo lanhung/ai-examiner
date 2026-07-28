@@ -12,13 +12,19 @@ from .config import get_settings
 from .db import SessionLocal
 from .models import (
     BackgroundJob,
+    DataSubjectRequest,
     Document,
     GoldenDataset,
     LearnerIdentity,
     MemoryDeletionAudit,
+    OrganizationExportArtifact,
     Project,
 )
 from .services.benchmark import BenchmarkService
+from .services.data_lifecycle import (
+    DataSubjectRequestService,
+    build_organization_export,
+)
 from .services.golden import GoldenDatasetService
 from .services.job_control import (
     JobAuthorizationError,
@@ -295,12 +301,127 @@ def _delete_learner_memory(
         raise
 
 
+def _export_organization(
+    envelope: TaskEnvelope,
+    lease_token: str,
+    heartbeat: JobHeartbeat,
+) -> TaskResult:
+    _progress(
+        envelope,
+        lease_token,
+        progress=0.15,
+        message="Building organization export",
+    )
+    heartbeat.checkpoint()
+    artifact_id = ""
+    try:
+        with _tenant_session(
+            envelope.organization_id,
+            envelope.actor_principal_id,
+        ) as db:
+            job = _job_or_error(db, envelope, lease_token)
+            artifact_id = str(job.payload["artifact_id"])
+            artifact = db.get(OrganizationExportArtifact, artifact_id)
+            if (
+                artifact is None
+                or artifact.organization_id != envelope.organization_id
+            ):
+                raise ValueError("Organization export not found")
+            result = build_organization_export(db, settings, artifact)
+            if artifact.data_subject_request_id:
+                request = db.get(
+                    DataSubjectRequest,
+                    artifact.data_subject_request_id,
+                )
+                if request is not None:
+                    request.status = "completed"
+                    request.completed_at = datetime.now(UTC)
+                    request.verification_json = {
+                        "manifest_digest": artifact.manifest_digest,
+                        "record_counts": artifact.record_counts_json,
+                    }
+            db.commit()
+        return result, "Organization export completed"
+    except Exception as exc:
+        if artifact_id:
+            with _tenant_session(
+                envelope.organization_id,
+                envelope.actor_principal_id,
+            ) as db:
+                artifact = db.get(OrganizationExportArtifact, artifact_id)
+                if artifact is not None:
+                    artifact.status = "failed"
+                    artifact.failure_code = type(exc).__name__[:120]
+                    if artifact.data_subject_request_id:
+                        request = db.get(
+                            DataSubjectRequest,
+                            artifact.data_subject_request_id,
+                        )
+                        if request is not None:
+                            request.status = "failed"
+                            request.failure_code = type(exc).__name__[:120]
+                    db.commit()
+        raise
+
+
+def _delete_data_subject(
+    envelope: TaskEnvelope,
+    lease_token: str,
+    heartbeat: JobHeartbeat,
+) -> TaskResult:
+    _progress(
+        envelope,
+        lease_token,
+        progress=0.15,
+        message="Deleting approved data-subject scope",
+    )
+    heartbeat.checkpoint()
+    request_id = ""
+    try:
+        with _tenant_session(
+            envelope.organization_id,
+            envelope.actor_principal_id,
+        ) as db:
+            job = _job_or_error(db, envelope, lease_token)
+            request_id = str(job.payload["request_id"])
+            request = db.get(DataSubjectRequest, request_id)
+            if (
+                request is None
+                or request.organization_id != envelope.organization_id
+            ):
+                raise ValueError("Data-subject request not found")
+            result = DataSubjectRequestService(
+                db,
+                settings,
+                envelope.organization_id,
+            ).execute_deletion(request)
+            db.commit()
+        return result, "Data-subject deletion completed"
+    except Exception as exc:
+        if request_id:
+            with _tenant_session(
+                envelope.organization_id,
+                envelope.actor_principal_id,
+            ) as db:
+                request = db.get(DataSubjectRequest, request_id)
+                if request is not None and request.status != "blocked":
+                    DataSubjectRequestService(
+                        db,
+                        settings,
+                        envelope.organization_id,
+                    ).mark_failed(request, type(exc).__name__)
+                    db.commit()
+        raise
+
+
 TASK_HANDLERS: dict[str, TaskHandler] = {
     "golden_dataset": _generate_golden_dataset,
     "visual_document": _analyze_visual_document,
     "benchmark": _run_benchmark,
     "memory_export": _export_learner_memory,
     "memory_deletion": _delete_learner_memory,
+    "organization_export": _export_organization,
+    "data_subject_deletion": _delete_data_subject,
 }
 
 
@@ -423,4 +544,14 @@ def export_learner_memory_task(task, envelope: dict) -> dict:
 
 @celery_app.task(bind=True, name="ai_examiner.delete_learner_memory")
 def delete_learner_memory_task(task, envelope: dict) -> dict:
+    return execute_job_delivery(task, envelope)
+
+
+@celery_app.task(bind=True, name="ai_examiner.export_organization")
+def export_organization_task(task, envelope: dict) -> dict:
+    return execute_job_delivery(task, envelope)
+
+
+@celery_app.task(bind=True, name="ai_examiner.delete_data_subject")
+def delete_data_subject_task(task, envelope: dict) -> dict:
     return execute_job_delivery(task, envelope)

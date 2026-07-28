@@ -96,6 +96,19 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   before provider construction, with redacted policy/quota/usage APIs and export.
 - Add migration `20260728_0015`, forced PostgreSQL tenant RLS, runtime DELETE
   revocation and deterministic governance, concurrency, voice and rollback tests.
+- Add WP-10 versioned organization retention policies, scoped legal holds and
+  fail-closed deletion blocking across both reviewed and legacy project paths.
+- Add checksum-verified asynchronous organization/project/learner exports with
+  immutable manifests, bounded lifetime, optional private object inclusion and
+  authorization revalidation on every download.
+- Add idempotent data-subject export/delete requests with independent human
+  approval, legal-hold blocking, resumable jobs and relational/object convergence
+  evidence.
+- Add human review, assignment, decision and appeal cases backed by append-only
+  events; model-authored evidence can open a case but cannot write a final decision.
+- Add migration `20260728_0016`, PostgreSQL FORCE RLS/runtime privilege controls
+  and deterministic lifecycle, dual-control, export, legal-hold, review and
+  rollback tests.
 
 - Add complete Planner v6 reciprocal real-provider evidence for all seven built-in
   templates: 30 unique cases per template, 420 case evaluations and 840 anonymous

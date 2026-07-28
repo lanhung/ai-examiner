@@ -346,6 +346,10 @@ def _resource_id_for_request(request: Request, resolver: str) -> str | None:
         "evidence_asset": "asset_id",
         "memory_export_artifact": "artifact_id",
         "background_job": "job_id",
+        "legal_hold": "hold_id",
+        "organization_export": "export_id",
+        "data_subject_request": "request_id",
+        "review_case": "case_id",
     }.get(resolver)
     if parameter is None:
         return None

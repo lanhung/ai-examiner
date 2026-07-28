@@ -77,6 +77,12 @@ New enterprise models:
 | `DataSubjectRequest` | organization/learner | export/delete workflow |
 | `ReviewCase` | organization/project | human review and appeal |
 | `StoredObject` | organization/project | private backend locator; never user-selected |
+| `OrganizationRetentionPolicy` | organization | versioned policy and digest |
+| `LegalHold` | organization/scoped resource | deletion blocker until human release |
+| `OrganizationExportArtifact` | organization | expiring verified export package |
+| `DataSubjectRequest` | organization/scoped resource | reviewed export/delete workflow |
+| `HumanReviewCase` | organization | review state; AI may only supply evidence |
+| `HumanReviewEvent` | organization | append-only human decision and appeal evidence |
 
 ## 3. Capability registry
 

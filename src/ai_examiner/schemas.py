@@ -72,6 +72,99 @@ class OrganizationQuotaUpdate(BaseModel):
     max_concurrent_calls: int = Field(default=3, ge=1, le=1_000)
 
 
+class RetentionPolicyUpdate(BaseModel):
+    policy_mode: Literal["monitor", "enforce"] = "monitor"
+    project_days: int = Field(default=730, ge=30, le=3650)
+    session_days: int = Field(default=365, ge=30, le=3650)
+    document_days: int = Field(default=365, ge=30, le=3650)
+    learner_memory_days: int = Field(default=365, ge=30, le=3650)
+    export_ttl_hours: int = Field(default=24, ge=1, le=168)
+    deletion_grace_days: int = Field(default=7, ge=0, le=90)
+
+
+class LegalHoldCreate(BaseModel):
+    scope_type: Literal[
+        "organization",
+        "project",
+        "learner_identity",
+        "data_subject_request",
+    ]
+    scope_id: str | None = Field(default=None, max_length=36)
+    reason: str = Field(min_length=5, max_length=4000)
+
+    @field_validator("scope_id")
+    @classmethod
+    def validate_scope_id(cls, value: str | None, info):
+        scope_type = info.data.get("scope_type")
+        if scope_type == "organization" and value is not None:
+            raise ValueError("organization legal holds cannot specify scope_id")
+        if scope_type != "organization" and not value:
+            raise ValueError("scoped legal holds require scope_id")
+        return value
+
+
+class LegalHoldRelease(BaseModel):
+    reason: str = Field(min_length=5, max_length=4000)
+
+
+class OrganizationExportCreate(BaseModel):
+    include_objects: bool = False
+    scope_type: Literal["organization", "project", "learner_identity"] = (
+        "organization"
+    )
+    scope_id: str | None = Field(default=None, max_length=36)
+
+    @field_validator("scope_id")
+    @classmethod
+    def validate_export_scope_id(cls, value: str | None, info):
+        scope_type = info.data.get("scope_type")
+        if scope_type == "organization" and value is not None:
+            raise ValueError("organization exports cannot specify scope_id")
+        if scope_type != "organization" and not value:
+            raise ValueError("scoped exports require scope_id")
+        return value
+
+
+class DataSubjectRequestCreate(BaseModel):
+    request_type: Literal["export", "delete"]
+    target_type: Literal["project", "learner_identity"]
+    target_id: str = Field(min_length=1, max_length=36)
+    reason: str = Field(default="", max_length=4000)
+    include_objects: bool = False
+
+
+class DataSubjectDecision(BaseModel):
+    decision: Literal["approved", "denied"]
+    reason: str = Field(min_length=5, max_length=4000)
+
+
+class DataSubjectCancel(BaseModel):
+    reason: str = Field(min_length=5, max_length=4000)
+
+
+class ReviewCaseCreate(BaseModel):
+    case_type: str = Field(min_length=2, max_length=50)
+    resource_type: str = Field(min_length=2, max_length=50)
+    resource_id: str = Field(min_length=1, max_length=36)
+    title: str = Field(min_length=3, max_length=240)
+    summary: str = Field(default="", max_length=10_000)
+    evidence: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+
+
+class ReviewCaseAssign(BaseModel):
+    principal_id: str = Field(min_length=1, max_length=36)
+
+
+class ReviewCaseDecision(BaseModel):
+    decision: str = Field(min_length=2, max_length=80)
+    reason: str = Field(min_length=5, max_length=4000)
+
+
+class ReviewCaseAppeal(BaseModel):
+    reason: str = Field(min_length=5, max_length=4000)
+    evidence: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+
+
 class MembershipCreate(BaseModel):
     principal_id: str = Field(min_length=1, max_length=36)
     role: Literal[

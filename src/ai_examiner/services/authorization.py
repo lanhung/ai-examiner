@@ -187,6 +187,83 @@ ROUTE_POLICIES: dict[tuple[str, str], RoutePolicy] = {
     ): RoutePolicy(
         "required", "audit.read", "organization", "read_sensitive"
     ),
+    (
+        "GET",
+        "/api/v1/organizations/{organization_id}/retention-policy",
+    ): RoutePolicy("required", "retention.read", "organization", "read_sensitive"),
+    (
+        "PUT",
+        "/api/v1/organizations/{organization_id}/retention-policy",
+    ): RoutePolicy(
+        "required", "retention.manage", "organization", "administrative"
+    ),
+    (
+        "GET",
+        "/api/v1/organizations/{organization_id}/legal-holds",
+    ): RoutePolicy("required", "retention.read", "organization", "read_sensitive"),
+    (
+        "POST",
+        "/api/v1/organizations/{organization_id}/legal-holds",
+    ): RoutePolicy(
+        "required", "retention.manage", "organization", "administrative"
+    ),
+    ("POST", "/api/v1/legal-holds/{hold_id}/release"): RoutePolicy(
+        "required", "retention.manage", "legal_hold", "administrative"
+    ),
+    (
+        "POST",
+        "/api/v1/organizations/{organization_id}/exports",
+    ): RoutePolicy(
+        "required", "retention.manage", "organization", "administrative"
+    ),
+    ("GET", "/api/v1/organization-exports/{export_id}"): RoutePolicy(
+        "required", "retention.manage", "organization_export", "read_sensitive"
+    ),
+    ("GET", "/api/v1/organization-exports/{export_id}/file"): RoutePolicy(
+        "required", "retention.manage", "organization_export", "read_sensitive"
+    ),
+    (
+        "POST",
+        "/api/v1/organizations/{organization_id}/data-subject-requests",
+    ): RoutePolicy(
+        "required", "review_case.create", "organization", "administrative"
+    ),
+    ("GET", "/api/v1/data-subject-requests/{request_id}"): RoutePolicy(
+        "required", "retention.read", "data_subject_request", "read_sensitive"
+    ),
+    ("POST", "/api/v1/data-subject-requests/{request_id}/approve"): RoutePolicy(
+        "required", "retention.manage", "data_subject_request", "administrative"
+    ),
+    ("POST", "/api/v1/data-subject-requests/{request_id}/cancel"): RoutePolicy(
+        "required", "retention.manage", "data_subject_request", "administrative"
+    ),
+    ("POST", "/api/v1/data-subject-requests/{request_id}/retry"): RoutePolicy(
+        "required", "retention.manage", "data_subject_request", "administrative"
+    ),
+    (
+        "POST",
+        "/api/v1/organizations/{organization_id}/review-cases",
+    ): RoutePolicy(
+        "required", "review_case.create", "organization", "administrative"
+    ),
+    (
+        "GET",
+        "/api/v1/organizations/{organization_id}/review-cases",
+    ): RoutePolicy(
+        "required", "review_case.review", "organization", "read_sensitive"
+    ),
+    ("GET", "/api/v1/review-cases/{case_id}"): RoutePolicy(
+        "required", "review_case.review", "review_case", "read_sensitive"
+    ),
+    ("POST", "/api/v1/review-cases/{case_id}/assign"): RoutePolicy(
+        "required", "review_case.review", "review_case", "administrative"
+    ),
+    ("POST", "/api/v1/review-cases/{case_id}/decisions"): RoutePolicy(
+        "required", "review_case.review", "review_case", "administrative"
+    ),
+    ("POST", "/api/v1/review-cases/{case_id}/appeals"): RoutePolicy(
+        "required", "review_case.appeal", "review_case", "administrative"
+    ),
 }
 
 

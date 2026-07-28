@@ -9,8 +9,10 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..jobs import (
     analyze_visual_document_task,
+    delete_data_subject_task,
     delete_learner_memory_task,
     export_learner_memory_task,
+    export_organization_task,
     generate_golden_dataset_task,
     run_benchmark_task,
 )
@@ -31,6 +33,8 @@ TASKS = {
     "benchmark": run_benchmark_task,
     "memory_export": export_learner_memory_task,
     "memory_deletion": delete_learner_memory_task,
+    "organization_export": export_organization_task,
+    "data_subject_deletion": delete_data_subject_task,
 }
 
 

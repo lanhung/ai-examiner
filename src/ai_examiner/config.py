@@ -134,6 +134,16 @@ class Settings(BaseSettings):
     audit_ip_hash_key: SecretStr | None = None
     audit_retention_days: int = Field(default=365, ge=30, le=3650)
     audit_export_max_rows: int = Field(default=10_000, ge=100, le=100_000)
+    organization_export_max_bytes: int = Field(
+        default=268_435_456,
+        ge=1_048_576,
+        le=5_368_709_120,
+    )
+    organization_export_default_ttl_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+    )
 
     daily_model_budget_usd: float = Field(default=20.0, ge=0)
     project_model_budget_usd: float = Field(default=10.0, ge=0)

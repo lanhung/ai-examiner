@@ -5,7 +5,7 @@ import json
 import shutil
 import time
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Annotated
@@ -48,11 +48,13 @@ from .models import (
     BenchmarkRun,
     Blueprint,
     Concept,
+    DataSubjectRequest,
     Document,
     EvidenceAsset,
     ExamSession,
     ExpertRating,
     GoldenDataset,
+    HumanReviewCase,
     JointAnalysis,
     KnowledgeEvidenceEvent,
     KnowledgeUnit,
@@ -63,10 +65,12 @@ from .models import (
     LearnerMemoryEvent,
     LearnerPreference,
     LearnerSubject,
+    LegalHold,
     MemoryDeletionAudit,
     MemoryExportArtifact,
     ModelUsageLedger,
     Organization,
+    OrganizationExportArtifact,
     OrganizationMembership,
     Principal,
     Project,
@@ -91,6 +95,9 @@ from .schemas import (
     ConceptMappingCreate,
     ConceptMappingReview,
     DatasetStatusUpdate,
+    DataSubjectCancel,
+    DataSubjectDecision,
+    DataSubjectRequestCreate,
     ExpertRatingCreate,
     GoldenDatasetCreate,
     JobCancelCreate,
@@ -98,6 +105,8 @@ from .schemas import (
     JointAnalysisCreate,
     LearnerIdentityCreate,
     LearnerIdentityLinkCreate,
+    LegalHoldCreate,
+    LegalHoldRelease,
     LongitudinalRebuildCreate,
     MembershipCreate,
     MembershipUpdate,
@@ -107,6 +116,7 @@ from .schemas import (
     MemoryImportCreate,
     MemorySettingsUpdate,
     ModelPolicyUpdate,
+    OrganizationExportCreate,
     OrganizationQuotaUpdate,
     PolicyBenchmarkCreate,
     PreferenceAction,
@@ -114,9 +124,14 @@ from .schemas import (
     ProjectCreate,
     ProjectTemplateBindingUpdate,
     PromptVersionCreate,
+    RetentionPolicyUpdate,
     RetestItemAction,
     RetestPlanCreate,
     RetestSessionCreate,
+    ReviewCaseAppeal,
+    ReviewCaseAssign,
+    ReviewCaseCreate,
+    ReviewCaseDecision,
     ScenarioTemplateCloneCreate,
     ScenarioTemplateCreate,
     ScenarioTemplateImport,
@@ -162,6 +177,20 @@ from .services.authorization import (
 from .services.benchmark import BenchmarkService
 from .services.cognitive import CognitiveStateService
 from .services.conversation_policy import effective_conversation_policy
+from .services.data_lifecycle import (
+    DataLifecycleError,
+    DataSubjectRequestService,
+    HumanReviewService,
+    active_legal_holds,
+    ensure_retention_policy,
+    export_artifact_or_error,
+    retention_policy_payload,
+    serialize_data_subject_request,
+    serialize_export,
+    serialize_legal_hold,
+    serialize_review_case,
+    update_retention_policy,
+)
 from .services.datasets import dataset_diff, set_dataset_status
 from .services.documents import parse_document, save_upload
 from .services.enterprise_identity import (
@@ -312,6 +341,26 @@ PolicyManageAccess = Annotated[
 UsageReadAccess = Annotated[
     AuthorizationContext,
     Depends(require_capability("usage.read")),
+]
+RetentionReadAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("retention.read")),
+]
+RetentionManageAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("retention.manage")),
+]
+ReviewCreateAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("review_case.create")),
+]
+ReviewAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("review_case.review")),
+]
+ReviewAppealAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("review_case.appeal")),
 ]
 
 
@@ -3062,6 +3111,32 @@ def delete_project(project_id: str, db: Annotated[Session, Depends(get_db)]):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
+    holds = active_legal_holds(
+        db,
+        organization_id=project.organization_id,
+        target_type="project",
+        target_id=project.id,
+    )
+    if holds:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "legal_hold",
+                "message": "Project deletion is blocked by an active legal hold.",
+                "legal_hold_ids": [hold.id for hold in holds],
+            },
+        )
+    if settings.auth_mode != "disabled" or settings.app_env == "production":
+        raise HTTPException(
+            409,
+            detail={
+                "code": "reviewed_deletion_required",
+                "message": (
+                    "Enterprise project deletion requires an approved "
+                    "data-subject request."
+                ),
+            },
+        )
     upload_path = settings.upload_dir / project_id
     affected_identity_ids = set(
         db.scalars(
@@ -4081,6 +4156,636 @@ def export_enterprise_audit_events(
             "X-Audit-Truncated": str(truncated).lower(),
         },
     )
+
+
+def _lifecycle_http_error(exc: DataLifecycleError) -> HTTPException:
+    status = {
+        "target_not_found": 404,
+        "export_not_found": 404,
+        "idempotency_conflict": 409,
+        "dual_control_required": 409,
+        "request_not_pending": 409,
+        "request_not_executable": 409,
+        "request_not_cancellable": 409,
+        "review_case_terminal": 409,
+        "review_case_not_decided": 409,
+    }.get(exc.code, 400)
+    return HTTPException(
+        status,
+        detail={"code": exc.code, "message": str(exc)},
+    )
+
+
+@app.get("/api/v1/organizations/{organization_id}/retention-policy")
+def get_organization_retention_policy(
+    organization_id: str,
+    _context: RetentionReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    policy = ensure_retention_policy(db, organization_id)
+    db.commit()
+    return retention_policy_payload(policy)
+
+
+@app.put("/api/v1/organizations/{organization_id}/retention-policy")
+def put_organization_retention_policy(
+    organization_id: str,
+    payload: RetentionPolicyUpdate,
+    context: RetentionManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    policy = ensure_retention_policy(db, organization_id)
+    update_retention_policy(
+        db,
+        policy,
+        payload.model_dump(),
+        principal_id=context.principal_id,
+    )
+    db.commit()
+    return retention_policy_payload(policy)
+
+
+@app.get("/api/v1/organizations/{organization_id}/legal-holds")
+def list_organization_legal_holds(
+    organization_id: str,
+    _context: RetentionReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+    status: str | None = Query(
+        default=None,
+        pattern="^(active|released)$",
+    ),
+):
+    query = select(LegalHold).where(
+        LegalHold.organization_id == organization_id
+    )
+    if status:
+        query = query.where(LegalHold.status == status)
+    holds = db.scalars(
+        query.order_by(LegalHold.created_at.desc(), LegalHold.id.desc())
+    ).all()
+    return {"items": [serialize_legal_hold(hold) for hold in holds]}
+
+
+@app.post(
+    "/api/v1/organizations/{organization_id}/legal-holds",
+    status_code=201,
+)
+def create_organization_legal_hold(
+    organization_id: str,
+    payload: LegalHoldCreate,
+    context: RetentionManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    if payload.scope_type == "project":
+        target = db.get(Project, payload.scope_id)
+    elif payload.scope_type == "learner_identity":
+        target = db.get(LearnerIdentity, payload.scope_id)
+    elif payload.scope_type == "data_subject_request":
+        target = db.get(DataSubjectRequest, payload.scope_id)
+    else:
+        target = db.get(Organization, organization_id)
+    target_organization_id = (
+        target.id if isinstance(target, Organization) else target.organization_id
+    ) if target is not None else None
+    if target is None or target_organization_id != organization_id:
+        raise HTTPException(404, "Legal-hold scope not found")
+    hold = LegalHold(
+        organization_id=organization_id,
+        scope_type=payload.scope_type,
+        scope_id=payload.scope_id,
+        reason=payload.reason,
+        created_by_principal_id=context.principal_id,
+    )
+    db.add(hold)
+    db.commit()
+    db.refresh(hold)
+    return serialize_legal_hold(hold)
+
+
+@app.post("/api/v1/legal-holds/{hold_id}/release")
+def release_organization_legal_hold(
+    hold_id: str,
+    payload: LegalHoldRelease,
+    context: RetentionManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    hold = db.get(LegalHold, hold_id)
+    if hold is None:
+        raise HTTPException(404, "Legal hold not found")
+    try:
+        authorize_resource_organization(context, hold.organization_id)
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    if hold.status != "active":
+        raise HTTPException(409, "Legal hold is already released")
+    hold.status = "released"
+    hold.released_by_principal_id = context.principal_id
+    hold.release_reason = payload.reason
+    hold.released_at = datetime.now(UTC)
+    db.commit()
+    return serialize_legal_hold(hold)
+
+
+def _create_organization_export_job(
+    db: Session,
+    *,
+    organization_id: str,
+    context: AuthorizationContext,
+    payload: OrganizationExportCreate,
+    idempotency_key: str,
+    data_subject_request_id: str | None = None,
+) -> OrganizationExportArtifact:
+    existing = db.scalar(
+        select(OrganizationExportArtifact).where(
+            OrganizationExportArtifact.organization_id == organization_id,
+            OrganizationExportArtifact.requested_by_principal_id
+            == context.principal_id,
+            OrganizationExportArtifact.idempotency_key == idempotency_key,
+        )
+    )
+    if existing is not None:
+        expected = (
+            payload.scope_type,
+            payload.scope_id,
+            payload.include_objects,
+            data_subject_request_id,
+        )
+        actual = (
+            existing.scope_type,
+            existing.scope_id,
+            existing.include_objects,
+            existing.data_subject_request_id,
+        )
+        if actual != expected:
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "idempotency_conflict",
+                    "message": "Export idempotency key was reused with different data",
+                },
+            )
+        return existing
+    if payload.scope_type == "project":
+        target = db.get(Project, payload.scope_id)
+    elif payload.scope_type == "learner_identity":
+        target = db.get(LearnerIdentity, payload.scope_id)
+    else:
+        target = db.get(Organization, organization_id)
+    if target is None or target.organization_id != organization_id:
+        raise HTTPException(404, "Export scope not found")
+    policy = ensure_retention_policy(db, organization_id)
+    ttl_hours = min(
+        policy.export_ttl_hours,
+        settings.organization_export_default_ttl_hours,
+    )
+    artifact = OrganizationExportArtifact(
+        organization_id=organization_id,
+        requested_by_principal_id=context.principal_id,
+        idempotency_key=idempotency_key,
+        data_subject_request_id=data_subject_request_id,
+        scope_type=payload.scope_type,
+        scope_id=payload.scope_id,
+        include_objects=payload.include_objects,
+        expires_at=datetime.now(UTC) + timedelta(hours=ttl_hours),
+    )
+    db.add(artifact)
+    db.commit()
+    job = enqueue_job(
+        db,
+        kind="organization_export",
+        project_id=(
+            payload.scope_id if payload.scope_type == "project" else None
+        ),
+        organization_id=organization_id,
+        actor_principal_id=context.principal_id,
+        idempotency_key=idempotency_key,
+        payload={"artifact_id": artifact.id},
+    )
+    db.refresh(artifact)
+    if data_subject_request_id:
+        request = db.get(DataSubjectRequest, data_subject_request_id)
+        if request is not None:
+            db.refresh(request)
+            request.export_artifact_id = artifact.id
+            request.job_id = job.id
+            request.status = (
+                "completed" if artifact.status == "completed" else "running"
+            )
+            db.commit()
+    db.refresh(artifact)
+    return artifact
+
+
+@app.post(
+    "/api/v1/organizations/{organization_id}/exports",
+    status_code=202,
+)
+def create_organization_export(
+    organization_id: str,
+    payload: OrganizationExportCreate,
+    context: RetentionManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+    idempotency_key: Annotated[
+        str,
+        Header(alias="Idempotency-Key", min_length=1, max_length=160),
+    ],
+):
+    artifact = _create_organization_export_job(
+        db,
+        organization_id=organization_id,
+        context=context,
+        payload=payload,
+        idempotency_key=idempotency_key,
+    )
+    return serialize_export(artifact)
+
+
+@app.get("/api/v1/organization-exports/{export_id}")
+def get_organization_export(
+    export_id: str,
+    context: RetentionManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    artifact = db.get(OrganizationExportArtifact, export_id)
+    if artifact is None:
+        raise HTTPException(404, "Organization export not found")
+    try:
+        authorize_resource_organization(context, artifact.organization_id)
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    return serialize_export(artifact)
+
+
+@app.get(
+    "/api/v1/organization-exports/{export_id}/file",
+    include_in_schema=False,
+)
+def download_organization_export(
+    export_id: str,
+    context: RetentionManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    artifact = db.get(OrganizationExportArtifact, export_id)
+    if artifact is None:
+        raise HTTPException(404, "Organization export not found")
+    try:
+        authorize_resource_organization(context, artifact.organization_id)
+        _artifact, stored = export_artifact_or_error(db, settings, export_id)
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    except DataLifecycleError as exc:
+        raise _lifecycle_http_error(exc) from exc
+    return stored_object_response(
+        db,
+        stored,
+        filename=f"organization-export-{artifact.id}.zip",
+    )
+
+
+@app.post(
+    "/api/v1/organizations/{organization_id}/data-subject-requests",
+    status_code=202,
+)
+def create_data_subject_request(
+    organization_id: str,
+    payload: DataSubjectRequestCreate,
+    context: ReviewCreateAccess,
+    db: Annotated[Session, Depends(get_db)],
+    idempotency_key: Annotated[
+        str,
+        Header(alias="Idempotency-Key", min_length=1, max_length=160),
+    ],
+):
+    try:
+        request = DataSubjectRequestService(
+            db, settings, organization_id
+        ).create(
+            request_type=payload.request_type,
+            target_type=payload.target_type,
+            target_id=payload.target_id,
+            requester_id=context.principal_id,
+            idempotency_key=idempotency_key,
+            reason=payload.reason,
+        )
+    except DataLifecycleError as exc:
+        raise _lifecycle_http_error(exc) from exc
+    request.verification_json = {
+        **request.verification_json,
+        "include_objects": payload.include_objects,
+    }
+    db.commit()
+    return serialize_data_subject_request(request)
+
+
+@app.get("/api/v1/data-subject-requests/{request_id}")
+def get_data_subject_request(
+    request_id: str,
+    context: RetentionReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    request = db.get(DataSubjectRequest, request_id)
+    if request is None:
+        raise HTTPException(404, "Data-subject request not found")
+    try:
+        authorize_resource_organization(context, request.organization_id)
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    return serialize_data_subject_request(request)
+
+
+def _dispatch_approved_data_subject_request(
+    db: Session,
+    request: DataSubjectRequest,
+    context: AuthorizationContext,
+    *,
+    idempotency_key: str,
+) -> None:
+    if request.request_type == "export":
+        artifact = _create_organization_export_job(
+            db,
+            organization_id=request.organization_id,
+            context=context,
+            payload=OrganizationExportCreate(
+                scope_type=request.target_type,
+                scope_id=request.target_id,
+                include_objects=bool(
+                    request.verification_json.get("include_objects")
+                ),
+            ),
+            idempotency_key=idempotency_key,
+            data_subject_request_id=request.id,
+        )
+        request.export_artifact_id = artifact.id
+        db.commit()
+        return
+    job = enqueue_job(
+        db,
+        kind="data_subject_deletion",
+        project_id=(
+            request.target_id if request.target_type == "project" else None
+        ),
+        organization_id=request.organization_id,
+        actor_principal_id=context.principal_id,
+        idempotency_key=idempotency_key,
+        payload={"request_id": request.id},
+    )
+    db.refresh(request)
+    request.job_id = job.id
+    if request.status == "approved":
+        request.status = "running"
+    db.commit()
+
+
+@app.post("/api/v1/data-subject-requests/{request_id}/approve")
+def decide_data_subject_request(
+    request_id: str,
+    payload: DataSubjectDecision,
+    context: RetentionManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+    idempotency_key: Annotated[
+        str,
+        Header(alias="Idempotency-Key", min_length=1, max_length=160),
+    ],
+):
+    request = db.get(DataSubjectRequest, request_id)
+    if request is None:
+        raise HTTPException(404, "Data-subject request not found")
+    try:
+        authorize_resource_organization(context, request.organization_id)
+        service = DataSubjectRequestService(
+            db,
+            settings,
+            request.organization_id,
+        )
+        service.decide(
+            request,
+            decision=payload.decision,
+            reason=payload.reason,
+            reviewer_id=context.principal_id,
+            idempotency_key=idempotency_key,
+        )
+        db.commit()
+        if payload.decision == "approved" and request.job_id is None:
+            _dispatch_approved_data_subject_request(
+                db,
+                request,
+                context,
+                idempotency_key=idempotency_key,
+            )
+            db.refresh(request)
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    except DataLifecycleError as exc:
+        raise _lifecycle_http_error(exc) from exc
+    return serialize_data_subject_request(request)
+
+
+@app.post("/api/v1/data-subject-requests/{request_id}/cancel")
+def cancel_data_subject_request(
+    request_id: str,
+    payload: DataSubjectCancel,
+    context: RetentionManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    request = db.get(DataSubjectRequest, request_id)
+    if request is None:
+        raise HTTPException(404, "Data-subject request not found")
+    try:
+        authorize_resource_organization(context, request.organization_id)
+        DataSubjectRequestService(
+            db,
+            settings,
+            request.organization_id,
+        ).cancel(
+            request,
+            actor_id=context.principal_id,
+            reason=payload.reason,
+        )
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    except DataLifecycleError as exc:
+        raise _lifecycle_http_error(exc) from exc
+    db.commit()
+    return serialize_data_subject_request(request)
+
+
+@app.post("/api/v1/data-subject-requests/{request_id}/retry")
+def retry_data_subject_request(
+    request_id: str,
+    context: RetentionManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+    idempotency_key: Annotated[
+        str,
+        Header(alias="Idempotency-Key", min_length=1, max_length=160),
+    ],
+):
+    request = db.get(DataSubjectRequest, request_id)
+    if request is None:
+        raise HTTPException(404, "Data-subject request not found")
+    try:
+        authorize_resource_organization(context, request.organization_id)
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    if request.final_decision != "approved" or request.status not in {
+        "failed",
+        "blocked",
+    }:
+        raise HTTPException(409, "Only failed or blocked approved requests can retry")
+    request.status = "approved"
+    request.failure_code = ""
+    request.blocked_reason = ""
+    db.commit()
+    _dispatch_approved_data_subject_request(
+        db,
+        request,
+        context,
+        idempotency_key=idempotency_key,
+    )
+    db.refresh(request)
+    return serialize_data_subject_request(request)
+
+
+@app.post(
+    "/api/v1/organizations/{organization_id}/review-cases",
+    status_code=201,
+)
+def create_human_review_case(
+    organization_id: str,
+    payload: ReviewCaseCreate,
+    context: ReviewCreateAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    review_case = HumanReviewService(db, organization_id).create(
+        case_type=payload.case_type,
+        resource_type=payload.resource_type,
+        resource_id=payload.resource_id,
+        title=payload.title,
+        summary=payload.summary,
+        evidence=payload.evidence,
+        actor_type="human",
+        actor_id=context.principal_id,
+    )
+    db.commit()
+    return serialize_review_case(review_case)
+
+
+@app.get("/api/v1/organizations/{organization_id}/review-cases")
+def list_human_review_cases(
+    organization_id: str,
+    _context: ReviewAccess,
+    db: Annotated[Session, Depends(get_db)],
+    status: str | None = Query(default=None, max_length=20),
+):
+    query = select(HumanReviewCase).where(
+        HumanReviewCase.organization_id == organization_id
+    )
+    if status:
+        query = query.where(HumanReviewCase.status == status)
+    cases = db.scalars(
+        query.order_by(HumanReviewCase.created_at.desc(), HumanReviewCase.id.desc())
+    ).all()
+    return {"items": [serialize_review_case(item) for item in cases]}
+
+
+@app.get("/api/v1/review-cases/{case_id}")
+def get_human_review_case(
+    case_id: str,
+    context: ReviewAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    review_case = db.get(HumanReviewCase, case_id)
+    if review_case is None:
+        raise HTTPException(404, "Review case not found")
+    try:
+        authorize_resource_organization(context, review_case.organization_id)
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    service = HumanReviewService(db, review_case.organization_id)
+    return serialize_review_case(review_case, service.events(review_case))
+
+
+@app.post("/api/v1/review-cases/{case_id}/assign")
+def assign_human_review_case(
+    case_id: str,
+    payload: ReviewCaseAssign,
+    context: ReviewAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    review_case = db.get(HumanReviewCase, case_id)
+    membership = db.scalar(
+        select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == context.organization_id,
+            OrganizationMembership.principal_id == payload.principal_id,
+            OrganizationMembership.status == "active",
+        )
+    )
+    if review_case is None or membership is None:
+        raise HTTPException(404, "Review case or reviewer not found")
+    try:
+        authorize_resource_organization(context, review_case.organization_id)
+        HumanReviewService(db, review_case.organization_id).assign(
+            review_case,
+            reviewer_id=payload.principal_id,
+            actor_id=context.principal_id,
+        )
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    except DataLifecycleError as exc:
+        raise _lifecycle_http_error(exc) from exc
+    db.commit()
+    return serialize_review_case(review_case)
+
+
+@app.post("/api/v1/review-cases/{case_id}/decisions")
+def decide_human_review_case(
+    case_id: str,
+    payload: ReviewCaseDecision,
+    context: ReviewAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    review_case = db.get(HumanReviewCase, case_id)
+    if review_case is None:
+        raise HTTPException(404, "Review case not found")
+    try:
+        authorize_resource_organization(context, review_case.organization_id)
+        HumanReviewService(db, review_case.organization_id).decide(
+            review_case,
+            decision=payload.decision,
+            reason=payload.reason,
+            actor_id=context.principal_id,
+        )
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    except DataLifecycleError as exc:
+        raise _lifecycle_http_error(exc) from exc
+    db.commit()
+    return serialize_review_case(review_case)
+
+
+@app.post("/api/v1/review-cases/{case_id}/appeals")
+def appeal_human_review_case(
+    case_id: str,
+    payload: ReviewCaseAppeal,
+    context: ReviewAppealAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    review_case = db.get(HumanReviewCase, case_id)
+    if review_case is None:
+        raise HTTPException(404, "Review case not found")
+    try:
+        authorize_resource_organization(context, review_case.organization_id)
+        HumanReviewService(db, review_case.organization_id).appeal(
+            review_case,
+            reason=payload.reason,
+            evidence=payload.evidence,
+            actor_id=context.principal_id,
+        )
+    except AuthorizationError as exc:
+        raise authorization_http_error(exc) from exc
+    except DataLifecycleError as exc:
+        raise _lifecycle_http_error(exc) from exc
+    db.commit()
+    return serialize_review_case(review_case)
 
 
 @app.get("/api/provider-health")

@@ -33,6 +33,8 @@ JOB_CAPABILITIES: dict[str, str] = {
     "benchmark": "benchmark.run",
     "memory_export": "learner_memory.admin",
     "memory_deletion": "learner_memory.admin",
+    "organization_export": "retention.read",
+    "data_subject_deletion": "retention.manage",
 }
 
 

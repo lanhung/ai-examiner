@@ -673,6 +673,295 @@ def _guard_model_usage_ledger_delete(_mapper, _connection, _target) -> None:
     raise ValueError("Model usage ledger entries cannot be deleted")
 
 
+class OrganizationRetentionPolicy(TenantOwnedMixin, Base):
+    __tablename__ = "organization_retention_policies"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            name="uq_retention_policy_organization",
+        ),
+        CheckConstraint(
+            "policy_mode IN ('monitor', 'enforce')",
+            name="ck_retention_policy_mode",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    policy_mode: Mapped[str] = mapped_column(String(20), default="monitor")
+    project_days: Mapped[int] = mapped_column(Integer, default=730)
+    session_days: Mapped[int] = mapped_column(Integer, default=365)
+    document_days: Mapped[int] = mapped_column(Integer, default=365)
+    learner_memory_days: Mapped[int] = mapped_column(Integer, default=365)
+    export_ttl_hours: Mapped[int] = mapped_column(Integer, default=24)
+    deletion_grace_days: Mapped[int] = mapped_column(Integer, default=7)
+    policy_digest: Mapped[str] = mapped_column(String(64))
+    updated_by_principal_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class LegalHold(TenantOwnedMixin, Base):
+    __tablename__ = "legal_holds"
+    __table_args__ = (
+        Index(
+            "ix_legal_hold_scope",
+            "organization_id",
+            "scope_type",
+            "scope_id",
+            "status",
+        ),
+        CheckConstraint(
+            "scope_type IN "
+            "('organization', 'project', 'learner_identity', "
+            "'data_subject_request')",
+            name="ck_legal_hold_scope_type",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'released')",
+            name="ck_legal_hold_status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    scope_type: Mapped[str] = mapped_column(String(40))
+    scope_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    created_by_principal_id: Mapped[str] = mapped_column(String(36))
+    released_by_principal_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
+    release_reason: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    released_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class OrganizationExportArtifact(TenantOwnedMixin, Base):
+    __tablename__ = "organization_export_artifacts"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "requested_by_principal_id",
+            "idempotency_key",
+            name="uq_organization_export_idempotency",
+        ),
+        Index(
+            "ix_organization_export_created",
+            "organization_id",
+            "created_at",
+        ),
+        Index("ix_organization_export_storage_object", "storage_object_id"),
+        CheckConstraint(
+            "status IN ('queued', 'running', 'completed', 'failed', 'expired')",
+            name="ck_organization_export_status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    requested_by_principal_id: Mapped[str] = mapped_column(String(36))
+    idempotency_key: Mapped[str] = mapped_column(String(160))
+    data_subject_request_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
+    scope_type: Mapped[str] = mapped_column(String(40), default="organization")
+    scope_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    include_objects: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(20), default="queued")
+    storage_object_id: Mapped[str | None] = mapped_column(
+        ForeignKey("stored_objects.id", ondelete="SET NULL"), nullable=True
+    )
+    manifest_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    record_counts_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    object_counts_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    failure_code: Mapped[str] = mapped_column(String(120), default="")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class DataSubjectRequest(TenantOwnedMixin, Base):
+    __tablename__ = "data_subject_requests"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "requester_principal_id",
+            "idempotency_key",
+            name="uq_data_subject_request_idempotency",
+        ),
+        Index(
+            "ix_data_subject_request_status",
+            "organization_id",
+            "status",
+            "requested_at",
+        ),
+        CheckConstraint(
+            "request_type IN ('export', 'delete')",
+            name="ck_data_subject_request_type",
+        ),
+        CheckConstraint(
+            "target_type IN ('project', 'learner_identity')",
+            name="ck_data_subject_target_type",
+        ),
+        CheckConstraint(
+            "status IN "
+            "('requested', 'approved', 'running', 'verifying', 'completed', "
+            "'blocked', 'failed', 'cancelled', 'denied')",
+            name="ck_data_subject_request_status",
+        ),
+        CheckConstraint(
+            "final_decision IN ('', 'approved', 'denied', 'cancelled')",
+            name="ck_data_subject_final_decision",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    request_type: Mapped[str] = mapped_column(String(20))
+    target_type: Mapped[str] = mapped_column(String(40))
+    target_id: Mapped[str] = mapped_column(String(36))
+    requester_principal_id: Mapped[str] = mapped_column(String(36))
+    reviewer_principal_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="requested")
+    final_decision: Mapped[str] = mapped_column(String(20), default="")
+    decision_reason: Mapped[str] = mapped_column(Text, default="")
+    idempotency_key: Mapped[str] = mapped_column(String(160))
+    decision_idempotency_key: Mapped[str | None] = mapped_column(
+        String(160), nullable=True
+    )
+    review_case_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    export_artifact_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    verification_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    deletion_counts_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    blocked_reason: Mapped[str] = mapped_column(String(160), default="")
+    failure_code: Mapped[str] = mapped_column(String(120), default="")
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class HumanReviewCase(TenantOwnedMixin, Base):
+    __tablename__ = "human_review_cases"
+    __table_args__ = (
+        Index(
+            "ix_human_review_case_status",
+            "organization_id",
+            "status",
+            "created_at",
+        ),
+        CheckConstraint(
+            "status IN ('open', 'assigned', 'decided', 'appealed', 'closed')",
+            name="ck_human_review_case_status",
+        ),
+        CheckConstraint(
+            "created_by_actor_type IN ('human', 'ai', 'system')",
+            name="ck_human_review_creator_type",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    case_type: Mapped[str] = mapped_column(String(50))
+    resource_type: Mapped[str] = mapped_column(String(50))
+    resource_id: Mapped[str] = mapped_column(String(36))
+    status: Mapped[str] = mapped_column(String(20), default="open")
+    title: Mapped[str] = mapped_column(String(240))
+    summary: Mapped[str] = mapped_column(Text, default="")
+    evidence_json: Mapped[list] = mapped_column(JSON, default=list)
+    created_by_actor_type: Mapped[str] = mapped_column(String(20))
+    created_by_actor_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
+    assigned_principal_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
+    final_decision: Mapped[str] = mapped_column(String(80), default="")
+    final_decision_by_principal_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class HumanReviewEvent(TenantOwnedMixin, Base):
+    __tablename__ = "human_review_events"
+    __table_args__ = (
+        Index("ix_human_review_event_case", "case_id", "created_at"),
+        CheckConstraint(
+            "event_type IN ('created', 'assigned', 'decision', 'appeal', 'closed')",
+            name="ck_human_review_event_type",
+        ),
+        CheckConstraint(
+            "actor_type IN ('human', 'ai', 'system')",
+            name="ck_human_review_event_actor_type",
+        ),
+        CheckConstraint(
+            "event_type != 'decision' OR actor_type = 'human'",
+            name="ck_human_review_decision_actor",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    case_id: Mapped[str] = mapped_column(
+        ForeignKey("human_review_cases.id", ondelete="RESTRICT")
+    )
+    event_type: Mapped[str] = mapped_column(String(20))
+    actor_type: Mapped[str] = mapped_column(String(20))
+    actor_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+@event.listens_for(HumanReviewEvent, "before_insert")
+def _guard_non_human_final_review(_mapper, _connection, target) -> None:
+    if target.event_type == "decision" and target.actor_type != "human":
+        raise ValueError("Final review decisions must be made by a human")
+
+
+@event.listens_for(HumanReviewEvent, "before_update")
+@event.listens_for(HumanReviewEvent, "before_delete")
+def _guard_review_event_mutation(_mapper, _connection, _target) -> None:
+    raise ValueError("Human review events are append-only")
+
+
+event.listen(
+    HumanReviewEvent.__table__,
+    "after_create",
+    DDL(
+        "CREATE TRIGGER IF NOT EXISTS human_review_events_no_update "
+        "BEFORE UPDATE ON human_review_events BEGIN "
+        "SELECT RAISE(ABORT, 'human_review_events are append-only'); END"
+    ).execute_if(dialect="sqlite"),
+)
+event.listen(
+    HumanReviewEvent.__table__,
+    "after_create",
+    DDL(
+        "CREATE TRIGGER IF NOT EXISTS human_review_events_no_delete "
+        "BEFORE DELETE ON human_review_events BEGIN "
+        "SELECT RAISE(ABORT, 'human_review_events are append-only'); END"
+    ).execute_if(dialect="sqlite"),
+)
+
+
 class GoldenDataset(TenantOwnedMixin, Base):
     __tablename__ = "golden_datasets"
 
