@@ -41,6 +41,7 @@ from .enterprise_constants import (
 from .model_catalog import CATALOG
 from .models import (
     AdaptiveDecision,
+    AuditEvent,
     BackgroundJob,
     BenchmarkRun,
     Blueprint,
@@ -123,12 +124,26 @@ from .schemas import (
     VoiceSessionCreate,
 )
 from .services.agreement import agreement_summary
+from .services.audit import (
+    AuditFilters,
+    AuditWriteError,
+    append_request_audit_event,
+    decode_audit_cursor,
+    encode_audit_cursor,
+    export_audit_events,
+    initialize_request_audit_context,
+    list_audit_events,
+    serialize_audit_event,
+    should_audit_request,
+    write_request_audit,
+)
 from .services.authentication import (
     CurrentAuthentication,
     authentication_http_error,
     get_oidc_authenticator,
 )
 from .services.authorization import (
+    ROUTE_POLICIES,
     AuthorizationContext,
     AuthorizationError,
     authorization_http_error,
@@ -265,6 +280,10 @@ JobManageAccess = Annotated[
     AuthorizationContext,
     Depends(require_capability("job.manage")),
 ]
+AuditReadAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("audit.read")),
+]
 
 
 @asynccontextmanager
@@ -274,6 +293,7 @@ async def lifespan(app: FastAPI):
         + settings.rls_configuration_issues()
         + settings.storage_configuration_issues()
         + settings.job_configuration_issues()
+        + settings.audit_configuration_issues()
     )
     if settings.app_env == "production" and configuration_issues:
         raise RuntimeError(
@@ -291,15 +311,76 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.middleware("http")
 async def disable_dynamic_response_cache(request: Request, call_next):
-    response = await call_next(request)
+    initialize_request_audit_context(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        route = request.scope.get("route")
+        route_template = getattr(route, "path", "")
+        policy = ROUTE_POLICIES.get((request.method, route_template))
+        if policy is not None:
+            request.state.audit_reason_code = "unhandled_exception"
+            try:
+                write_request_audit(
+                    request,
+                    policy,
+                    500,
+                    route_template=route_template,
+                )
+            except Exception as audit_exc:
+                if settings.audit_required:
+                    raise AuditWriteError(
+                        "Required audit event could not be persisted"
+                    ) from audit_exc
+        raise
+
+    route = request.scope.get("route")
+    route_template = getattr(route, "path", "")
+    policy = ROUTE_POLICIES.get((request.method, route_template))
+    if (
+        not getattr(request.state, "audit_recorded", False)
+        and should_audit_request(request, policy, response.status_code)
+    ):
+        try:
+            write_request_audit(
+                request,
+                policy,
+                response.status_code,
+                route_template=route_template,
+            )
+        except Exception:
+            if settings.audit_required:
+                response = JSONResponse(
+                    status_code=503,
+                    content={
+                        "detail": {
+                            "code": "audit_unavailable",
+                            "message": "Required audit evidence is unavailable.",
+                        }
+                    },
+                )
     if request.url.path == "/health" or request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Request-ID"] = request.state.request_id
     return response
 
 
 @app.exception_handler(JobQueueUnavailable)
 async def job_queue_unavailable_handler(_request: Request, exc: JobQueueUnavailable):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(AuditWriteError)
+async def audit_write_error_handler(_request: Request, _exc: AuditWriteError):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": {
+                "code": "audit_unavailable",
+                "message": "Required audit evidence is unavailable.",
+            }
+        },
+    )
 
 
 @app.exception_handler(TemplateLifecycleError)
@@ -840,6 +921,7 @@ def list_organization_memberships(
 def create_organization_membership(
     organization_id: str,
     payload: MembershipCreate,
+    request: Request,
     response: Response,
     context: MemberManageAccess,
     db: Annotated[Session, Depends(get_db)],
@@ -851,9 +933,28 @@ def create_organization_membership(
             principal_id=payload.principal_id,
             role=payload.role,
             status=payload.status,
+            commit=False,
         )
     except MembershipAdministrationError as exc:
         raise _membership_http_error(exc) from exc
+    append_request_audit_event(
+        db,
+        request=request,
+        policy=ROUTE_POLICIES[
+            ("POST", "/api/v1/organizations/{organization_id}/memberships")
+        ],
+        status_code=201,
+        route_template="/api/v1/organizations/{organization_id}/memberships",
+        organization_id=organization_id,
+        resource_id=membership.id,
+        metadata={
+            "changed_fields": ["role", "status"],
+            "membership_role": membership.role,
+            "membership_status": membership.status,
+        },
+    )
+    db.commit()
+    db.refresh(membership)
     response.headers["ETag"] = f'"{membership.version}"'
     return _serialize_membership_with_principal(db, membership)
 
@@ -865,6 +966,7 @@ def update_organization_membership(
     organization_id: str,
     membership_id: str,
     payload: MembershipUpdate,
+    request: Request,
     response: Response,
     context: MemberManageAccess,
     db: Annotated[Session, Depends(get_db)],
@@ -894,9 +996,38 @@ def update_organization_membership(
             expected_version=_membership_version(if_match),
             role=payload.role,
             status=payload.status,
+            commit=False,
         )
     except MembershipAdministrationError as exc:
         raise _membership_http_error(exc) from exc
+    changed_fields = [
+        field
+        for field, value in (("role", payload.role), ("status", payload.status))
+        if value is not None
+    ]
+    append_request_audit_event(
+        db,
+        request=request,
+        policy=ROUTE_POLICIES[
+            (
+                "PATCH",
+                "/api/v1/organizations/{organization_id}/memberships/{membership_id}",
+            )
+        ],
+        status_code=200,
+        route_template=(
+            "/api/v1/organizations/{organization_id}/memberships/{membership_id}"
+        ),
+        organization_id=organization_id,
+        resource_id=membership.id,
+        metadata={
+            "changed_fields": changed_fields,
+            "membership_role": membership.role,
+            "membership_status": membership.status,
+        },
+    )
+    db.commit()
+    db.refresh(membership)
     response.headers["ETag"] = f'"{membership.version}"'
     return _serialize_membership_with_principal(db, membership)
 
@@ -907,6 +1038,7 @@ def update_organization_membership(
 def revoke_organization_membership(
     organization_id: str,
     membership_id: str,
+    request: Request,
     response: Response,
     context: MemberManageAccess,
     db: Annotated[Session, Depends(get_db)],
@@ -922,9 +1054,33 @@ def revoke_organization_membership(
         membership = service.revoke(
             membership,
             expected_version=_membership_version(if_match),
+            commit=False,
         )
     except MembershipAdministrationError as exc:
         raise _membership_http_error(exc) from exc
+    append_request_audit_event(
+        db,
+        request=request,
+        policy=ROUTE_POLICIES[
+            (
+                "DELETE",
+                "/api/v1/organizations/{organization_id}/memberships/{membership_id}",
+            )
+        ],
+        status_code=200,
+        route_template=(
+            "/api/v1/organizations/{organization_id}/memberships/{membership_id}"
+        ),
+        organization_id=organization_id,
+        resource_id=membership.id,
+        metadata={
+            "changed_fields": ["status"],
+            "membership_role": membership.role,
+            "membership_status": membership.status,
+        },
+    )
+    db.commit()
+    db.refresh(membership)
     response.headers["ETag"] = f'"{membership.version}"'
     return _serialize_membership_with_principal(db, membership)
 
@@ -3430,6 +3586,135 @@ def recover_enterprise_jobs(
             for job in jobs
         ],
     }
+
+
+def _audit_filter_values(
+    *,
+    actor_id: str | None,
+    action: str | None,
+    resource_type: str | None,
+    resource_id: str | None,
+    outcome: str | None,
+    occurred_after: datetime | None,
+    occurred_before: datetime | None,
+    request_id: str | None,
+) -> AuditFilters:
+    return AuditFilters(
+        actor_id=actor_id,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        outcome=outcome,
+        occurred_after=occurred_after,
+        occurred_before=occurred_before,
+        request_id=request_id,
+    )
+
+
+@app.get("/api/v1/organizations/{organization_id}/audit-events")
+def list_enterprise_audit_events(
+    organization_id: str,
+    _context: AuditReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+    actor_id: str | None = Query(default=None, max_length=100),
+    action: str | None = Query(default=None, max_length=160),
+    resource_type: str | None = Query(default=None, max_length=100),
+    resource_id: str | None = Query(default=None, max_length=160),
+    outcome: str | None = Query(
+        default=None,
+        pattern="^(succeeded|denied|failed)$",
+    ),
+    occurred_after: datetime | None = None,
+    occurred_before: datetime | None = None,
+    request_id: str | None = Query(default=None, max_length=64),
+    cursor: str | None = Query(default=None, max_length=256),
+    limit: int = Query(default=100, ge=1, le=200),
+):
+    decoded_cursor = decode_audit_cursor(cursor)
+    if cursor and decoded_cursor is None:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "audit_cursor_invalid",
+                "message": "The audit cursor is invalid.",
+            },
+        )
+    events, next_cursor = list_audit_events(
+        db,
+        organization_id=organization_id,
+        filters=_audit_filter_values(
+            actor_id=actor_id,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            outcome=outcome,
+            occurred_after=occurred_after,
+            occurred_before=occurred_before,
+            request_id=request_id,
+        ),
+        cursor=decoded_cursor,
+        limit=limit,
+    )
+    eligible_count = db.scalar(
+        select(func.count(AuditEvent.id)).where(
+            AuditEvent.organization_id == organization_id,
+            AuditEvent.retention_until <= datetime.now(UTC),
+        )
+    )
+    return {
+        "items": [serialize_audit_event(event) for event in events],
+        "next_cursor": encode_audit_cursor(next_cursor) if next_cursor else None,
+        "retention": {
+            "configured_days": settings.audit_retention_days,
+            "eligible_for_privileged_aging": int(eligible_count or 0),
+            "runtime_deletion_allowed": False,
+        },
+    }
+
+
+@app.get("/api/v1/organizations/{organization_id}/audit-events/export")
+def export_enterprise_audit_events(
+    organization_id: str,
+    _context: AuditReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+    actor_id: str | None = Query(default=None, max_length=100),
+    action: str | None = Query(default=None, max_length=160),
+    resource_type: str | None = Query(default=None, max_length=100),
+    resource_id: str | None = Query(default=None, max_length=160),
+    outcome: str | None = Query(
+        default=None,
+        pattern="^(succeeded|denied|failed)$",
+    ),
+    occurred_after: datetime | None = None,
+    occurred_before: datetime | None = None,
+    request_id: str | None = Query(default=None, max_length=64),
+):
+    content, count, truncated = export_audit_events(
+        db,
+        organization_id=organization_id,
+        filters=_audit_filter_values(
+            actor_id=actor_id,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            outcome=outcome,
+            occurred_after=occurred_after,
+            occurred_before=occurred_before,
+            request_id=request_id,
+        ),
+        max_rows=settings.audit_export_max_rows,
+    )
+    return Response(
+        content=content,
+        media_type="application/x-ndjson",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="audit-{organization_id}.jsonl"'
+            ),
+            "X-Audit-Records": str(count),
+            "X-Audit-Truncated": str(truncated).lower(),
+        },
+    )
 
 
 @app.get("/api/provider-health")

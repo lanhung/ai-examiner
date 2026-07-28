@@ -35,6 +35,9 @@ Research implementation progress:
   restartable object migration/reconciliation;
 - WP-07 implemented: tamper-evident task envelopes, idempotency, leases,
   heartbeats, execution-time capability checks, cancellation and recovery;
+- WP-08 implemented: append-only tenant audit events, request/trace correlation,
+  denial and task-terminal evidence, redacted list/export APIs and privileged
+  retention boundaries;
 - the v0.9 research branch remains non-deployable until the complete gate passes.
 
 Authoritative research documents:
@@ -42,6 +45,7 @@ Authoritative research documents:
 - `docs/decisions/ADR-006-ENTERPRISE-TENANCY-AND-IDENTITY.md`;
 - `docs/architecture/V0_9_ENTERPRISE_PLATFORM.md`;
 - `docs/architecture/V0_9_JOB_DELIVERY_HARDENING.md`;
+- `docs/architecture/V0_9_IMMUTABLE_AUDIT_SYSTEM.md`;
 - `docs/api/V0_9_ENTERPRISE_API.md`;
 - `docs/security/V0_9_ENTERPRISE_THREAT_MODEL.md`;
 - `docs/security/V0_9_RESOURCE_AND_CAPABILITY_MATRIX.md`;

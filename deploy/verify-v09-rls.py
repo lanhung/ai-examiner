@@ -78,6 +78,7 @@ def verify() -> dict:
     project_a = str(uuid4())
     project_b = str(uuid4())
     cross_tenant_project = str(uuid4())
+    audit_event_id = str(uuid4())
     result: dict[str, object] = {}
 
     with engine.connect() as connection:
@@ -96,6 +97,49 @@ def verify() -> dict:
         if policies != len(RLS_TABLES):
             raise RuntimeError(
                 f"Expected {len(RLS_TABLES)} tenant policies, found {policies}"
+            )
+        audit_policy_count = int(
+            connection.scalar(
+                text(
+                    "SELECT COUNT(*) FROM pg_policies "
+                    "WHERE schemaname = current_schema() "
+                    "AND tablename = 'audit_events' "
+                    "AND policyname = ANY(:policies)"
+                ),
+                {
+                    "policies": [
+                        "audit_tenant_select",
+                        "audit_tenant_insert",
+                        "audit_maintenance_select",
+                        "audit_maintenance_delete",
+                    ]
+                },
+            )
+            or 0
+        )
+        if audit_policy_count != 4:
+            raise RuntimeError(
+                f"Expected 4 audit policies, found {audit_policy_count}"
+            )
+        audit_runtime_update = bool(
+            connection.scalar(
+                text(
+                    "SELECT has_table_privilege("
+                    "'ai_examiner_runtime', 'audit_events', 'UPDATE')"
+                )
+            )
+        )
+        audit_runtime_delete = bool(
+            connection.scalar(
+                text(
+                    "SELECT has_table_privilege("
+                    "'ai_examiner_runtime', 'audit_events', 'DELETE')"
+                )
+            )
+        )
+        if audit_runtime_update or audit_runtime_delete:
+            raise RuntimeError(
+                "Runtime role must not have UPDATE or DELETE on audit_events"
             )
 
         transaction = connection.begin_nested()
@@ -129,6 +173,26 @@ def verify() -> dict:
                 "b": organization_b,
             },
         )
+        connection.execute(
+            text(
+                "INSERT INTO audit_events "
+                "(id, organization_id, schema_version, actor_type, actor_id, "
+                "authentication_method, action, resource_type, resource_id, "
+                "outcome, reason_code, request_id, trace_id, "
+                "source_ip_class, user_agent_family, metadata_json, "
+                "event_digest, retention_class, retention_until, occurred_at) "
+                "VALUES (:id, :organization_id, 1, 'system', NULL, 'system', "
+                "'rls.verify', 'organization', :organization_id, "
+                "'succeeded', '', 'rls-request', 'rls-trace', 'unknown', "
+                "'unknown', '{}', :digest, 'security', "
+                "now() + interval '365 days', now())"
+            ),
+            {
+                "id": audit_event_id,
+                "organization_id": organization_a,
+                "digest": "0" * 64,
+            },
+        )
 
         connection.execute(text("SET LOCAL ROLE ai_examiner_runtime"))
         missing_context_count = int(
@@ -148,6 +212,44 @@ def verify() -> dict:
         ).scalars().all()
         if visible_a != [project_a]:
             raise RuntimeError(f"Organization A visibility mismatch: {visible_a}")
+        visible_audit = connection.execute(
+            text("SELECT id FROM audit_events ORDER BY id")
+        ).scalars().all()
+        if visible_audit != [audit_event_id]:
+            raise RuntimeError(
+                f"Organization A audit visibility mismatch: {visible_audit}"
+            )
+
+        audit_update_blocked = False
+        savepoint = connection.begin_nested()
+        try:
+            connection.execute(
+                text(
+                    "UPDATE audit_events SET action = 'tampered' "
+                    "WHERE id = :id"
+                ),
+                {"id": audit_event_id},
+            )
+            savepoint.commit()
+        except Exception:
+            savepoint.rollback()
+            audit_update_blocked = True
+        if not audit_update_blocked:
+            raise RuntimeError("Runtime audit update was not blocked")
+
+        audit_delete_blocked = False
+        savepoint = connection.begin_nested()
+        try:
+            connection.execute(
+                text("DELETE FROM audit_events WHERE id = :id"),
+                {"id": audit_event_id},
+            )
+            savepoint.commit()
+        except Exception:
+            savepoint.rollback()
+            audit_delete_blocked = True
+        if not audit_delete_blocked:
+            raise RuntimeError("Runtime audit delete was not blocked")
 
         connection.execute(
             text(
@@ -192,6 +294,11 @@ def verify() -> dict:
             "organization_a_visible": len(visible_a),
             "organization_b_visible": len(visible_b),
             "cross_tenant_write_blocked": cross_tenant_write_blocked,
+            "audit_policy_count": audit_policy_count,
+            "audit_runtime_update": audit_runtime_update,
+            "audit_runtime_delete": audit_runtime_delete,
+            "audit_update_blocked": audit_update_blocked,
+            "audit_delete_blocked": audit_delete_blocked,
             "legacy_organization": LEGACY_ORGANIZATION_ID,
         }
     engine.dispose()

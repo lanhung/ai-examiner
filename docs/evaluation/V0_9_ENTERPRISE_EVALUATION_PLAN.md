@@ -242,6 +242,16 @@ Canary scan audit records for:
 
 Target: zero canary leakage.
 
+WP-08 deterministic evidence is implemented in
+`tests/test_audit_system_v09.py`. It verifies the complete sensitive route-policy
+inventory, administrative success and rollback, authorization denial, tenant
+isolation, request/trace correlation, canary redaction, bounded JSONL export, worker
+terminal evidence, ORM/database immutability and migration downgrade refusal.
+
+The PostgreSQL CI gate executes `deploy/verify-v09-rls.py` after Alembic upgrade. It
+verifies audit RLS policies, confirms `ai_examiner_runtime` has no `UPDATE/DELETE`
+privilege and attempts both forbidden mutations under the runtime role.
+
 ### 3.9 Quota and model governance
 
 - concurrent requests around hard limit;

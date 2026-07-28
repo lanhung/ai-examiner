@@ -129,6 +129,11 @@ class Settings(BaseSettings):
     job_retry_base_seconds: int = Field(default=10, ge=1, le=600)
     job_recovery_batch_size: int = Field(default=100, ge=1, le=1000)
 
+    audit_required: bool = True
+    audit_ip_hash_key: SecretStr | None = None
+    audit_retention_days: int = Field(default=365, ge=30, le=3650)
+    audit_export_max_rows: int = Field(default=10_000, ge=100, le=100_000)
+
     daily_model_budget_usd: float = Field(default=20.0, ge=0)
     project_model_budget_usd: float = Field(default=10.0, ge=0)
     max_concurrent_model_calls: int = Field(default=3, ge=1, le=20)
@@ -154,6 +159,15 @@ class Settings(BaseSettings):
         if self.job_heartbeat_seconds >= self.job_lease_seconds:
             issues.append("job_heartbeat_must_be_shorter_than_lease")
         return issues
+
+    def audit_configuration_issues(self) -> list[str]:
+        if (
+            self.app_env == "production"
+            and self.audit_required
+            and self.audit_ip_hash_key is None
+        ):
+            return ["missing_audit_ip_hash_key"]
+        return []
 
     def api_key_for(self, provider: str) -> str | None:
         return {

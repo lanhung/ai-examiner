@@ -213,6 +213,9 @@ S3_ALLOW_INSECURE_HTTP=false
 S3_PRESIGN_TTL_SECONDS=300
 
 AUDIT_REQUIRED=true
+AUDIT_IP_HASH_KEY=
+AUDIT_RETENTION_DAYS=365
+AUDIT_EXPORT_MAX_ROWS=10000
 RATE_LIMIT_MODE=enforce
 OTEL_ENABLED=true
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
@@ -220,6 +223,12 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
 
 `.env.example` eventually documents names with blank values. Real values remain only
 in deployment secrets.
+
+`AUDIT_IP_HASH_KEY` is mandatory when production required-audit mode is enabled.
+Generate it independently from OIDC, provider and storage secrets. Migration
+`20260728_0014` creates the immutable audit table and PostgreSQL roles/policies.
+The normal API/worker database identity must never receive
+`ai_examiner_audit_maintenance`.
 
 ### 9.1 Implemented WP-06 object migration
 

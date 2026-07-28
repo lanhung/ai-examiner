@@ -73,6 +73,19 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   omit broker identifiers, lease owners and raw exception details.
 - Add migration `20260728_0013` and deterministic duplicate-delivery,
   authorization-revocation, cancellation, recovery and migration tests.
+- Add WP-08 append-only `AuditEvent` evidence with server request IDs, W3C trace
+  correlation, keyed source-IP hashing and user-agent family reduction.
+- Audit authentication, administrative, sensitive-read, authorization-denial and
+  worker-terminal activity through the centralized route and job policy layers.
+- Add tenant-scoped redacted audit list and bounded JSONL export APIs requiring
+  `audit.read`.
+- Add positive metadata allowlisting, secret/canary redaction, event digests and
+  retention eligibility without a runtime deletion path.
+- Add migration `20260728_0014` with SQLite mutation triggers and PostgreSQL
+  runtime privilege revocation, FORCE RLS, native immutability trigger and a
+  separate privileged aging role.
+- Add deterministic audit rollback, leakage, isolation, correlation, immutability,
+  API/export and migration tests, plus PostgreSQL runtime mutation verification.
 
 - Add complete Planner v6 reciprocal real-provider evidence for all seven built-in
   templates: 30 unique cases per template, 420 case evaluations and 840 anonymous

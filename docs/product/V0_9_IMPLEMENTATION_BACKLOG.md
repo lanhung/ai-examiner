@@ -166,7 +166,7 @@ Implementation evidence:
 
 ## WP-07: Job hardening
 
-Status: implemented on `research/v0.9.0`; deterministic SQLite gates pass.
+Status: completed on `research/v0.9.0`; SQLite and PostgreSQL CI gates pass.
 PostgreSQL CI and Linux Redis/Celery process-restart rehearsal remain required.
 
 Deliver:
@@ -195,6 +195,9 @@ Implementation evidence:
 - `docs/architecture/V0_9_JOB_DELIVERY_HARDENING.md`.
 
 ## WP-08: Audit system
+
+Status: implemented on `research/v0.9.0`; deterministic gates pass and PostgreSQL
+immutability/RLS verification is part of CI.
 
 Deliver:
 

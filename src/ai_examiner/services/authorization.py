@@ -154,6 +154,15 @@ ROUTE_POLICIES: dict[tuple[str, str], RoutePolicy] = {
     ): RoutePolicy(
         "required", "job.manage", "organization", "administrative"
     ),
+    ("GET", "/api/v1/organizations/{organization_id}/audit-events"): RoutePolicy(
+        "required", "audit.read", "organization", "read_sensitive"
+    ),
+    (
+        "GET",
+        "/api/v1/organizations/{organization_id}/audit-events/export",
+    ): RoutePolicy(
+        "required", "audit.read", "organization", "read_sensitive"
+    ),
 }
 
 
@@ -313,7 +322,7 @@ def require_capability(capability: str):
             "organization_id"
         ) or request.headers.get("X-AI-Examiner-Organization")
         try:
-            return resolve_authorization_context(
+            context = resolve_authorization_context(
                 db,
                 authentication=authentication,
                 organization_id=organization_id,
@@ -322,7 +331,18 @@ def require_capability(capability: str):
                     "X-AI-Examiner-Principal"
                 ),
             )
+            request.state.audit_actor_type = "principal"
+            request.state.audit_actor_id = context.principal_id
+            request.state.audit_authentication_method = (
+                context.authentication_method
+            )
+            return context
         except AuthorizationError as exc:
+            request.state.audit_reason_code = exc.code
+            request.state.audit_actor_id = (
+                authentication.principal_id
+                or request.headers.get("X-AI-Examiner-Principal")
+            )
             raise authorization_http_error(exc) from exc
 
     return dependency
@@ -334,12 +354,17 @@ def require_authenticated_principal(
     db: Annotated[Session, Depends(get_db)],
 ) -> Principal:
     try:
-        return resolve_authenticated_principal(
+        principal = resolve_authenticated_principal(
             db,
             authentication=authentication,
             disabled_principal_id=request.headers.get("X-AI-Examiner-Principal"),
         )
+        request.state.audit_actor_type = "principal"
+        request.state.audit_actor_id = principal.id
+        request.state.audit_authentication_method = authentication.method
+        return principal
     except AuthorizationError as exc:
+        request.state.audit_reason_code = exc.code
         raise authorization_http_error(exc) from exc
 
 

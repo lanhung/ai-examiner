@@ -383,6 +383,11 @@ metadata. Domain evidence remains in its existing evidence tables.
 Application code cannot update or delete audit events. Retention policy may export and
 age them through a privileged operational process.
 
+WP-08 implements this contract in
+`docs/architecture/V0_9_IMMUTABLE_AUDIT_SYSTEM.md`. Runtime immutability is enforced
+at ORM and database layers. PostgreSQL runtime credentials have only `SELECT/INSERT`;
+aging is reserved for a separate maintenance role and is not exposed by the API.
+
 ## 12. Data lifecycle
 
 Retention policy is organization-specific but bounded by deployment policy.

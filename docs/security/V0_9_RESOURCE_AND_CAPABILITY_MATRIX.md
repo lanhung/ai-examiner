@@ -72,7 +72,7 @@ New enterprise models:
 | `OrganizationPolicy` | organization | security and feature policy |
 | `OrganizationModelPolicy` | organization | provider/model/data classification |
 | `UsageLedgerEntry` | organization/project | authoritative cost event |
-| `AuditEvent` | organization | append-only |
+| `AuditEvent` | organization or global security event | append-only; runtime select/insert only |
 | `RetentionPolicy` | organization | bounded by deployment minimums |
 | `DataSubjectRequest` | organization/learner | export/delete workflow |
 | `ReviewCase` | organization/project | human review and appeal |
@@ -227,6 +227,16 @@ Implemented enterprise object routes:
 | document file | `document.read` |
 | evidence file/highlight | `document.read` |
 | memory export file | `learner_memory.admin` |
+
+Implemented audit routes:
+
+| Route | Capability | Audit behavior |
+|---|---|---|
+| organization audit list | `audit.read` | sensitive read |
+| organization audit JSONL export | `audit.read` | sensitive read |
+
+Audit APIs are tenant-scoped through membership authorization and PostgreSQL RLS.
+Runtime code has no update or delete path for `AuditEvent`.
 
 The database resource is authorized before a stream or bounded presigned redirect is
 created. The object key alone is never an authorization credential.

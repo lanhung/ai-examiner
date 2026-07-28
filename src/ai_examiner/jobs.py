@@ -26,6 +26,7 @@ from .services.job_control import (
     JobEnvelopeError,
     JobHeartbeat,
     TaskEnvelope,
+    append_job_audit,
     claim_job,
     complete_job,
     fail_job,
@@ -330,6 +331,13 @@ def execute_job_delivery(task, envelope_data: dict) -> dict:
                 job.message = "Job authorization denied"
                 job.terminal_reason = "authorization_revoked"
                 job.completed_at = job.updated_at = datetime.now(UTC)
+                append_job_audit(
+                    db,
+                    job,
+                    status="failed",
+                    reason_code="authorization_revoked",
+                    outcome="denied",
+                )
                 db.commit()
         raise
     if not claim.execute:

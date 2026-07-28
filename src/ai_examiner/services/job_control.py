@@ -18,6 +18,7 @@ from ..models import (
     OrganizationMembership,
     Principal,
 )
+from .audit import append_audit_event
 from .authorization import effective_capabilities
 
 ENVELOPE_VERSION = 1
@@ -37,6 +38,38 @@ JOB_CAPABILITIES: dict[str, str] = {
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def append_job_audit(
+    db: Session,
+    job: BackgroundJob,
+    *,
+    status: str,
+    reason_code: str,
+    outcome: str,
+) -> None:
+    append_audit_event(
+        db,
+        organization_id=job.organization_id,
+        actor_type="worker",
+        actor_id=job.actor_principal_id,
+        authentication_method=job.authorization_mode,
+        action=f"job.{status}",
+        resource_type="background_job",
+        resource_id=job.id,
+        outcome=outcome,
+        reason_code=reason_code,
+        request_id=f"job:{job.id}",
+        trace_id=(job.envelope_digest or job.id.replace("-", ""))[:64],
+        metadata={
+            "audit_class": "administrative",
+            "job_kind": job.kind,
+            "terminal_status": status,
+        },
+        retention_class=(
+            "security" if outcome in {"denied", "failed"} else "administrative"
+        ),
+    )
 
 
 def _canonical_json(value: Any) -> bytes:
@@ -258,6 +291,13 @@ def claim_job(
         job.terminal_reason = "cancel_requested"
         job.completed_at = now
         job.updated_at = now
+        append_job_audit(
+            db,
+            job,
+            status="cancelled",
+            reason_code="cancel_requested",
+            outcome="succeeded",
+        )
         db.commit()
         return JobClaim(False, None, "cancelled", {})
     if job.attempt_count >= job.max_attempts:
@@ -266,6 +306,13 @@ def claim_job(
         job.completed_at = now
         job.terminal_reason = "attempt_limit_exhausted"
         job.updated_at = now
+        append_job_audit(
+            db,
+            job,
+            status="dead_letter",
+            reason_code="attempt_limit_exhausted",
+            outcome="failed",
+        )
         db.commit()
         return JobClaim(False, None, "dead_letter", {})
     authorize_job_execution(db, settings, job)
@@ -428,6 +475,8 @@ def update_running_job(
     db: Session,
     envelope: TaskEnvelope,
     ownership_token: str,
+    *,
+    commit: bool = True,
     **values: Any,
 ) -> None:
     values["updated_at"] = utcnow()
@@ -441,9 +490,11 @@ def update_running_job(
         )
         .values(**values)
     )
-    db.commit()
     if updated.rowcount != 1:
+        db.rollback()
         raise JobLeaseLost("Job lease is no longer owned by this delivery")
+    if commit:
+        db.commit()
 
 
 def complete_job(
@@ -459,6 +510,7 @@ def complete_job(
         db,
         envelope,
         lease_token,
+        commit=False,
         status="completed",
         progress=1.0,
         message=message,
@@ -471,6 +523,18 @@ def complete_job(
         completed_at=now,
         terminal_reason="completed",
     )
+    job = db.get(BackgroundJob, envelope.job_id)
+    if job is None:
+        db.rollback()
+        raise JobLeaseLost("Completed job could not be reloaded")
+    append_job_audit(
+        db,
+        job,
+        status="completed",
+        reason_code="completed",
+        outcome="succeeded",
+    )
+    db.commit()
 
 
 @dataclass(frozen=True)
@@ -538,6 +602,13 @@ def fail_job(
         job.terminal_reason = "cancel_requested"
         for key, value in common.items():
             setattr(job, key, value)
+        append_job_audit(
+            db,
+            job,
+            status="cancelled",
+            reason_code="cancel_requested",
+            outcome="succeeded",
+        )
         db.commit()
         return JobFailureDisposition("cancelled", False, 0, error_code)
     if retry_class == "transient" and job.attempt_count < job.max_attempts:
@@ -575,6 +646,13 @@ def fail_job(
     )
     for key, value in common.items():
         setattr(job, key, value)
+    append_job_audit(
+        db,
+        job,
+        status=job.status,
+        reason_code=job.terminal_reason,
+        outcome="failed",
+    )
     db.commit()
     return JobFailureDisposition(job.status, False, 0, error_code)
 
@@ -598,6 +676,13 @@ def request_job_cancellation(
         job.progress = 1.0
         job.completed_at = now
         job.terminal_reason = "cancel_requested"
+        append_job_audit(
+            db,
+            job,
+            status="cancelled",
+            reason_code="cancel_requested",
+            outcome="succeeded",
+        )
     db.commit()
     db.refresh(job)
     return job
@@ -662,11 +747,25 @@ def recover_stale_jobs(
             job.status = "cancelled"
             job.completed_at = now
             job.terminal_reason = "cancel_requested"
+            append_job_audit(
+                db,
+                job,
+                status="cancelled",
+                reason_code="cancel_requested",
+                outcome="succeeded",
+            )
         elif job.attempt_count >= job.max_attempts:
             job.status = "dead_letter"
             job.dead_lettered_at = now
             job.completed_at = now
             job.terminal_reason = "attempt_limit_exhausted"
+            append_job_audit(
+                db,
+                job,
+                status="dead_letter",
+                reason_code="attempt_limit_exhausted",
+                outcome="failed",
+            )
         else:
             job.status = "retry_scheduled"
             job.next_attempt_at = now

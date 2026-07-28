@@ -242,6 +242,34 @@ limit
 
 Audit responses contain redacted metadata only. Reading audit requires `audit.read`.
 
+WP-08 implements both endpoints. List responses are cursor-paginated and include:
+
+```json
+{
+  "items": [],
+  "next_cursor": null,
+  "retention": {
+    "configured_days": 365,
+    "eligible_for_privileged_aging": 0,
+    "runtime_deletion_allowed": false
+  }
+}
+```
+
+Export uses `application/x-ndjson`; the first line is a manifest and all following
+lines use the same redacted event contract as the list endpoint. Export is bounded by
+`AUDIT_EXPORT_MAX_ROWS`. Both reads produce their own sensitive-read audit event.
+
+Every API response under `/api/` also returns a server-generated:
+
+```text
+X-Request-ID
+```
+
+A valid W3C `traceparent` trace ID is retained for correlation. Raw request bodies,
+headers, query values, cookies and user-agent strings are never copied into audit
+metadata.
+
 ## 10. Retention, export and deletion
 
 ```text

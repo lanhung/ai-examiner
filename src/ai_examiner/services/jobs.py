@@ -18,6 +18,7 @@ from ..models import BackgroundJob, Project
 from .job_control import (
     JOB_CAPABILITIES,
     TaskEnvelope,
+    append_job_audit,
     recover_stale_jobs,
     request_job_cancellation,
     reset_job_for_retry,
@@ -159,6 +160,13 @@ def enqueue_job(
         job.status = "failed"
         job.error = "queue_unavailable"
         job.terminal_reason = "queue_unavailable"
+        append_job_audit(
+            db,
+            job,
+            status="failed",
+            reason_code="queue_unavailable",
+            outcome="failed",
+        )
         db.commit()
         raise JobQueueUnavailable(
             "Background queue unavailable. Start Redis and the Celery worker, "
@@ -210,6 +218,13 @@ def dispatch_persisted_job(db: Session, job: BackgroundJob) -> BackgroundJob:
         job.status = "failed"
         job.error = "queue_unavailable"
         job.terminal_reason = "queue_unavailable"
+        append_job_audit(
+            db,
+            job,
+            status="failed",
+            reason_code="queue_unavailable",
+            outcome="failed",
+        )
         db.commit()
         raise JobQueueUnavailable("Background queue unavailable") from exc
     job.celery_task_id = result.id

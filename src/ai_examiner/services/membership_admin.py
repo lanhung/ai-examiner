@@ -44,6 +44,7 @@ class MembershipAdministrationService:
         principal_id: str,
         role: str,
         status: str,
+        commit: bool = True,
     ) -> OrganizationMembership:
         self._validate_role_and_status(role, status)
         principal = self.db.get(Principal, principal_id)
@@ -72,8 +73,11 @@ class MembershipAdministrationService:
             status=status,
         )
         self.db.add(membership)
-        self.db.commit()
-        self.db.refresh(membership)
+        if commit:
+            self.db.commit()
+            self.db.refresh(membership)
+        else:
+            self.db.flush()
         return membership
 
     def update(
@@ -83,6 +87,7 @@ class MembershipAdministrationService:
         expected_version: int,
         role: str | None,
         status: str | None,
+        commit: bool = True,
     ) -> OrganizationMembership:
         if membership.version != expected_version:
             raise MembershipAdministrationError(
@@ -103,8 +108,11 @@ class MembershipAdministrationService:
         membership.status = target_status
         membership.version += 1
         membership.updated_at = utcnow()
-        self.db.commit()
-        self.db.refresh(membership)
+        if commit:
+            self.db.commit()
+            self.db.refresh(membership)
+        else:
+            self.db.flush()
         return membership
 
     def revoke(
@@ -112,12 +120,14 @@ class MembershipAdministrationService:
         membership: OrganizationMembership,
         *,
         expected_version: int,
+        commit: bool = True,
     ) -> OrganizationMembership:
         return self.update(
             membership,
             expected_version=expected_version,
             role=None,
             status="revoked",
+            commit=commit,
         )
 
     def get_in_organization(

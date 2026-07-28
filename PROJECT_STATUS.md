@@ -7,12 +7,31 @@
 - Base candidate: `v0.7.0-rc.2`
 - Release tag: not created
 - Deployment status: research only; not approved for production
-- Alembic head: `20260728_0013`
+- Alembic head: `20260728_0014`
 
-v0.9 WP-01 through WP-07 are implemented. WP-07 adds tenant-scoped immutable task
+v0.9 WP-01 through WP-08 are implemented. WP-07 adds tenant-scoped immutable task
 envelopes, idempotency, atomic leases, heartbeats, execution-time authorization,
 bounded retry, cancellation, dead-letter state and stale-worker recovery. The
-package version intentionally remains `0.8.0.dev0`.
+WP-08 adds append-only tenant audit evidence, request/trace correlation, redacted
+audit APIs, authorization-denial coverage, task-terminal evidence and privileged
+retention boundaries. The package version intentionally remains `0.8.0.dev0`.
+
+WP-08 local verification:
+
+```text
+Full pytest                   250 passed
+Coverage                      86%
+Focused enterprise/audit      51 passed
+Ruff                          passed
+Python compileall             passed
+OpenAPI paths                 97
+Alembic head                  20260728_0014
+Secret scan                   clean
+```
+
+The known Windows AnyIO/TestClient cleanup access-violation diagnostic may print
+after pytest reports success; the pytest process exits successfully. Linux GitHub CI
+remains the authoritative PostgreSQL and async cleanup gate.
 
 v0.8 is being delivered as reviewable vertical slices. The current implementation
 now carries one immutable template snapshot through planning, selection,

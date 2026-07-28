@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import (
+    DDL,
     JSON,
     Boolean,
     CheckConstraint,
@@ -655,6 +656,105 @@ class PromptVersion(GlobalOrTenantOwnedMixin, Base):
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(30), default="draft")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AuditEvent(GlobalOrTenantOwnedMixin, Base):
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        Index(
+            "ix_audit_event_organization_occurred",
+            "organization_id",
+            "occurred_at",
+            "id",
+        ),
+        Index("ix_audit_event_request", "request_id"),
+        Index(
+            "ix_audit_event_actor",
+            "organization_id",
+            "actor_id",
+            "occurred_at",
+        ),
+        Index(
+            "ix_audit_event_resource",
+            "organization_id",
+            "resource_type",
+            "resource_id",
+        ),
+        CheckConstraint(
+            "actor_type IN ('anonymous', 'principal', 'system', 'worker')",
+            name="ck_audit_event_actor_type",
+        ),
+        CheckConstraint(
+            "outcome IN ('succeeded', 'denied', 'failed')",
+            name="ck_audit_event_outcome",
+        ),
+        CheckConstraint(
+            "source_ip_class IN "
+            "('loopback', 'private', 'public', 'unknown')",
+            name="ck_audit_event_source_ip_class",
+        ),
+        CheckConstraint(
+            "retention_class IN ('security', 'administrative', 'sensitive_read')",
+            name="ck_audit_event_retention_class",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    schema_version: Mapped[int] = mapped_column(Integer, default=1)
+    actor_type: Mapped[str] = mapped_column(String(30))
+    actor_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    authentication_method: Mapped[str] = mapped_column(String(30), default="unknown")
+    action: Mapped[str] = mapped_column(String(160))
+    resource_type: Mapped[str] = mapped_column(String(100), default="none")
+    resource_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    outcome: Mapped[str] = mapped_column(String(30))
+    reason_code: Mapped[str] = mapped_column(String(120), default="")
+    request_id: Mapped[str] = mapped_column(String(64))
+    trace_id: Mapped[str] = mapped_column(String(64))
+    source_ip_class: Mapped[str] = mapped_column(String(20), default="unknown")
+    source_ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent_family: Mapped[str] = mapped_column(String(40), default="unknown")
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    event_digest: Mapped[str] = mapped_column(String(64))
+    retention_class: Mapped[str] = mapped_column(
+        String(30),
+        default="administrative",
+    )
+    retention_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+    )
+
+
+@event.listens_for(AuditEvent, "before_update")
+def _guard_audit_event_update(_mapper, _connection, _target) -> None:
+    raise ValueError("Audit events are append-only")
+
+
+@event.listens_for(AuditEvent, "before_delete")
+def _guard_audit_event_delete(_mapper, _connection, _target) -> None:
+    raise ValueError("Audit events are append-only")
+
+
+event.listen(
+    AuditEvent.__table__,
+    "after_create",
+    DDL(
+        "CREATE TRIGGER IF NOT EXISTS audit_events_no_update "
+        "BEFORE UPDATE ON audit_events BEGIN "
+        "SELECT RAISE(ABORT, 'audit_events are append-only'); END"
+    ).execute_if(dialect="sqlite"),
+)
+event.listen(
+    AuditEvent.__table__,
+    "after_create",
+    DDL(
+        "CREATE TRIGGER IF NOT EXISTS audit_events_no_delete "
+        "BEFORE DELETE ON audit_events BEGIN "
+        "SELECT RAISE(ABORT, 'audit_events are append-only'); END"
+    ).execute_if(dialect="sqlite"),
+)
 
 
 class BackgroundJob(TenantOwnedMixin, Base):
