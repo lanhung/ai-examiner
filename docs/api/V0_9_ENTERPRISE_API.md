@@ -15,6 +15,16 @@ Enterprise clients use `/api/v1`. A request never gains access by sending an
 organization header alone; the authenticated principal must have an active
 membership.
 
+### Operational status
+
+`GET /health` includes telemetry configuration status. `GET /ready` includes a
+telemetry readiness check. Neither endpoint returns an OTLP endpoint,
+authorization header or exporter credential.
+
+Every HTTP response continues to include `X-Request-ID`. New background jobs
+carry the request ID and W3C `traceparent` in the integrity-protected task
+envelope.
+
 ## 2. Common request context
 
 Interactive request:

@@ -1,0 +1,52 @@
+groups:
+  - name: ai-examiner-slo
+    rules:
+      - alert: AIExaminerHighServerErrorRatio
+        expr: |
+          (
+            sum(rate(ai_examiner_http_server_requests_total{http_response_status_code=~"5.."}[10m]))
+            /
+            clamp_min(sum(rate(ai_examiner_http_server_requests_total[10m])), 0.001)
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: AI Examiner HTTP 5xx ratio exceeds 5%
+
+      - alert: AIExaminerHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(ai_examiner_http_server_duration_seconds_bucket[10m]))
+          ) > 2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: AI Examiner p95 request latency exceeds two seconds
+
+      - alert: AIExaminerBackgroundJobFailures
+        expr: |
+          sum(rate(ai_examiner_jobs_deliveries_total{celery_state="failed"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: AI Examiner background jobs are failing
+
+      - alert: AIExaminerTelemetryPipelineDown
+        expr: up{job="otel-collector"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: OpenTelemetry collector metrics endpoint is unavailable
+
+      - alert: AIExaminerTelemetryExportFailures
+        expr: sum(rate(otelcol_exporter_send_failed_spans_total[10m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: OpenTelemetry collector cannot export traces

@@ -20,8 +20,10 @@ from ..models import (
 )
 from .audit import append_audit_event
 from .authorization import effective_capabilities
+from .observability import current_correlation, trace_id_from_traceparent
 
-ENVELOPE_VERSION = 1
+ENVELOPE_VERSION = 2
+SUPPORTED_ENVELOPE_VERSIONS = frozenset({1, 2})
 TERMINAL_JOB_STATUSES = frozenset(
     {"completed", "failed", "cancelled", "dead_letter"}
 )
@@ -50,6 +52,11 @@ def append_job_audit(
     reason_code: str,
     outcome: str,
 ) -> None:
+    envelope = job.envelope_json or {}
+    request_id = str(envelope.get("request_id") or f"job:{job.id}")[:64]
+    trace_id = trace_id_from_traceparent(
+        str(envelope.get("traceparent") or "")
+    )
     append_audit_event(
         db,
         organization_id=job.organization_id,
@@ -61,8 +68,11 @@ def append_job_audit(
         resource_id=job.id,
         outcome=outcome,
         reason_code=reason_code,
-        request_id=f"job:{job.id}",
-        trace_id=(job.envelope_digest or job.id.replace("-", ""))[:64],
+        request_id=request_id,
+        trace_id=(
+            trace_id
+            or (job.envelope_digest or job.id.replace("-", ""))[:64]
+        ),
         metadata={
             "audit_class": "administrative",
             "job_kind": job.kind,
@@ -117,6 +127,8 @@ class TaskEnvelope:
     authorization_mode: str
     idempotency_key: str
     payload_digest: str
+    request_id: str = ""
+    traceparent: str = ""
     version: int = ENVELOPE_VERSION
 
     @classmethod
@@ -132,6 +144,7 @@ class TaskEnvelope:
         idempotency_key: str,
         payload: dict,
     ) -> TaskEnvelope:
+        request_id, traceparent = current_correlation()
         return cls(
             job_id=job_id,
             organization_id=organization_id,
@@ -141,10 +154,18 @@ class TaskEnvelope:
             authorization_mode=authorization_mode,
             idempotency_key=idempotency_key,
             payload_digest=_digest(payload),
+            request_id=request_id,
+            traceparent=traceparent,
         )
 
     @classmethod
     def from_dict(cls, value: dict) -> TaskEnvelope:
+        if not isinstance(value, dict):
+            raise JobEnvelopeError("Task envelope fields are invalid")
+        try:
+            version = int(value["version"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise JobEnvelopeError("Task envelope values are invalid") from exc
         expected = {
             "version",
             "job_id",
@@ -156,11 +177,13 @@ class TaskEnvelope:
             "idempotency_key",
             "payload_digest",
         }
-        if not isinstance(value, dict) or set(value) != expected:
+        if version == 2:
+            expected.update({"request_id", "traceparent"})
+        if version not in SUPPORTED_ENVELOPE_VERSIONS or set(value) != expected:
             raise JobEnvelopeError("Task envelope fields are invalid")
         try:
             envelope = cls(
-                version=int(value["version"]),
+                version=version,
                 job_id=str(value["job_id"]),
                 organization_id=str(value["organization_id"]),
                 actor_principal_id=(
@@ -173,21 +196,27 @@ class TaskEnvelope:
                 authorization_mode=str(value["authorization_mode"]),
                 idempotency_key=str(value["idempotency_key"]),
                 payload_digest=str(value["payload_digest"]),
+                request_id=str(value.get("request_id") or ""),
+                traceparent=str(value.get("traceparent") or ""),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise JobEnvelopeError("Task envelope values are invalid") from exc
-        if envelope.version != ENVELOPE_VERSION:
-            raise JobEnvelopeError("Task envelope version is unsupported")
         if envelope.authorization_mode not in {"membership", "legacy_local"}:
             raise JobEnvelopeError("Task envelope authorization mode is invalid")
         if envelope.kind not in JOB_CAPABILITIES:
             raise JobEnvelopeError("Task envelope job kind is invalid")
         if envelope.required_capability != JOB_CAPABILITIES[envelope.kind]:
             raise JobEnvelopeError("Task envelope capability is invalid")
+        if len(envelope.request_id) > 64:
+            raise JobEnvelopeError("Task envelope request ID is invalid")
+        if envelope.traceparent and not trace_id_from_traceparent(
+            envelope.traceparent
+        ):
+            raise JobEnvelopeError("Task envelope trace context is invalid")
         return envelope
 
     def as_dict(self) -> dict:
-        return {
+        value = {
             "version": self.version,
             "job_id": self.job_id,
             "organization_id": self.organization_id,
@@ -198,6 +227,10 @@ class TaskEnvelope:
             "idempotency_key": self.idempotency_key,
             "payload_digest": self.payload_digest,
         }
+        if self.version >= 2:
+            value["request_id"] = self.request_id
+            value["traceparent"] = self.traceparent
+        return value
 
     @property
     def digest(self) -> str:

@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 from . import __version__
 from .agents.orchestrator import ExamOrchestrator
 from .config import get_settings
-from .db import SessionLocal, get_db, init_db
+from .db import SessionLocal, engine, get_db, init_db
 from .enterprise_constants import (
     CAPABILITIES,
     HIGH_RISK_CAPABILITIES,
@@ -234,6 +234,14 @@ from .services.model_governance import (
     update_model_policy,
     usage_summary,
 )
+from .services.observability import (
+    instrument_fastapi_app,
+    instrument_httpx,
+    instrument_sqlalchemy_engine,
+    record_http_request,
+    request_correlation,
+    telemetry_status,
+)
 from .services.oidc import OIDCError
 from .services.policy_benchmark import PolicyBenchmarkService
 from .services.preferences import PreferencePolicyError, PreferenceService
@@ -373,6 +381,7 @@ async def lifespan(app: FastAPI):
         + settings.job_configuration_issues()
         + settings.audit_configuration_issues()
         + settings.model_governance_configuration_issues()
+        + settings.telemetry_configuration_issues()
     )
     if settings.app_env == "production" and configuration_issues:
         raise RuntimeError(
@@ -386,62 +395,81 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_name, version=__version__, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+instrument_sqlalchemy_engine(engine, settings)
+instrument_httpx(settings)
 
 
 @app.middleware("http")
 async def disable_dynamic_response_cache(request: Request, call_next):
+    started = time.monotonic()
     initialize_request_audit_context(request)
-    try:
-        response = await call_next(request)
-    except Exception:
+    with request_correlation(
+        request.state.request_id,
+        request.state.trace_id,
+    ):
+        try:
+            response = await call_next(request)
+        except Exception:
+            route = request.scope.get("route")
+            route_template = getattr(route, "path", "")
+            policy = ROUTE_POLICIES.get((request.method, route_template))
+            if policy is not None:
+                request.state.audit_reason_code = "unhandled_exception"
+                try:
+                    write_request_audit(
+                        request,
+                        policy,
+                        500,
+                        route_template=route_template,
+                    )
+                except Exception as audit_exc:
+                    if settings.audit_required:
+                        raise AuditWriteError(
+                            "Required audit event could not be persisted"
+                        ) from audit_exc
+            record_http_request(
+                request.method,
+                route_template,
+                500,
+                time.monotonic() - started,
+            )
+            raise
+
         route = request.scope.get("route")
         route_template = getattr(route, "path", "")
         policy = ROUTE_POLICIES.get((request.method, route_template))
-        if policy is not None:
-            request.state.audit_reason_code = "unhandled_exception"
+        if (
+            not getattr(request.state, "audit_recorded", False)
+            and should_audit_request(request, policy, response.status_code)
+        ):
             try:
                 write_request_audit(
                     request,
                     policy,
-                    500,
+                    response.status_code,
                     route_template=route_template,
                 )
-            except Exception as audit_exc:
+            except Exception:
                 if settings.audit_required:
-                    raise AuditWriteError(
-                        "Required audit event could not be persisted"
-                    ) from audit_exc
-        raise
-
-    route = request.scope.get("route")
-    route_template = getattr(route, "path", "")
-    policy = ROUTE_POLICIES.get((request.method, route_template))
-    if (
-        not getattr(request.state, "audit_recorded", False)
-        and should_audit_request(request, policy, response.status_code)
-    ):
-        try:
-            write_request_audit(
-                request,
-                policy,
-                response.status_code,
-                route_template=route_template,
-            )
-        except Exception:
-            if settings.audit_required:
-                response = JSONResponse(
-                    status_code=503,
-                    content={
-                        "detail": {
-                            "code": "audit_unavailable",
-                            "message": "Required audit evidence is unavailable.",
-                        }
-                    },
-                )
-    if request.url.path == "/health" or request.url.path.startswith("/api/"):
-        response.headers["Cache-Control"] = "no-store"
-    response.headers["X-Request-ID"] = request.state.request_id
-    return response
+                    response = JSONResponse(
+                        status_code=503,
+                        content={
+                            "detail": {
+                                "code": "audit_unavailable",
+                                "message": "Required audit evidence is unavailable.",
+                            }
+                        },
+                    )
+        if request.url.path == "/health" or request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Request-ID"] = request.state.request_id
+        record_http_request(
+            request.method,
+            route_template,
+            response.status_code,
+            time.monotonic() - started,
+        )
+        return response
 
 
 @app.exception_handler(JobQueueUnavailable)
@@ -759,6 +787,7 @@ def health():
             "backend": settings.storage_backend,
             "download_mode": settings.storage_download_mode,
         },
+        "telemetry": telemetry_status(settings),
     }
 
 
@@ -769,6 +798,7 @@ def readiness(db: Annotated[Session, Depends(get_db)]):
     rls_issues = settings.rls_configuration_issues()
     storage_issues = settings.storage_configuration_issues()
     governance_issues = settings.model_governance_configuration_issues()
+    telemetry_issues = settings.telemetry_configuration_issues()
     storage_ready = not storage_issues
     try:
         db.execute(text("SELECT 1"))
@@ -836,12 +866,23 @@ def readiness(db: Annotated[Session, Depends(get_db)]):
                 "codes": ["model_admission_backend_unavailable"],
             }
     checks["model_governance"] = governance_check
+    telemetry = telemetry_status(settings)
+    telemetry_ready = not telemetry_issues and (
+        not settings.telemetry_required
+        or bool(telemetry["exporter_ready"])
+    )
+    checks["telemetry"] = {
+        **telemetry,
+        "ready": telemetry_ready,
+        **({"codes": telemetry_issues} if telemetry_issues else {}),
+    }
     ready = (
         bool(checks["database"]["ready"])
         and authentication_ready
         and not rls_issues
         and storage_ready
         and governance_ready
+        and telemetry_ready
     )
     return JSONResponse(
         status_code=200 if ready else 503,
@@ -5302,3 +5343,6 @@ def complete_voice_session(
     voice.metrics = metrics
     db.commit()
     return serialize_voice_session(voice, db, include_events=True)
+
+
+instrument_fastapi_app(app, settings)

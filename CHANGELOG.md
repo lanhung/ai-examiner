@@ -6,6 +6,14 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ### Added
 
+- Add WP-11 failure-isolated OpenTelemetry instrumentation for FastAPI,
+  SQLAlchemy, HTTPX and Celery with allowlist-based span redaction.
+- Add backward-compatible worker task envelope v2 request and W3C trace
+  correlation plus low-cardinality HTTP and job metrics.
+- Add an optional Collector, Tempo, Prometheus, Grafana and Alertmanager
+  Compose profile with provisioned dashboards and alert rules.
+- Add telemetry privacy, endpoint validation, backend-outage and correlation
+  regression tests.
 - Add the v0.9 enterprise-platform research package covering organization tenancy,
   external OIDC identity, scoped service accounts, capability RBAC, PostgreSQL RLS,
   S3-compatible storage, tenant-aware jobs, audit, model governance, retention,

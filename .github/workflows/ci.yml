@@ -12,6 +12,10 @@ jobs:
           python-version: "3.12"
       - run: uv sync --extra dev
       - run: uv run ruff check src tests
+      - name: Validate observability Compose configuration
+        env:
+          GRAFANA_ADMIN_PASSWORD: ci-observability-only
+        run: docker compose -f docker-compose.yml -f docker-compose.observability.yml config --quiet
       - run: uv run pytest --cov=ai_examiner --cov-report=term-missing
   postgres:
     runs-on: ubuntu-latest

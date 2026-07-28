@@ -145,6 +145,26 @@ class Settings(BaseSettings):
         le=168,
     )
 
+    telemetry_enabled: bool = False
+    telemetry_required: bool = False
+    telemetry_service_name: str = "ai-examiner"
+    telemetry_service_namespace: str = "ai-examiner"
+    telemetry_otlp_endpoint: str | None = None
+    telemetry_otlp_headers: SecretStr | None = None
+    telemetry_allow_insecure_otlp: bool = False
+    telemetry_trace_sample_ratio: float = Field(default=0.1, ge=0.0, le=1.0)
+    telemetry_export_timeout_seconds: float = Field(
+        default=2.0,
+        ge=0.1,
+        le=30.0,
+    )
+    telemetry_metric_interval_seconds: int = Field(
+        default=30,
+        ge=5,
+        le=300,
+    )
+    telemetry_excluded_urls: str = "/health,/ready"
+
     daily_model_budget_usd: float = Field(default=20.0, ge=0)
     project_model_budget_usd: float = Field(default=10.0, ge=0)
     max_concurrent_model_calls: int = Field(default=3, ge=1, le=20)
@@ -194,6 +214,29 @@ class Settings(BaseSettings):
         if self.model_rate_limit_backend != "redis":
             return ["model_governance_requires_redis_in_production"]
         return []
+
+    def telemetry_configuration_issues(self) -> list[str]:
+        issues: list[str] = []
+        if self.telemetry_required and not self.telemetry_enabled:
+            issues.append("required_telemetry_disabled")
+        if not self.telemetry_enabled:
+            return issues
+        if not self.telemetry_otlp_endpoint:
+            issues.append("missing_telemetry_otlp_endpoint")
+            return issues
+        parsed = urlparse(self.telemetry_otlp_endpoint)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
+            issues.append("invalid_telemetry_otlp_endpoint")
+        elif parsed.scheme == "http" and not self.telemetry_allow_insecure_otlp:
+            issues.append("telemetry_insecure_otlp_not_allowed")
+        return issues
 
     def api_key_for(self, provider: str) -> str | None:
         return {

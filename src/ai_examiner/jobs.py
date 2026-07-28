@@ -9,7 +9,7 @@ from celery import Celery
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .db import SessionLocal
+from .db import SessionLocal, engine
 from .models import (
     BackgroundJob,
     DataSubjectRequest,
@@ -39,6 +39,12 @@ from .services.job_control import (
     update_running_job,
 )
 from .services.memory_control import MemoryControlService
+from .services.observability import (
+    instrument_celery,
+    instrument_httpx,
+    instrument_sqlalchemy_engine,
+    worker_delivery_span,
+)
 from .services.tenancy import set_tenant_context
 from .services.visual import VisualEvidenceService
 
@@ -57,6 +63,9 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
 )
+instrument_sqlalchemy_engine(engine, settings)
+instrument_httpx(settings)
+instrument_celery(settings)
 
 TaskResult = tuple[dict, str]
 TaskHandler = Callable[[TaskEnvelope, str, JobHeartbeat], TaskResult]
@@ -427,6 +436,11 @@ TASK_HANDLERS: dict[str, TaskHandler] = {
 
 def execute_job_delivery(task, envelope_data: dict) -> dict:
     envelope = TaskEnvelope.from_dict(envelope_data)
+    with worker_delivery_span(envelope):
+        return _execute_job_delivery(task, envelope)
+
+
+def _execute_job_delivery(task, envelope: TaskEnvelope) -> dict:
     delivery_id = str(getattr(task.request, "id", "") or uuid4().hex)
     try:
         with _tenant_session(

@@ -262,6 +262,10 @@ Implementation contract:
 
 ## WP-11: OpenTelemetry and operations
 
+Status: implemented on `research/v0.9.0`; deterministic privacy, correlation
+and backend-outage tests pass. The complete SQLite/PostgreSQL CI gates remain
+required before branch acceptance.
+
 Deliver:
 
 - trace/metric bootstrap;
@@ -276,6 +280,16 @@ Acceptance:
 - request-to-worker trace correlation works;
 - no raw content or secrets in telemetry;
 - telemetry backend outage does not corrupt business state.
+
+Implementation evidence:
+
+- `src/ai_examiner/services/observability.py`;
+- backward-compatible `TaskEnvelope` v2 request/trace propagation;
+- `docker-compose.observability.yml`;
+- `deploy/observability/`;
+- `tests/test_observability_v09.py`;
+- `docs/architecture/V0_9_OBSERVABILITY_AND_OPERATIONS.md`;
+- `docs/evaluation/V0_9_WP11_OBSERVABILITY_RESULTS.md`.
 
 ## WP-12: Enterprise Compose and recovery
 
