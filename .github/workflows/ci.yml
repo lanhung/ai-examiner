@@ -14,6 +14,7 @@ jobs:
       - run: uv run ruff check src tests
       - name: Validate observability Compose configuration
         env:
+          APP_ENV_FILE: .env.example
           GRAFANA_ADMIN_PASSWORD: ci-observability-only
         run: docker compose -f docker-compose.yml -f docker-compose.observability.yml config --quiet
       - run: uv run pytest --cov=ai_examiner --cov-report=term-missing
