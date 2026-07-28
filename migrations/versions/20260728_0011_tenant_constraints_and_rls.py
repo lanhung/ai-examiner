@@ -220,6 +220,28 @@ def _constraint_names(table_name: str) -> set[str]:
     return names
 
 
+def _has_foreign_key(
+    table_name: str,
+    constrained_columns: tuple[str, ...],
+    referred_table: str,
+    referred_columns: tuple[str, ...],
+) -> bool:
+    return any(
+        tuple(item.get("constrained_columns") or ()) == constrained_columns
+        and item.get("referred_table") == referred_table
+        and tuple(item.get("referred_columns") or ()) == referred_columns
+        for item in inspect(op.get_bind()).get_foreign_keys(table_name)
+    )
+
+
+def _index_names(table_name: str) -> set[str]:
+    return {
+        item["name"]
+        for item in inspect(op.get_bind()).get_indexes(table_name)
+        if item.get("name")
+    }
+
+
 def _drop_unique_for_columns(
     table_name: str,
     columns: tuple[str, ...],
@@ -311,9 +333,13 @@ def upgrade() -> None:
         return
 
     for table_name in ALL_OWNED_TABLES:
-        names = _constraint_names(table_name)
         fk_name = f"fk_{table_name}_organization"
-        if fk_name not in names:
+        if not _has_foreign_key(
+            table_name,
+            ("organization_id",),
+            "organizations",
+            ("id",),
+        ):
             op.create_foreign_key(
                 fk_name,
                 table_name,
@@ -323,7 +349,12 @@ def upgrade() -> None:
                 ondelete="RESTRICT",
             )
 
-    if "fk_background_jobs_actor" not in _constraint_names("background_jobs"):
+    if not _has_foreign_key(
+        "background_jobs",
+        ("actor_principal_id",),
+        "principals",
+        ("id",),
+    ):
         op.create_foreign_key(
             "fk_background_jobs_actor",
             "background_jobs",
@@ -377,13 +408,14 @@ def upgrade() -> None:
             ["namespace", "canonical_key"],
         ),
     ):
-        op.create_index(
-            name,
-            table_name,
-            columns,
-            unique=True,
-            postgresql_where=sa.text("organization_id IS NULL"),
-        )
+        if name not in _index_names(table_name):
+            op.create_index(
+                name,
+                table_name,
+                columns,
+                unique=True,
+                postgresql_where=sa.text("organization_id IS NULL"),
+            )
 
     parent_tables = {parent for _, _, parent, _ in COMPOSITE_LINKS}
     for table_name in sorted(parent_tables):
