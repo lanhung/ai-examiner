@@ -40,6 +40,17 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   bounded lifecycle transitions, owner-only owner mutation and last-owner protection.
 - Replace the OIDC template-authoring compatibility seam with real author, reviewer
   and publisher capabilities while retaining disabled-mode deterministic tests.
+- Add WP-05 direct organization ownership across project, learner, template, prompt,
+  usage and background-job records with a two-phase legacy backfill.
+- Add transaction-local SQLAlchemy tenant/principal context, tenant-aware Celery job
+  dispatch and fail-closed worker resource loading.
+- Add tenant-aware uniqueness, critical composite ownership constraints and forced
+  PostgreSQL RLS policies for the restricted `ai_examiner_runtime` role.
+- Add a PostgreSQL pre-pytest RLS proof covering missing context, context switching
+  and cross-tenant writes, while retaining SQLite local-evaluation compatibility.
+- Separate schema-management and runtime responsibilities: enforced RLS requires
+  `DATABASE_SCHEMA_MANAGEMENT=external`, so API and worker startup cannot run DDL or
+  global seed writes with the restricted runtime credential.
 
 - Add complete Planner v6 reciprocal real-provider evidence for all seven built-in
   templates: 30 unique cases per template, 420 case evaluations and 840 anonymous

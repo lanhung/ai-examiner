@@ -272,6 +272,21 @@ Enterprise context must not enter answer scoring as a quality signal. Run:
 Compare authenticated and disabled-mode runs for identical content inputs and policy
 snapshots. Scores and next actions must be equivalent except for ownership metadata.
 
+### WP-05 tenant-isolation evidence
+
+PostgreSQL CI runs `deploy/verify-v09-rls.py` after `alembic upgrade head` and before
+pytest. The proof must establish:
+
+- no null owner remains on required tenant tables;
+- protected reads return zero rows without transaction context;
+- organizations A and B see only their own projects after context switching;
+- a cross-tenant write is rejected by PostgreSQL;
+- API and worker context contains organization and actor identity;
+- enforced RLS rejects startup schema management.
+
+SQLite continues to run the complete functional regression suite, including legacy
+ownership backfill and downgrade. SQLite passing alone is not RLS evidence.
+
 ## 5. Performance targets
 
 On the agreed Vultr staging size:

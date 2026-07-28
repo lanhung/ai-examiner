@@ -80,6 +80,14 @@ class Settings(BaseSettings):
     benchmark_case_limit: int = Field(default=4, ge=1, le=20)
 
     database_url: str = "sqlite:///./data/ai_examiner.db"
+    database_schema_management: str = Field(
+        default="startup",
+        pattern="^(startup|external)$",
+    )
+    postgres_rls_mode: str = Field(
+        default="off",
+        pattern="^(off|observe|enforce)$",
+    )
     upload_dir: Path = Path("./data/uploads")
     evidence_dir: Path = Path("./data/evidence")
     export_dir: Path = Path("./data/exports")
@@ -220,6 +228,17 @@ class Settings(BaseSettings):
             )
             if not secure and not local_test:
                 issues.append(f"oidc_{name}_must_use_https")
+        return issues
+
+    def rls_configuration_issues(self) -> list[str]:
+        issues: list[str] = []
+        if self.postgres_rls_mode == "enforce":
+            if not self.database_url.startswith("postgresql"):
+                issues.append("postgres_rls_requires_postgresql")
+            if self.auth_mode != "oidc":
+                issues.append("postgres_rls_requires_oidc")
+            if self.database_schema_management != "external":
+                issues.append("postgres_rls_requires_external_schema_management")
         return issues
 
 

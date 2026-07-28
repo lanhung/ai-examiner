@@ -24,6 +24,7 @@ from ..template_engine.compiler import (
     canonical_json,
 )
 from .templates import TemplateLifecycleError
+from .tenancy import tenant_organization_or_legacy
 
 LEGACY_TEMPLATE_SLUGS = {
     "defense": "academic.thesis_defense",
@@ -113,6 +114,8 @@ class SessionTemplateService:
         if current:
             current.superseded_at = _now()
         binding = ProjectTemplateBinding(
+            organization_id=project.organization_id
+            or tenant_organization_or_legacy(self.db),
             project_id=project.id,
             template_version_id=version.id,
             default_overrides_json=overrides,

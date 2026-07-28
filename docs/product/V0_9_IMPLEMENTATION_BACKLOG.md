@@ -105,6 +105,8 @@ Acceptance:
 
 ## WP-05: Tenant ownership propagation and RLS
 
+Status: Implemented on `research/v0.9.0`; PostgreSQL CI evidence required.
+
 Deliver:
 
 - `organization_id` on tenant tables;
@@ -113,6 +115,16 @@ Deliver:
 - SQLAlchemy transaction context;
 - PostgreSQL policies and runtime role;
 - worker tenant context.
+
+Implementation evidence:
+
+- migrations `20260728_0010` and `20260728_0011`;
+- direct ownership across the complete resource matrix;
+- transaction-local SQLAlchemy tenant context;
+- forced PostgreSQL RLS using `ai_examiner_runtime`;
+- composite ownership constraints on critical parent chains;
+- tenant/actor-aware Celery job dispatch;
+- `deploy/verify-v09-rls.py`.
 
 Acceptance:
 

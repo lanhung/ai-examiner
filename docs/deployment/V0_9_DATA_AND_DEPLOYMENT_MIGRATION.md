@@ -184,6 +184,7 @@ OIDC_CLIENT_SECRET=
 AUTHZ_ENFORCEMENT_MODE=enforce
 
 DATABASE_URL=postgresql+psycopg://...
+DATABASE_SCHEMA_MANAGEMENT=external
 POSTGRES_RLS_MODE=enforce
 
 STORAGE_BACKEND=s3
@@ -220,3 +221,8 @@ docker compose -f docker-compose.yml -f docker-compose.enterprise.yml \
 ```
 
 Normal updates never use `docker compose down -v`.
+
+The migration command uses a DDL-capable migration credential. API and worker
+containers use a separate login role granted membership in `ai_examiner_runtime`.
+With `DATABASE_SCHEMA_MANAGEMENT=external`, application startup checks connectivity
+but does not run Alembic, `create_all` or global seed writes.

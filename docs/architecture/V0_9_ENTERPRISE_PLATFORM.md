@@ -567,7 +567,25 @@ Detailed contracts:
 - `docs/architecture/V0_9_OIDC_AUTHENTICATION.md`;
 - `docs/architecture/V0_9_CAPABILITY_RBAC.md`.
 
-Tenant ownership propagation and PostgreSQL RLS remain WP-05.
+### WP-05 tenant ownership and PostgreSQL RLS
+
+WP-05 now adds:
+
+- direct `organization_id` ownership across business resources;
+- a nullable backfill migration followed by a constraint/RLS migration;
+- transaction-local organization and principal context;
+- tenant-aware uniqueness and critical composite ownership constraints;
+- forced PostgreSQL RLS for a restricted runtime role;
+- tenant and actor propagation through background jobs;
+- a PostgreSQL RLS proof executed before the regression suite.
+
+The API runtime can no longer manage schema in enforced mode. Enterprise staging uses
+`DATABASE_SCHEMA_MANAGEMENT=external`, applies Alembic with a separate migration
+role, and then starts API and worker containers with the restricted runtime role.
+
+Detailed contract:
+
+- `docs/architecture/V0_9_TENANT_OWNERSHIP_AND_RLS.md`.
 
 ## References
 

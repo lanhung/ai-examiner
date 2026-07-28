@@ -17,6 +17,7 @@ from ..models import (
     LearnerMemoryEvent,
     LearnerSubject,
 )
+from .tenancy import tenant_organization_or_legacy
 
 ALLOWED_MEMORY_CATEGORIES = frozenset(
     {
@@ -86,6 +87,7 @@ class LearnerMemoryService:
         if existing:
             return existing, False
         identity = LearnerIdentity(
+            organization_id=tenant_organization_or_legacy(self.db),
             opaque_key_hash=key_hash,
             display_name=display_name.strip() if display_name else None,
             memory_enabled=memory_enabled,
@@ -194,6 +196,7 @@ class LearnerMemoryService:
         if existing:
             return existing, False
         concept = Concept(
+            organization_id=tenant_organization_or_legacy(self.db),
             namespace=normalized_namespace,
             canonical_key=normalized_key,
             title=title.strip(),

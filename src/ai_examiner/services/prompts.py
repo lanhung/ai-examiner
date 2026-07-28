@@ -3,10 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from ..models import PromptVersion
+from .tenancy import tenant_organization_or_legacy
 
 DEFAULT_PROMPTS = {
     "planner": "Plan grounded oral-defense questions from the supplied material.",
@@ -31,6 +32,7 @@ def seed_prompt_registry(db: Session, prompt_dir: Path) -> None:
         loaded.add(name)
         db.add(
             PromptVersion(
+                organization_id=None,
                 name=name,
                 version=version,
                 role=str(payload.get("role") or "general"),
@@ -43,6 +45,7 @@ def seed_prompt_registry(db: Session, prompt_dir: Path) -> None:
         if name not in loaded:
             db.add(
                 PromptVersion(
+                    organization_id=None,
                     name=name,
                     version=1,
                     role=name,
@@ -55,18 +58,46 @@ def seed_prompt_registry(db: Session, prompt_dir: Path) -> None:
 
 
 def active_prompt(db: Session, name: str) -> PromptVersion | None:
+    organization_id = tenant_organization_or_legacy(db)
     return db.scalar(
         select(PromptVersion)
-        .where(PromptVersion.name == name, PromptVersion.status == "active")
-        .order_by(PromptVersion.version.desc())
+        .where(
+            PromptVersion.name == name,
+            PromptVersion.status == "active",
+            or_(
+                PromptVersion.organization_id == organization_id,
+                PromptVersion.organization_id.is_(None),
+            ),
+        )
+        .order_by(
+            case(
+                (PromptVersion.organization_id == organization_id, 0),
+                else_=1,
+            ),
+            PromptVersion.version.desc(),
+        )
     )
 
 
 def prompt_manifest(db: Session) -> dict[str, str]:
+    organization_id = tenant_organization_or_legacy(db)
     prompts = db.scalars(
         select(PromptVersion)
-        .where(PromptVersion.status == "active")
-        .order_by(PromptVersion.name, PromptVersion.version.desc())
+        .where(
+            PromptVersion.status == "active",
+            or_(
+                PromptVersion.organization_id == organization_id,
+                PromptVersion.organization_id.is_(None),
+            ),
+        )
+        .order_by(
+            PromptVersion.name,
+            case(
+                (PromptVersion.organization_id == organization_id, 0),
+                else_=1,
+            ),
+            PromptVersion.version.desc(),
+        )
     ).all()
     result: dict[str, str] = {}
     for prompt in prompts:
@@ -76,10 +107,24 @@ def prompt_manifest(db: Session) -> dict[str, str]:
 
 
 def prompt_contents(db: Session) -> dict[str, str]:
+    organization_id = tenant_organization_or_legacy(db)
     rows = db.scalars(
         select(PromptVersion)
-        .where(PromptVersion.status == "active")
-        .order_by(PromptVersion.name, PromptVersion.version.desc())
+        .where(
+            PromptVersion.status == "active",
+            or_(
+                PromptVersion.organization_id == organization_id,
+                PromptVersion.organization_id.is_(None),
+            ),
+        )
+        .order_by(
+            PromptVersion.name,
+            case(
+                (PromptVersion.organization_id == organization_id, 0),
+                else_=1,
+            ),
+            PromptVersion.version.desc(),
+        )
     ).all()
     result: dict[str, str] = {}
     for row in rows:
@@ -97,16 +142,28 @@ def create_prompt_version(
     metadata: dict,
     activate: bool,
 ) -> PromptVersion:
+    organization_id = tenant_organization_or_legacy(db)
     version = (
-        db.scalar(select(func.max(PromptVersion.version)).where(PromptVersion.name == name)) or 0
+        db.scalar(
+            select(func.max(PromptVersion.version)).where(
+                PromptVersion.name == name,
+                PromptVersion.organization_id == organization_id,
+            )
+        )
+        or 0
     ) + 1
     if activate:
         db.execute(
             update(PromptVersion)
-            .where(PromptVersion.name == name, PromptVersion.status == "active")
+            .where(
+                PromptVersion.name == name,
+                PromptVersion.organization_id == organization_id,
+                PromptVersion.status == "active",
+            )
             .values(status="candidate")
         )
     prompt = PromptVersion(
+        organization_id=organization_id,
         name=name,
         version=version,
         role=role,
@@ -124,7 +181,11 @@ def create_prompt_version(
 def activate_prompt(db: Session, prompt: PromptVersion) -> PromptVersion:
     db.execute(
         update(PromptVersion)
-        .where(PromptVersion.name == prompt.name, PromptVersion.status == "active")
+        .where(
+            PromptVersion.name == prompt.name,
+            PromptVersion.organization_id == prompt.organization_id,
+            PromptVersion.status == "active",
+        )
         .values(status="candidate")
     )
     prompt.status = "active"

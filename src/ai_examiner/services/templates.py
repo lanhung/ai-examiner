@@ -26,6 +26,7 @@ from ..template_engine.validator import (
     validate_template,
 )
 from ..templates.builtin import load_builtin_template
+from .tenancy import tenant_organization_or_legacy
 
 TEMPLATE_VERSION_STATES = {"draft", "candidate", "published", "deprecated"}
 TEMPLATE_TRANSITIONS = {
@@ -186,6 +187,7 @@ class TemplateLifecycleService:
         version.fingerprint = compiled.fingerprint
         self.db.add(
             TemplateValidationRun(
+                organization_id=version.organization_id,
                 template_version_id=version.id,
                 validator_version=TEMPLATE_VALIDATOR_VERSION,
                 status="passed",
@@ -200,6 +202,7 @@ class TemplateLifecycleService:
             deployment_capabilities=self.deployment_capabilities,
         )
         run = TemplateValidationRun(
+            organization_id=version.organization_id,
             template_version_id=version.id,
             validator_version=TEMPLATE_VALIDATOR_VERSION,
             status="passed" if result.valid else "failed",
@@ -272,6 +275,7 @@ class TemplateLifecycleService:
                 status_code=422,
             )
         template = ScenarioTemplate(
+            organization_id=tenant_organization_or_legacy(self.db),
             slug=slug,
             category=category,
             owner_scope="local",
@@ -280,6 +284,7 @@ class TemplateLifecycleService:
         self.db.add(template)
         self.db.flush()
         version = ScenarioTemplateVersion(
+            organization_id=template.organization_id,
             template_id=template.id,
             semantic_version=semantic_version,
             schema_version=result.source.schema_version,
@@ -291,6 +296,7 @@ class TemplateLifecycleService:
         self.db.flush()
         self.db.add(
             TemplateValidationRun(
+                organization_id=template.organization_id,
                 template_version_id=version.id,
                 validator_version=TEMPLATE_VALIDATOR_VERSION,
                 status="passed",
@@ -371,6 +377,7 @@ class TemplateLifecycleService:
                 status_code=422,
             )
         cloned = ScenarioTemplateVersion(
+            organization_id=version.organization_id,
             template_id=version.template_id,
             semantic_version=semantic_version,
             schema_version=result.source.schema_version,
@@ -473,6 +480,7 @@ def seed_builtin_templates(db: Session) -> None:
         )
         if template is None:
             template = ScenarioTemplate(
+                organization_id=None,
                 slug=metadata.slug,
                 category=metadata.category,
                 owner_scope="built_in",
@@ -516,6 +524,7 @@ def seed_builtin_templates(db: Session) -> None:
             if current_validation is None:
                 db.add(
                     TemplateValidationRun(
+                        organization_id=None,
                         template_version_id=version.id,
                         validator_version=TEMPLATE_VALIDATOR_VERSION,
                         status="passed",
@@ -525,6 +534,7 @@ def seed_builtin_templates(db: Session) -> None:
                 )
             continue
         version = ScenarioTemplateVersion(
+            organization_id=None,
             template_id=template.id,
             semantic_version=metadata.version,
             schema_version=source.schema_version,
@@ -544,6 +554,7 @@ def seed_builtin_templates(db: Session) -> None:
         db.flush()
         db.add(
             TemplateValidationRun(
+                organization_id=None,
                 template_version_id=version.id,
                 validator_version=TEMPLATE_VALIDATOR_VERSION,
                 status="passed",

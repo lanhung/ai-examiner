@@ -43,4 +43,5 @@ jobs:
       - run: uv sync --extra dev
       - run: uv run alembic upgrade head
       - run: uv run alembic current
+      - run: uv run python deploy/verify-v09-rls.py
       - run: uv run pytest --cov=ai_examiner --cov-report=term-missing

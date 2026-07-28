@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     event,
+    text,
 )
 from sqlalchemy import (
     inspect as sa_inspect,
@@ -32,6 +33,22 @@ def new_id() -> str:
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+class TenantOwnedMixin:
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
+        default=LEGACY_ORGANIZATION_ID,
+        server_default=LEGACY_ORGANIZATION_ID,
+        nullable=False,
+    )
+
+
+class GlobalOrTenantOwnedMixin:
+    organization_id: Mapped[str | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
 
 
 class Organization(Base):
@@ -200,11 +217,25 @@ class Project(Base):
     )
 
 
-class ScenarioTemplate(Base):
+class ScenarioTemplate(GlobalOrTenantOwnedMixin, Base):
     __tablename__ = "scenario_templates"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "slug",
+            name="uq_scenario_template_organization_slug",
+        ),
+        Index(
+            "uq_scenario_template_global_slug",
+            "slug",
+            unique=True,
+            postgresql_where=text("organization_id IS NULL"),
+            sqlite_where=text("organization_id IS NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    slug: Mapped[str] = mapped_column(String(160), unique=True)
+    slug: Mapped[str] = mapped_column(String(160))
     category: Mapped[str] = mapped_column(String(40))
     owner_scope: Mapped[str] = mapped_column(String(30), default="local")
     status: Mapped[str] = mapped_column(String(30), default="active")
@@ -215,7 +246,7 @@ class ScenarioTemplate(Base):
     )
 
 
-class ScenarioTemplateVersion(Base):
+class ScenarioTemplateVersion(GlobalOrTenantOwnedMixin, Base):
     __tablename__ = "scenario_template_versions"
     __table_args__ = (
         UniqueConstraint(
@@ -253,7 +284,7 @@ class ScenarioTemplateVersion(Base):
     )
 
 
-class TemplateValidationRun(Base):
+class TemplateValidationRun(GlobalOrTenantOwnedMixin, Base):
     __tablename__ = "template_validation_runs"
     __table_args__ = (
         Index(
@@ -278,7 +309,7 @@ class TemplateValidationRun(Base):
     )
 
 
-class ProjectTemplateBinding(Base):
+class ProjectTemplateBinding(TenantOwnedMixin, Base):
     __tablename__ = "project_template_bindings"
     __table_args__ = (
         Index("ix_project_template_binding_active", "project_id", "superseded_at"),
@@ -349,7 +380,7 @@ def _guard_published_template_version_delete(_mapper, _connection, target) -> No
         raise ValueError("Published template version cannot be deleted")
 
 
-class Document(Base):
+class Document(TenantOwnedMixin, Base):
     __tablename__ = "documents"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -366,7 +397,7 @@ class Document(Base):
     project: Mapped[Project] = relationship(back_populates="documents")
 
 
-class Blueprint(Base):
+class Blueprint(TenantOwnedMixin, Base):
     __tablename__ = "blueprints"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -381,7 +412,7 @@ class Blueprint(Base):
     project: Mapped[Project] = relationship(back_populates="blueprints")
 
 
-class ExamSession(Base):
+class ExamSession(TenantOwnedMixin, Base):
     __tablename__ = "exam_sessions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -422,7 +453,7 @@ class ExamSession(Base):
     )
 
 
-class Turn(Base):
+class Turn(TenantOwnedMixin, Base):
     __tablename__ = "turns"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -438,7 +469,7 @@ class Turn(Base):
     session: Mapped[ExamSession] = relationship(back_populates="turns")
 
 
-class UsageEvent(Base):
+class UsageEvent(TenantOwnedMixin, Base):
     __tablename__ = "usage_events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -456,7 +487,7 @@ class UsageEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class GoldenDataset(Base):
+class GoldenDataset(TenantOwnedMixin, Base):
     __tablename__ = "golden_datasets"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -472,7 +503,7 @@ class GoldenDataset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class BenchmarkRun(Base):
+class BenchmarkRun(TenantOwnedMixin, Base):
     __tablename__ = "benchmark_runs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -489,7 +520,7 @@ class BenchmarkRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class ExpertRating(Base):
+class ExpertRating(TenantOwnedMixin, Base):
     __tablename__ = "expert_ratings"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -503,7 +534,7 @@ class ExpertRating(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class EvidenceAsset(Base):
+class EvidenceAsset(TenantOwnedMixin, Base):
     __tablename__ = "evidence_assets"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -522,7 +553,7 @@ class EvidenceAsset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class VisualAnalysis(Base):
+class VisualAnalysis(TenantOwnedMixin, Base):
     __tablename__ = "visual_analyses"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -539,8 +570,24 @@ class VisualAnalysis(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class PromptVersion(Base):
+class PromptVersion(GlobalOrTenantOwnedMixin, Base):
     __tablename__ = "prompt_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "name",
+            "version",
+            name="uq_prompt_organization_name_version",
+        ),
+        Index(
+            "uq_prompt_global_name_version",
+            "name",
+            "version",
+            unique=True,
+            postgresql_where=text("organization_id IS NULL"),
+            sqlite_where=text("organization_id IS NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(100))
@@ -553,11 +600,15 @@ class PromptVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class BackgroundJob(Base):
+class BackgroundJob(TenantOwnedMixin, Base):
     __tablename__ = "background_jobs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     project_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    actor_principal_id: Mapped[str | None] = mapped_column(
+        ForeignKey("principals.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     kind: Mapped[str] = mapped_column(String(80))
     status: Mapped[str] = mapped_column(String(30), default="queued")
     progress: Mapped[float] = mapped_column(Float, default=0.0)
@@ -571,7 +622,7 @@ class BackgroundJob(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class JointAnalysis(Base):
+class JointAnalysis(TenantOwnedMixin, Base):
     __tablename__ = "joint_analyses"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -584,7 +635,7 @@ class JointAnalysis(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class VoiceSession(Base):
+class VoiceSession(TenantOwnedMixin, Base):
     __tablename__ = "voice_sessions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -604,7 +655,7 @@ class VoiceSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class VoiceEvent(Base):
+class VoiceEvent(TenantOwnedMixin, Base):
     __tablename__ = "voice_events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -619,7 +670,7 @@ class VoiceEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class KnowledgeUnit(Base):
+class KnowledgeUnit(TenantOwnedMixin, Base):
     __tablename__ = "knowledge_units"
     __table_args__ = (UniqueConstraint("blueprint_id", "code", name="uq_knowledge_unit_code"),)
 
@@ -637,7 +688,7 @@ class KnowledgeUnit(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class QuestionKnowledgeUnit(Base):
+class QuestionKnowledgeUnit(TenantOwnedMixin, Base):
     __tablename__ = "question_knowledge_units"
     __table_args__ = (
         UniqueConstraint(
@@ -656,7 +707,7 @@ class QuestionKnowledgeUnit(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class LearnerSubject(Base):
+class LearnerSubject(TenantOwnedMixin, Base):
     __tablename__ = "learner_subjects"
     __table_args__ = (UniqueConstraint("project_id", "subject_key", name="uq_subject_key"),)
 
@@ -668,11 +719,18 @@ class LearnerSubject(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class LearnerIdentity(Base):
+class LearnerIdentity(TenantOwnedMixin, Base):
     __tablename__ = "learner_identities"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "opaque_key_hash",
+            name="uq_learner_identity_organization_hash",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    opaque_key_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    opaque_key_hash: Mapped[str] = mapped_column(String(64))
     display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     memory_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     memory_scope: Mapped[str] = mapped_column(String(30), default="project_only")
@@ -687,7 +745,7 @@ class LearnerIdentity(Base):
     )
 
 
-class LearnerIdentityLink(Base):
+class LearnerIdentityLink(TenantOwnedMixin, Base):
     __tablename__ = "learner_identity_links"
     __table_args__ = (
         UniqueConstraint("learner_subject_id", name="uq_identity_link_subject"),
@@ -708,10 +766,23 @@ class LearnerIdentityLink(Base):
     )
 
 
-class Concept(Base):
+class Concept(GlobalOrTenantOwnedMixin, Base):
     __tablename__ = "concepts"
     __table_args__ = (
-        UniqueConstraint("namespace", "canonical_key", name="uq_concept_namespace_key"),
+        UniqueConstraint(
+            "organization_id",
+            "namespace",
+            "canonical_key",
+            name="uq_concept_organization_namespace_key",
+        ),
+        Index(
+            "uq_concept_global_namespace_key",
+            "namespace",
+            "canonical_key",
+            unique=True,
+            postgresql_where=text("organization_id IS NULL"),
+            sqlite_where=text("organization_id IS NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -725,7 +796,7 @@ class Concept(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class KnowledgeUnitConceptMap(Base):
+class KnowledgeUnitConceptMap(TenantOwnedMixin, Base):
     __tablename__ = "knowledge_unit_concept_maps"
     __table_args__ = (
         UniqueConstraint(
@@ -754,7 +825,7 @@ class KnowledgeUnitConceptMap(Base):
     )
 
 
-class LearnerMemoryEvent(Base):
+class LearnerMemoryEvent(TenantOwnedMixin, Base):
     __tablename__ = "learner_memory_events"
     __table_args__ = (
         UniqueConstraint(
@@ -795,7 +866,7 @@ class LearnerMemoryEvent(Base):
     )
 
 
-class LearnerConceptState(Base):
+class LearnerConceptState(TenantOwnedMixin, Base):
     __tablename__ = "learner_concept_states"
     __table_args__ = (
         UniqueConstraint(
@@ -831,7 +902,7 @@ class LearnerConceptState(Base):
     rebuilt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class RetestPlan(Base):
+class RetestPlan(TenantOwnedMixin, Base):
     __tablename__ = "retest_plans"
     __table_args__ = (
         Index("ix_retest_plan_identity_created", "learner_identity_id", "created_at"),
@@ -848,7 +919,7 @@ class RetestPlan(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class RetestItem(Base):
+class RetestItem(TenantOwnedMixin, Base):
     __tablename__ = "retest_items"
     __table_args__ = (
         UniqueConstraint("retest_plan_id", "concept_id", name="uq_retest_plan_concept"),
@@ -891,7 +962,7 @@ class RetestItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class LearnerPreference(Base):
+class LearnerPreference(TenantOwnedMixin, Base):
     __tablename__ = "learner_preferences"
     __table_args__ = (
         UniqueConstraint(
@@ -920,7 +991,7 @@ class LearnerPreference(Base):
     )
 
 
-class MemoryExportArtifact(Base):
+class MemoryExportArtifact(TenantOwnedMixin, Base):
     __tablename__ = "memory_export_artifacts"
     __table_args__ = (
         Index("ix_memory_export_identity_created", "learner_identity_id", "created_at"),
@@ -937,7 +1008,7 @@ class MemoryExportArtifact(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class MemoryDeletionAudit(Base):
+class MemoryDeletionAudit(TenantOwnedMixin, Base):
     __tablename__ = "memory_deletion_audits"
     __table_args__ = (
         Index("ix_memory_deletion_identity_created", "learner_identity_id", "created_at"),
@@ -958,7 +1029,7 @@ class MemoryDeletionAudit(Base):
     )
 
 
-class KnowledgeState(Base):
+class KnowledgeState(TenantOwnedMixin, Base):
     __tablename__ = "knowledge_states"
     __table_args__ = (
         UniqueConstraint("session_id", "knowledge_unit_id", name="uq_session_knowledge_state"),
@@ -984,7 +1055,7 @@ class KnowledgeState(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class KnowledgeEvidenceEvent(Base):
+class KnowledgeEvidenceEvent(TenantOwnedMixin, Base):
     __tablename__ = "knowledge_evidence_events"
     __table_args__ = (
         UniqueConstraint("turn_id", "knowledge_unit_id", name="uq_turn_knowledge_event"),
@@ -1016,7 +1087,7 @@ class KnowledgeEvidenceEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class AdaptiveDecision(Base):
+class AdaptiveDecision(TenantOwnedMixin, Base):
     __tablename__ = "adaptive_decisions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

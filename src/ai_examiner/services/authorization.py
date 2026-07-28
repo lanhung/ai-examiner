@@ -14,6 +14,7 @@ from ..enterprise_constants import CAPABILITIES, ROLE_CAPABILITIES
 from ..models import Organization, OrganizationMembership, Principal
 from .authentication import CurrentAuthentication
 from .oidc import AuthenticationContext
+from .tenancy import set_tenant_context
 
 
 class AuthorizationError(RuntimeError):
@@ -197,6 +198,11 @@ def resolve_authorization_context(
         db,
         authentication=authentication,
         disabled_principal_id=disabled_principal_id,
+    )
+    set_tenant_context(
+        db,
+        organization_id=organization_id,
+        principal_id=principal.id,
     )
     organization = db.get(Organization, organization_id)
     if organization is None:

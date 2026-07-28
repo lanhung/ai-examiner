@@ -232,10 +232,14 @@ MemberManageAccess = Annotated[
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    auth_issues = settings.auth_configuration_issues()
-    if settings.app_env == "production" and auth_issues:
+    configuration_issues = (
+        settings.auth_configuration_issues()
+        + settings.rls_configuration_issues()
+    )
+    if settings.app_env == "production" and configuration_issues:
         raise RuntimeError(
-            "Unsafe authentication configuration: " + ", ".join(auth_issues)
+            "Unsafe enterprise configuration: "
+            + ", ".join(configuration_issues)
         )
     bind_and_validate_route_policies(app)
     init_db()
@@ -451,26 +455,31 @@ def health():
             "mode": settings.auth_mode,
             "unsafe_disabled_in_production": unsafe_auth_disabled,
         },
+        "tenancy": {
+            "postgres_rls_mode": settings.postgres_rls_mode,
+            "schema_management": settings.database_schema_management,
+        },
     }
 
 
 @app.get("/ready")
 def readiness(db: Annotated[Session, Depends(get_db)]):
     checks: dict[str, dict[str, object]] = {}
-    issues = settings.auth_configuration_issues()
+    auth_issues = settings.auth_configuration_issues()
+    rls_issues = settings.rls_configuration_issues()
     try:
         db.execute(text("SELECT 1"))
         checks["database"] = {"ready": True}
     except Exception:
         checks["database"] = {"ready": False, "code": "database_unavailable"}
 
-    authentication_ready = not issues
+    authentication_ready = not auth_issues
     auth_check: dict[str, object] = {
         "ready": authentication_ready,
         "mode": settings.auth_mode,
     }
-    if issues:
-        auth_check["codes"] = issues
+    if auth_issues:
+        auth_check["codes"] = auth_issues
     elif settings.auth_mode == "oidc":
         try:
             authenticator = get_oidc_authenticator()
@@ -484,7 +493,17 @@ def readiness(db: Annotated[Session, Depends(get_db)]):
                 "codes": [exc.reason_code],
             }
     checks["authentication"] = auth_check
-    ready = bool(checks["database"]["ready"]) and authentication_ready
+    checks["tenant_isolation"] = {
+        "ready": not rls_issues,
+        "mode": settings.postgres_rls_mode,
+        "schema_management": settings.database_schema_management,
+        **({"codes": rls_issues} if rls_issues else {}),
+    }
+    ready = (
+        bool(checks["database"]["ready"])
+        and authentication_ready
+        and not rls_issues
+    )
     return JSONResponse(
         status_code=200 if ready else 503,
         content={"status": "ready" if ready else "not_ready", "checks": checks},

@@ -303,3 +303,8 @@ every object locator starts with its tenant prefix
 
 Conflicting or orphaned records stop migration and appear in a redacted remediation
 report.
+
+WP-05 implements these ownership checks through migrations `20260728_0010` and
+`20260728_0011`. Required tenant rows are non-null, reviewed catalog resources may be
+global, critical parent chains use composite organization constraints, and
+PostgreSQL RLS provides a second boundary after application capability checks.
