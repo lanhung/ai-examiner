@@ -4,6 +4,16 @@ import asyncio
 import json
 from pathlib import Path
 
+from sqlalchemy import select
+
+from ai_examiner.db import SessionLocal
+from ai_examiner.enterprise_constants import LEGACY_ORGANIZATION_ID
+from ai_examiner.models import ModelUsageLedger, VoiceSession
+from ai_examiner.services.model_governance import (
+    ensure_model_policy,
+    update_model_policy,
+)
+
 
 def create_project_and_blueprint(client):
     project = client.post("/api/projects", json={"name": "实时语音答辩"}).json()
@@ -65,6 +75,15 @@ def test_voice_config_and_session_lifecycle(client, monkeypatch):
     )
     assert sdp.status_code == 200
     assert "a=setup:active" in sdp.text
+    with SessionLocal() as db:
+        usage = db.scalar(
+            select(ModelUsageLedger).where(
+                ModelUsageLedger.task_type == "voice"
+            )
+        )
+        assert usage.status == "completed"
+        assert usage.actual_provider == "openai"
+        assert usage.actual_model == "gpt-realtime-2.1"
 
     user_event = client.post(
         f"/api/voice/sessions/{voice_id}/events",
@@ -115,6 +134,47 @@ def test_voice_rejects_unsupported_voice(client):
         },
     )
     assert response.status_code == 400
+
+
+def test_voice_policy_denial_happens_before_upstream_connection(client):
+    project, blueprint = create_project_and_blueprint(client)
+    with SessionLocal() as db:
+        policy = ensure_model_policy(db, LEGACY_ORGANIZATION_ID)
+        update_model_policy(
+            db,
+            policy,
+            values={
+                "allowed_profiles_json": [
+                    {
+                        "provider": "mock",
+                        "model_pattern": "heuristic-v2",
+                        "tasks": ["*"],
+                    }
+                ]
+            },
+            principal_id=None,
+        )
+        db.commit()
+
+    response = client.post(
+        "/api/voice/sessions",
+        json={
+            "project_id": project["id"],
+            "blueprint_id": blueprint["id"],
+            "provider": "openai",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "model_policy_denied"
+    with SessionLocal() as db:
+        assert db.scalar(select(VoiceSession)) is None
+        denied = db.scalar(
+            select(ModelUsageLedger).where(
+                ModelUsageLedger.task_type == "voice"
+            )
+        )
+        assert denied.status == "denied"
 
 
 def test_adaptive_voice_finalizes_transcript_into_knowledge_events(client):

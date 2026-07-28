@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlparse
 
 from pydantic import Field, SecretStr
@@ -138,6 +139,12 @@ class Settings(BaseSettings):
     project_model_budget_usd: float = Field(default=10.0, ge=0)
     max_concurrent_model_calls: int = Field(default=3, ge=1, le=20)
     max_model_retries: int = Field(default=2, ge=0, le=5)
+    model_governance_enabled: bool = True
+    model_rate_limit_backend: Literal["redis", "memory"] = "redis"
+    model_rate_limit_required: bool = True
+    model_rate_limit_window_seconds: int = Field(default=60, ge=10, le=3600)
+    model_concurrency_lease_seconds: int = Field(default=300, ge=30, le=3600)
+    model_reserved_output_tokens: int = Field(default=4096, ge=128, le=131_072)
 
     # Required only when the optional v0.7 cross-project memory API is used.
     memory_identity_secret: str | None = None
@@ -167,6 +174,15 @@ class Settings(BaseSettings):
             and self.audit_ip_hash_key is None
         ):
             return ["missing_audit_ip_hash_key"]
+        return []
+
+    def model_governance_configuration_issues(self) -> list[str]:
+        if self.app_env != "production":
+            return []
+        if not self.model_governance_enabled:
+            return ["model_governance_required_in_production"]
+        if self.model_rate_limit_backend != "redis":
+            return ["model_governance_requires_redis_in_production"]
         return []
 
     def api_key_for(self, provider: str) -> str | None:

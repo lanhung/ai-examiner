@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Annotated
 from urllib.parse import urlencode
+from uuid import uuid4
 
 import websockets
 from fastapi import (
@@ -63,6 +65,7 @@ from .models import (
     LearnerSubject,
     MemoryDeletionAudit,
     MemoryExportArtifact,
+    ModelUsageLedger,
     Organization,
     OrganizationMembership,
     Principal,
@@ -78,6 +81,7 @@ from .models import (
     VoiceEvent,
     VoiceSession,
 )
+from .providers.base import ProviderResult
 from .providers.factory import build_provider, parse_profile, profile_ready
 from .schemas import (
     AnswerSubmit,
@@ -102,6 +106,8 @@ from .schemas import (
     MemoryExportCreate,
     MemoryImportCreate,
     MemorySettingsUpdate,
+    ModelPolicyUpdate,
+    OrganizationQuotaUpdate,
     PolicyBenchmarkCreate,
     PreferenceAction,
     PreferenceCreate,
@@ -189,6 +195,16 @@ from .services.memory import (
     canonical_token,
 )
 from .services.memory_control import MemoryControlError, MemoryControlService
+from .services.model_governance import (
+    ModelGovernanceError,
+    ModelGovernanceService,
+    build_model_rate_limiter,
+    ensure_model_policy,
+    governed_provider,
+    policy_snapshot,
+    update_model_policy,
+    usage_summary,
+)
 from .services.oidc import OIDCError
 from .services.policy_benchmark import PolicyBenchmarkService
 from .services.preferences import PreferencePolicyError, PreferenceService
@@ -225,6 +241,7 @@ from .services.templates import (
     serialize_template_version,
     serialize_validation_run,
 )
+from .services.tenancy import current_tenant_context
 from .services.visual import VisualEvidenceService
 from .services.voice import (
     VOICE_PROVIDERS,
@@ -284,6 +301,18 @@ AuditReadAccess = Annotated[
     AuthorizationContext,
     Depends(require_capability("audit.read")),
 ]
+PolicyReadAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("policy.read")),
+]
+PolicyManageAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("policy.manage")),
+]
+UsageReadAccess = Annotated[
+    AuthorizationContext,
+    Depends(require_capability("usage.read")),
+]
 
 
 @asynccontextmanager
@@ -294,6 +323,7 @@ async def lifespan(app: FastAPI):
         + settings.storage_configuration_issues()
         + settings.job_configuration_issues()
         + settings.audit_configuration_issues()
+        + settings.model_governance_configuration_issues()
     )
     if settings.app_env == "production" and configuration_issues:
         raise RuntimeError(
@@ -383,6 +413,28 @@ async def audit_write_error_handler(_request: Request, _exc: AuditWriteError):
     )
 
 
+@app.exception_handler(ModelGovernanceError)
+async def model_governance_error_handler(
+    _request: Request,
+    exc: ModelGovernanceError,
+):
+    headers = (
+        {"Retry-After": str(exc.retry_after)}
+        if exc.retry_after is not None
+        else None
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": {
+                "code": exc.code,
+                "message": exc.public_message,
+            }
+        },
+        headers=headers,
+    )
+
+
 @app.exception_handler(TemplateLifecycleError)
 async def template_lifecycle_error_handler(
     _request: Request,
@@ -394,9 +446,25 @@ async def template_lifecycle_error_handler(
     )
 
 
-def provider_or_503(profile: str | None = None):
+def provider_or_503(
+    profile: str | None = None,
+    *,
+    db: Session | None = None,
+    project_id: str | None = None,
+    session_id: str | None = None,
+):
     try:
+        if db is not None:
+            return governed_provider(
+                db,
+                settings,
+                profile,
+                project_id=project_id,
+                session_id=session_id,
+            )
         return build_provider(settings, profile)
+    except ModelGovernanceError:
+        raise
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -651,6 +719,7 @@ def readiness(db: Annotated[Session, Depends(get_db)]):
     auth_issues = settings.auth_configuration_issues()
     rls_issues = settings.rls_configuration_issues()
     storage_issues = settings.storage_configuration_issues()
+    governance_issues = settings.model_governance_configuration_issues()
     storage_ready = not storage_issues
     try:
         db.execute(text("SELECT 1"))
@@ -700,11 +769,30 @@ def readiness(db: Annotated[Session, Depends(get_db)]):
                 "codes": ["storage_unavailable"],
             }
     checks["storage"] = storage_check
+    governance_ready = not governance_issues
+    governance_check: dict[str, object] = {
+        "ready": governance_ready,
+        "enabled": settings.model_governance_enabled,
+        "rate_limit_backend": settings.model_rate_limit_backend,
+        **({"codes": governance_issues} if governance_issues else {}),
+    }
+    if governance_ready and settings.model_governance_enabled:
+        try:
+            build_model_rate_limiter(settings).check_ready()
+        except Exception:
+            governance_ready = False
+            governance_check = {
+                **governance_check,
+                "ready": False,
+                "codes": ["model_admission_backend_unavailable"],
+            }
+    checks["model_governance"] = governance_check
     ready = (
         bool(checks["database"]["ready"])
         and authentication_ready
         and not rls_issues
         and storage_ready
+        and governance_ready
     )
     return JSONResponse(
         status_code=200 if ready else 503,
@@ -1396,7 +1484,12 @@ def clear_project_template_binding(
 
 @app.post("/api/projects", status_code=201)
 def create_project(payload: ProjectCreate, db: Annotated[Session, Depends(get_db)]):
-    project = Project(name=payload.name, domain=payload.domain, language=payload.language)
+    project = Project(
+        name=payload.name,
+        domain=payload.domain,
+        language=payload.language,
+        data_classification=payload.data_classification,
+    )
     db.add(project)
     db.commit()
     db.refresh(project)
@@ -1406,6 +1499,7 @@ def create_project(payload: ProjectCreate, db: Annotated[Session, Depends(get_db
         "name": project.name,
         "domain": project.domain,
         "language": project.language,
+        "data_classification": project.data_classification,
     }
 
 
@@ -1419,6 +1513,7 @@ def list_projects(db: Annotated[Session, Depends(get_db)]):
             "name": project.name,
             "domain": project.domain,
             "language": project.language,
+            "data_classification": project.data_classification,
             "created_at": project.created_at,
         }
         for project in projects
@@ -1522,7 +1617,11 @@ def generate_blueprint(
         template_overrides=payload.template_overrides if payload else {},
         request_overrides={},
     )
-    provider = provider_or_503(payload.profile if payload else None)
+    provider = provider_or_503(
+        payload.profile if payload else None,
+        db=db,
+        project_id=project_id,
+    )
     orchestrator = ExamOrchestrator(db, provider, project_id=project_id)
     try:
         data, grounding = orchestrator.build_blueprint(
@@ -1558,6 +1657,9 @@ def generate_blueprint(
             question["page_preview_url"] = (
                 f"/api/evidence/{page_asset.id}/file" if page_asset else None
             )
+    except ModelGovernanceError:
+        db.rollback()
+        raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(502, f"Blueprint generation failed: {exc}") from exc
@@ -1609,6 +1711,9 @@ def generate_golden_dataset(
             question_count=payload.question_count,
             language=project.language,
         )
+    except ModelGovernanceError:
+        db.rollback()
+        raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(502, f"Golden Dataset generation failed: {exc}") from exc
@@ -1681,6 +1786,9 @@ def run_benchmark(
             run_analyzer=payload.run_analyzer,
             language=project.language,
         )
+    except ModelGovernanceError:
+        db.rollback()
+        raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(502, f"Benchmark failed: {exc}") from exc
@@ -1904,7 +2012,12 @@ def start_session(session_id: str, db: Annotated[Session, Depends(get_db)]):
     if not session:
         raise HTTPException(404, "Session not found")
     blueprint = db.get(Blueprint, session.blueprint_id)
-    provider = provider_or_503(session.config.get("profile"))
+    provider = provider_or_503(
+        session.config.get("profile"),
+        db=db,
+        project_id=session.project_id,
+        session_id=session.id,
+    )
     orchestrator = ExamOrchestrator(
         db, provider, project_id=session.project_id, session_id=session.id
     )
@@ -1925,7 +2038,12 @@ def submit_answer(
     if not session:
         raise HTTPException(404, "Session not found")
     blueprint = db.get(Blueprint, session.blueprint_id)
-    provider = provider_or_503(session.config.get("profile"))
+    provider = provider_or_503(
+        session.config.get("profile"),
+        db=db,
+        project_id=session.project_id,
+        session_id=session.id,
+    )
     orchestrator = ExamOrchestrator(
         db, provider, project_id=session.project_id, session_id=session.id
     )
@@ -2545,7 +2663,11 @@ def start_retest_session(
         f"{settings.default_model_for(settings.model_provider)}"
     )
     profile = _profiles([payload.profile] if payload.profile else [], fallback)[0]
-    provider = provider_or_503(profile)
+    provider = provider_or_503(
+        profile,
+        db=db,
+        project_id=blueprint.project_id,
+    )
     service = RetestLifecycleService(db)
     try:
         item = service.item_for_identity(identity, item_id)
@@ -3270,6 +3392,9 @@ def create_joint_analysis(
         analysis = JointAnalysisService(db, settings, project_id).run(
             documents, profile, project.language
         )
+    except ModelGovernanceError:
+        db.rollback()
+        raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(502, f"Joint analysis failed: {exc}") from exc
@@ -3588,6 +3713,247 @@ def recover_enterprise_jobs(
     }
 
 
+@app.get("/api/v1/organizations/{organization_id}/model-policy")
+def get_organization_model_policy(
+    organization_id: str,
+    _context: PolicyReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    policy = ensure_model_policy(db, organization_id)
+    db.commit()
+    return policy_snapshot(policy)
+
+
+@app.put("/api/v1/organizations/{organization_id}/model-policy")
+def replace_organization_model_policy(
+    organization_id: str,
+    payload: ModelPolicyUpdate,
+    request: Request,
+    context: PolicyManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    policy = ensure_model_policy(
+        db,
+        organization_id,
+        principal_id=context.principal_id,
+    )
+    values = {
+        "allowed_profiles_json": [
+            item.model_dump() for item in payload.allowed_profiles
+        ],
+        "fallback_profiles_json": payload.fallback_profiles,
+        "external_provider_max_classification": (
+            payload.external_provider_max_classification
+        ),
+        "fallback_mode": payload.fallback_mode,
+        "provider_retention_allowed": payload.provider_retention_allowed,
+    }
+    update_model_policy(
+        db,
+        policy,
+        values=values,
+        principal_id=context.principal_id,
+    )
+    append_request_audit_event(
+        db,
+        request=request,
+        policy=ROUTE_POLICIES[
+            ("PUT", "/api/v1/organizations/{organization_id}/model-policy")
+        ],
+        status_code=200,
+        route_template=(
+            "/api/v1/organizations/{organization_id}/model-policy"
+        ),
+        organization_id=organization_id,
+        resource_id=policy.id,
+        metadata={
+            "changed_fields": sorted(values),
+            "policy_version": policy.version,
+        },
+    )
+    db.commit()
+    return policy_snapshot(policy)
+
+
+@app.get("/api/v1/organizations/{organization_id}/quota")
+def get_organization_model_quota(
+    organization_id: str,
+    _context: PolicyReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    policy = ensure_model_policy(db, organization_id)
+    db.commit()
+    snapshot = policy_snapshot(policy)
+    return {
+        key: snapshot[key]
+        for key in (
+            "organization_id",
+            "version",
+            "quota_mode",
+            "monthly_budget_usd",
+            "per_session_budget_usd",
+            "per_request_budget_usd",
+            "soft_limit_ratio",
+            "organization_requests_per_minute",
+            "principal_requests_per_minute",
+            "organization_tokens_per_minute",
+            "max_concurrent_calls",
+            "policy_digest",
+            "updated_at",
+        )
+    }
+
+
+@app.put("/api/v1/organizations/{organization_id}/quota")
+def replace_organization_model_quota(
+    organization_id: str,
+    payload: OrganizationQuotaUpdate,
+    request: Request,
+    context: PolicyManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    policy = ensure_model_policy(
+        db,
+        organization_id,
+        principal_id=context.principal_id,
+    )
+    values = payload.model_dump()
+    update_model_policy(
+        db,
+        policy,
+        values=values,
+        principal_id=context.principal_id,
+    )
+    append_request_audit_event(
+        db,
+        request=request,
+        policy=ROUTE_POLICIES[
+            ("PUT", "/api/v1/organizations/{organization_id}/quota")
+        ],
+        status_code=200,
+        route_template="/api/v1/organizations/{organization_id}/quota",
+        organization_id=organization_id,
+        resource_id=policy.id,
+        metadata={
+            "changed_fields": sorted(values),
+            "policy_version": policy.version,
+            "quota_mode": policy.quota_mode,
+        },
+    )
+    db.commit()
+    return get_organization_model_quota(organization_id, context, db)
+
+
+def _serialize_model_usage(entry: ModelUsageLedger) -> dict:
+    return {
+        "id": entry.id,
+        "organization_id": entry.organization_id,
+        "project_id": entry.project_id,
+        "session_id": entry.session_id,
+        "actor_principal_id": entry.actor_principal_id,
+        "task_type": entry.task_type,
+        "data_classification": entry.data_classification,
+        "requested_profile": entry.requested_profile,
+        "actual_provider": entry.actual_provider,
+        "actual_model": entry.actual_model,
+        "fallback_from_profile": entry.fallback_from_profile,
+        "status": entry.status,
+        "reservation_cost_usd": entry.reservation_cost_usd,
+        "estimated_cost_usd": entry.estimated_cost_usd,
+        "input_tokens": entry.input_tokens,
+        "output_tokens": entry.output_tokens,
+        "latency_ms": entry.latency_ms,
+        "retry_count": entry.retry_count,
+        "rate_limit_scope": entry.rate_limit_scope,
+        "denial_reason": entry.denial_reason,
+        "soft_limit_exceeded": entry.soft_limit_exceeded,
+        "policy_id": entry.policy_id,
+        "policy_version": entry.policy_version,
+        "policy_snapshot_digest": entry.policy_snapshot_digest,
+        "request_id": entry.request_id,
+        "created_at": entry.created_at.isoformat(),
+        "completed_at": (
+            entry.completed_at.isoformat() if entry.completed_at else None
+        ),
+    }
+
+
+@app.get("/api/v1/organizations/{organization_id}/usage")
+def get_organization_model_usage(
+    organization_id: str,
+    _context: UsageReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+    project_id: Annotated[str | None, Query()] = None,
+):
+    if project_id:
+        project = db.get(Project, project_id)
+        if project is None or project.organization_id != organization_id:
+            raise HTTPException(404, "Project not found")
+    return usage_summary(
+        db,
+        organization_id=organization_id,
+        project_id=project_id,
+    )
+
+
+@app.get("/api/v1/organizations/{organization_id}/usage/export")
+def export_organization_model_usage(
+    organization_id: str,
+    _context: UsageReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+    project_id: Annotated[str | None, Query()] = None,
+):
+    query = select(ModelUsageLedger).where(
+        ModelUsageLedger.organization_id == organization_id
+    )
+    if project_id:
+        project = db.get(Project, project_id)
+        if project is None or project.organization_id != organization_id:
+            raise HTTPException(404, "Project not found")
+        query = query.where(ModelUsageLedger.project_id == project_id)
+    rows = db.scalars(
+        query.order_by(
+            ModelUsageLedger.created_at.desc(),
+            ModelUsageLedger.id.desc(),
+        ).limit(settings.audit_export_max_rows)
+    ).all()
+    manifest = {
+        "schema_version": 1,
+        "organization_id": organization_id,
+        "project_id": project_id,
+        "row_count": len(rows),
+        "exported_at": datetime.now(UTC).isoformat(),
+    }
+    content = "\n".join(
+        [
+            json.dumps(
+                {"record_type": "manifest", **manifest},
+                separators=(",", ":"),
+            ),
+            *[
+                json.dumps(
+                    {
+                        "record_type": "usage",
+                        **_serialize_model_usage(row),
+                    },
+                    separators=(",", ":"),
+                )
+                for row in rows
+            ],
+        ]
+    )
+    return Response(
+        content=content + "\n",
+        media_type="application/x-ndjson",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="model-usage-{organization_id}.jsonl"'
+            ),
+            "X-Usage-Row-Count": str(len(rows)),
+        },
+    )
+
+
 def _audit_filter_values(
     *,
     actor_id: str | None,
@@ -3830,6 +4196,64 @@ def serialize_voice_session(voice: VoiceSession, db: Session, *, include_events:
     return payload
 
 
+def _voice_profile(provider: str, model: str) -> str:
+    return f"{provider}:{model}"
+
+
+def _authorize_voice_profile(
+    db: Session,
+    *,
+    project: Project,
+    provider: str,
+    model: str,
+) -> None:
+    context = current_tenant_context(db)
+    ModelGovernanceService(settings).candidates(
+        organization_id=project.organization_id,
+        principal_id=context.principal_id,
+        requested_profile=_voice_profile(provider, model),
+        task_type="voice",
+        classification=project.data_classification,
+    )
+
+
+def _reserve_voice_connection(
+    db: Session,
+    voice: VoiceSession,
+):
+    project = db.get(Project, voice.project_id)
+    if project is None:
+        raise ModelGovernanceError(
+            "project_not_found",
+            "Project not found for voice model governance",
+            status_code=404,
+        )
+    context = current_tenant_context(db)
+    profile = _voice_profile(voice.provider, voice.model)
+    governance = ModelGovernanceService(settings)
+    governance.candidates(
+        organization_id=project.organization_id,
+        principal_id=context.principal_id,
+        requested_profile=profile,
+        task_type="voice",
+        classification=project.data_classification,
+    )
+    reservation = governance.reserve(
+        organization_id=project.organization_id,
+        principal_id=context.principal_id,
+        project_id=project.id,
+        session_id=voice.exam_session_id,
+        requested_profile=profile,
+        candidate_profile=profile,
+        fallback_from_profile=None,
+        task_type="voice",
+        classification=project.data_classification,
+        token_units=1,
+        request_id=uuid4().hex,
+    )
+    return governance, reservation
+
+
 @app.get("/api/voice/config")
 def voice_config():
     providers = [
@@ -3870,6 +4294,12 @@ def start_voice_session(
     blueprint = db.get(Blueprint, payload.blueprint_id)
     if not project or not blueprint or blueprint.project_id != project.id:
         raise HTTPException(404, "Project or blueprint not found")
+    _authorize_voice_profile(
+        db,
+        project=project,
+        provider=payload.provider,
+        model=model_for(payload.provider, settings),
+    )
     cognitive = CognitiveStateService(db)
     cognitive.ensure_blueprint_graph(blueprint)
     subject = cognitive.get_or_create_subject(project.id, payload.learner_subject_key)
@@ -3958,13 +4388,29 @@ async def create_voice_sdp(
     body = await request.body()
     if not body or len(body) > 200_000:
         raise HTTPException(400, "Invalid SDP payload")
-    status_code, text, content_type = await create_realtime_call(
-        sdp=body.decode("utf-8", errors="strict"),
-        session=voice,
-        settings=settings,
-    )
+    governance, reservation = _reserve_voice_connection(db, voice)
+    started = time.perf_counter()
+    try:
+        status_code, text, content_type = await create_realtime_call(
+            sdp=body.decode("utf-8", errors="strict"),
+            session=voice,
+            settings=settings,
+        )
+    except Exception:
+        governance.fail(reservation)
+        raise
     if status_code >= 400:
+        governance.fail(reservation)
         raise HTTPException(status_code, text[:2000])
+    governance.settle(
+        reservation,
+        ProviderResult(
+            data="realtime_connection_established",
+            provider=voice.provider,
+            model=voice.model,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        ),
+    )
     voice.status = "connected"
     voice.started_at = voice.started_at or datetime.now(UTC)
     exam = db.get(ExamSession, voice.exam_session_id)
@@ -3979,6 +4425,8 @@ async def create_voice_sdp(
 @app.websocket("/api/voice/sessions/{voice_session_id}/qwen-ws")
 async def qwen_voice_websocket(websocket: WebSocket, voice_session_id: str):
     await websocket.accept()
+    governance = None
+    reservation = None
     with SessionLocal() as db:
         voice = db.get(VoiceSession, voice_session_id)
         if not voice or voice.provider != "qwen":
@@ -3988,8 +4436,14 @@ async def qwen_voice_websocket(websocket: WebSocket, voice_session_id: str):
             await websocket.close(code=1011, reason="Qwen realtime voice is not configured")
             return
         model = voice.model
+        try:
+            governance, reservation = _reserve_voice_connection(db, voice)
+        except ModelGovernanceError as exc:
+            await websocket.close(code=1008, reason=exc.public_message)
+            return
 
     upstream_url = f"{settings.qwen_realtime_ws_url}?{urlencode({'model': model})}"
+    started = time.perf_counter()
     try:
         async with websockets.connect(
             upstream_url,
@@ -3998,6 +4452,16 @@ async def qwen_voice_websocket(websocket: WebSocket, voice_session_id: str):
             close_timeout=5,
             max_size=8 * 1024 * 1024,
         ) as upstream:
+            governance.settle(
+                reservation,
+                ProviderResult(
+                    data="realtime_connection_established",
+                    provider="qwen",
+                    model=model,
+                    latency_ms=int((time.perf_counter() - started) * 1000),
+                ),
+            )
+            reservation = None
             with SessionLocal() as db:
                 voice = db.get(VoiceSession, voice_session_id)
                 if voice:
@@ -4032,6 +4496,9 @@ async def qwen_voice_websocket(websocket: WebSocket, voice_session_id: str):
     except WebSocketDisconnect:
         return
     except Exception as exc:
+        if reservation is not None:
+            governance.fail(reservation)
+            reservation = None
         try:
             await websocket.send_json(
                 {"type": "error", "error": {"message": f"Qwen realtime connection failed: {exc}"}}
@@ -4097,8 +4564,6 @@ def complete_voice_session(
     if not voice:
         raise HTTPException(404, "Voice session not found")
     now = datetime.now(UTC)
-    voice.status = "completed"
-    voice.completed_at = now
     metrics = dict(voice.metrics or {})
     metrics["completion_reason"] = payload.reason
     if voice.started_at:
@@ -4112,7 +4577,12 @@ def complete_voice_session(
             blueprint = db.get(Blueprint, exam.blueprint_id)
             finalized = ExamOrchestrator(
                 db,
-                provider_or_503(exam.config.get("profile")),
+                provider_or_503(
+                    exam.config.get("profile"),
+                    db=db,
+                    project_id=exam.project_id,
+                    session_id=exam.id,
+                ),
                 project_id=exam.project_id,
                 session_id=exam.id,
             ).finalize_voice_transcripts(exam, blueprint)
@@ -4122,6 +4592,8 @@ def complete_voice_session(
         exam.status = "completed"
         exam.state = "VOICE_COMPLETED"
         exam.completed_at = now
+    voice.status = "completed"
+    voice.completed_at = now
     voice.metrics = metrics
     db.commit()
     return serialize_voice_session(voice, db, include_events=True)

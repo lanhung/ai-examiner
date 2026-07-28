@@ -215,6 +215,9 @@ Acceptance:
 
 ## WP-09: Model policy, quota and rate limits
 
+Status: implemented on `research/v0.9.0`; deterministic SQLite tests pass and the
+PostgreSQL RLS/full-suite CI gates remain required before branch acceptance.
+
 Deliver:
 
 - organization model allowlist;
@@ -229,6 +232,10 @@ Acceptance:
 - disallowed provider is never called;
 - concurrent hard-limit tests pass;
 - actual provider/model and policy snapshot are recorded.
+
+Implementation contract:
+
+- `docs/architecture/V0_9_MODEL_GOVERNANCE.md`.
 
 ## WP-10: Retention, export, deletion and review
 

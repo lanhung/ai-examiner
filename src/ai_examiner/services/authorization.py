@@ -154,6 +154,30 @@ ROUTE_POLICIES: dict[tuple[str, str], RoutePolicy] = {
     ): RoutePolicy(
         "required", "job.manage", "organization", "administrative"
     ),
+    (
+        "GET",
+        "/api/v1/organizations/{organization_id}/model-policy",
+    ): RoutePolicy("required", "policy.read", "organization", "read_sensitive"),
+    (
+        "PUT",
+        "/api/v1/organizations/{organization_id}/model-policy",
+    ): RoutePolicy("required", "policy.manage", "organization", "administrative"),
+    (
+        "GET",
+        "/api/v1/organizations/{organization_id}/quota",
+    ): RoutePolicy("required", "policy.read", "organization", "read_sensitive"),
+    (
+        "PUT",
+        "/api/v1/organizations/{organization_id}/quota",
+    ): RoutePolicy("required", "policy.manage", "organization", "administrative"),
+    (
+        "GET",
+        "/api/v1/organizations/{organization_id}/usage",
+    ): RoutePolicy("required", "usage.read", "organization", "read_sensitive"),
+    (
+        "GET",
+        "/api/v1/organizations/{organization_id}/usage/export",
+    ): RoutePolicy("required", "usage.read", "organization", "read_sensitive"),
     ("GET", "/api/v1/organizations/{organization_id}/audit-events"): RoutePolicy(
         "required", "audit.read", "organization", "read_sensitive"
     ),

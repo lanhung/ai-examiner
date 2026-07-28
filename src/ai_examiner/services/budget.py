@@ -38,6 +38,10 @@ def budget_snapshot(db: Session, settings: Settings, project_id: str | None = No
 
 
 def assert_budget(db: Session, settings: Settings, project_id: str | None = None) -> None:
+    if settings.model_governance_enabled:
+        # WP-09 performs authoritative organization-scoped reservation and
+        # settlement immediately before each provider call.
+        return
     snapshot = budget_snapshot(db, settings, project_id)
     if settings.daily_model_budget_usd and snapshot["daily_cost_usd"] >= settings.daily_model_budget_usd:
         raise RuntimeError("Daily model budget has been reached")

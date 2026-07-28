@@ -17,8 +17,8 @@ from ..config import Settings
 from ..model_catalog import estimate_cost
 from ..models import BenchmarkRun, Document, GoldenDataset, UsageEvent
 from ..providers.base import ModelProvider, ProviderResult
-from ..providers.factory import build_provider
 from .budget import assert_budget
+from .model_governance import governed_provider
 from .prompts import prompt_contents
 
 
@@ -325,7 +325,12 @@ class BenchmarkService:
         for profile in profiles:
             assert_budget(self.db, self.settings, self.project_id)
             calls_before = len(self.calls)
-            provider = build_provider(self.settings, profile)
+            provider = governed_provider(
+                self.db,
+                self.settings,
+                profile,
+                project_id=self.project_id,
+            )
             profile_result: dict[str, Any] = {"profile": profile}
 
             if run_planner:

@@ -10,8 +10,8 @@ from ..agents.visual import VisualEvidenceAgent
 from ..config import Settings
 from ..model_catalog import estimate_cost
 from ..models import Document, EvidenceAsset, UsageEvent, VisualAnalysis
-from ..providers.factory import build_provider
 from .budget import assert_budget
+from .model_governance import governed_provider
 from .prompts import prompt_contents
 from .storage import StorageObjectMissing, materialize_resource
 
@@ -39,7 +39,12 @@ class VisualEvidenceService:
 
     def analyze_asset(self, asset: EvidenceAsset, profile: str, language: str) -> VisualAnalysis:
         assert_budget(self.db, self.settings, self.project_id)
-        provider = build_provider(self.settings, profile)
+        provider = governed_provider(
+            self.db,
+            self.settings,
+            profile,
+            project_id=self.project_id,
+        )
         agent = VisualEvidenceAgent(
             AgentContext(
                 provider=provider,

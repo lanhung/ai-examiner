@@ -263,6 +263,18 @@ privilege and attempts both forbidden mutations under the runtime role.
 
 Target: no provider call occurs after an authoritative hard denial.
 
+WP-09 deterministic evidence is implemented in
+`tests/test_model_governance_v09.py` and the realtime governance cases in
+`tests/test_realtime_voice_v04.py`. It covers policy/digest behavior, no-call
+denials, external-provider classification boundaries, ordered fallback,
+hard/soft quota, concurrent quota and rate admission, fail-open consistency,
+actual model settlement, redacted usage export, realtime upstream admission,
+immutability and downgrade refusal.
+
+The PostgreSQL CI gate executes `deploy/verify-v09-rls.py` after migration and
+verifies forced tenant RLS plus runtime DELETE revocation for the policy and usage
+tables.
+
 ### 3.10 Observability
 
 Verify traces across:

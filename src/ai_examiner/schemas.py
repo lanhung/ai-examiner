@@ -1,12 +1,75 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProjectCreate(BaseModel):
     name: str = Field(min_length=2, max_length=200)
     domain: str = "research_defense"
     language: str = "zh-CN"
+    data_classification: Literal[
+        "public",
+        "internal",
+        "confidential",
+        "restricted",
+    ] = "confidential"
+
+
+class AllowedModelProfile(BaseModel):
+    provider: Literal["mock", "openai", "anthropic", "gemini", "qwen", "ollama"]
+    model_pattern: str = Field(min_length=1, max_length=120)
+    tasks: list[str] = Field(default_factory=lambda: ["*"], min_length=1, max_length=30)
+
+    @field_validator("tasks")
+    @classmethod
+    def validate_tasks(cls, value: list[str]) -> list[str]:
+        if any(not task.strip() or len(task) > 80 for task in value):
+            raise ValueError("tasks must contain non-empty names of at most 80 characters")
+        return value
+
+
+class ModelPolicyUpdate(BaseModel):
+    allowed_profiles: list[AllowedModelProfile] = Field(default_factory=list, max_length=50)
+    fallback_profiles: list[str] = Field(default_factory=list, max_length=10)
+    external_provider_max_classification: Literal[
+        "public",
+        "internal",
+        "confidential",
+        "restricted",
+    ] = "confidential"
+    fallback_mode: Literal["deny", "ordered"] = "deny"
+    provider_retention_allowed: bool = False
+
+    @field_validator("fallback_profiles")
+    @classmethod
+    def validate_fallback_profiles(cls, value: list[str]) -> list[str]:
+        providers = {"mock", "openai", "anthropic", "gemini", "qwen", "ollama"}
+        for profile in value:
+            provider, separator, model = profile.partition(":")
+            if (
+                not separator
+                or provider not in providers
+                or not model.strip()
+                or len(profile) > 180
+            ):
+                raise ValueError(f"invalid fallback model profile: {profile}")
+        return value
+
+
+class OrganizationQuotaUpdate(BaseModel):
+    quota_mode: Literal["soft", "hard"] = "hard"
+    monthly_budget_usd: float = Field(default=500.0, ge=0, le=10_000_000)
+    per_session_budget_usd: float = Field(default=4.0, ge=0, le=100_000)
+    per_request_budget_usd: float = Field(default=1.0, ge=0, le=100_000)
+    soft_limit_ratio: float = Field(default=0.8, ge=0.1, le=1.0)
+    organization_requests_per_minute: int = Field(default=120, ge=1, le=1_000_000)
+    principal_requests_per_minute: int = Field(default=30, ge=1, le=1_000_000)
+    organization_tokens_per_minute: int = Field(
+        default=500_000,
+        ge=1,
+        le=1_000_000_000,
+    )
+    max_concurrent_calls: int = Field(default=3, ge=1, le=1_000)
 
 
 class MembershipCreate(BaseModel):

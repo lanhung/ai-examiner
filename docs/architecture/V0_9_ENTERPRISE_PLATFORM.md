@@ -359,6 +359,9 @@ provider keys in normal application tables.
 Rate limits use Redis for fast counters. PostgreSQL usage ledger is authoritative for
 cost reporting and quota reconciliation.
 
+WP-09 implementation details, failure semantics and verification are defined in
+`docs/architecture/V0_9_MODEL_GOVERNANCE.md`.
+
 ## 11. Audit design
 
 `AuditEvent` is append-only and records:

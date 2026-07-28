@@ -218,6 +218,51 @@ Model policy example:
 
 Policy changes are audited. The server reports the effective model actually used.
 
+The policy and quota writes are intentionally separate. `PUT /model-policy`
+accepts:
+
+```json
+{
+  "allowed_profiles": [
+    {
+      "provider": "qwen",
+      "model_pattern": "qwen-plus",
+      "tasks": ["planner", "answer_analyzer"]
+    }
+  ],
+  "fallback_profiles": [],
+  "external_provider_max_classification": "confidential",
+  "fallback_mode": "deny",
+  "provider_retention_allowed": false
+}
+```
+
+`PUT /quota` accepts hard/soft mode, monthly/per-session/per-request budgets,
+soft-limit ratio, organization/principal requests per minute, organization token
+units per minute and maximum concurrent calls.
+
+`GET /usage` supports an optional `project_id` filter and returns committed and
+reserved cost plus profile, project and task/Agent groupings. `GET /usage/export`
+returns bounded NDJSON accounting records. Prompt, answer and document content is
+never included in the usage export.
+
+Stable denial codes include:
+
+```text
+model_policy_denied
+monthly_quota_exceeded
+session_quota_exceeded
+per_request_quota_exceeded
+organization_rate_limited
+principal_rate_limited
+organization_token_rate_limited
+organization_concurrency_limited
+rate_limiter_unavailable
+```
+
+Detailed runtime semantics are in
+`docs/architecture/V0_9_MODEL_GOVERNANCE.md`.
+
 ## 9. Audit
 
 ```text

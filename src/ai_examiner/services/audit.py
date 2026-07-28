@@ -30,13 +30,18 @@ SAFE_METADATA_KEYS = frozenset(
         "audit_class",
         "capability",
         "changed_fields",
+        "data_classification",
         "http_method",
         "job_kind",
         "membership_role",
         "membership_status",
+        "policy_version",
+        "quota_mode",
         "recovered_count",
+        "requested_profile",
         "route_template",
         "status_code",
+        "task_type",
         "terminal_status",
     }
 )

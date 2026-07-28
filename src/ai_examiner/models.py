@@ -191,6 +191,13 @@ class BrowserAuthSession(Base):
 
 class Project(Base):
     __tablename__ = "projects"
+    __table_args__ = (
+        CheckConstraint(
+            "data_classification IN "
+            "('public', 'internal', 'confidential', 'restricted')",
+            name="ck_project_data_classification",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(
@@ -201,6 +208,11 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(200))
     domain: Mapped[str] = mapped_column(String(100), default="research_defense")
     language: Mapped[str] = mapped_column(String(20), default="zh-CN")
+    data_classification: Mapped[str] = mapped_column(
+        String(30),
+        default="confidential",
+        server_default="confidential",
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     organization: Mapped[Organization] = relationship(back_populates="projects")
@@ -536,6 +548,129 @@ class UsageEvent(TenantOwnedMixin, Base):
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
     json_repair_used: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class OrganizationModelPolicy(TenantOwnedMixin, Base):
+    __tablename__ = "organization_model_policies"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            name="uq_organization_model_policy_organization",
+        ),
+        CheckConstraint(
+            "external_provider_max_classification IN "
+            "('public', 'internal', 'confidential', 'restricted')",
+            name="ck_model_policy_external_classification",
+        ),
+        CheckConstraint(
+            "fallback_mode IN ('deny', 'ordered')",
+            name="ck_model_policy_fallback_mode",
+        ),
+        CheckConstraint(
+            "quota_mode IN ('soft', 'hard')",
+            name="ck_model_policy_quota_mode",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    allowed_profiles_json: Mapped[list] = mapped_column(JSON, default=list)
+    fallback_profiles_json: Mapped[list] = mapped_column(JSON, default=list)
+    external_provider_max_classification: Mapped[str] = mapped_column(
+        String(30),
+        default="confidential",
+    )
+    fallback_mode: Mapped[str] = mapped_column(String(20), default="deny")
+    provider_retention_allowed: Mapped[bool] = mapped_column(Boolean, default=False)
+    quota_mode: Mapped[str] = mapped_column(String(20), default="hard")
+    monthly_budget_usd: Mapped[float] = mapped_column(Float, default=500.0)
+    per_session_budget_usd: Mapped[float] = mapped_column(Float, default=4.0)
+    per_request_budget_usd: Mapped[float] = mapped_column(Float, default=1.0)
+    soft_limit_ratio: Mapped[float] = mapped_column(Float, default=0.8)
+    organization_requests_per_minute: Mapped[int] = mapped_column(Integer, default=120)
+    principal_requests_per_minute: Mapped[int] = mapped_column(Integer, default=30)
+    organization_tokens_per_minute: Mapped[int] = mapped_column(Integer, default=500_000)
+    max_concurrent_calls: Mapped[int] = mapped_column(Integer, default=3)
+    policy_digest: Mapped[str] = mapped_column(String(64))
+    updated_by_principal_id: Mapped[str | None] = mapped_column(
+        String(36),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ModelUsageLedger(TenantOwnedMixin, Base):
+    __tablename__ = "model_usage_ledger"
+    __table_args__ = (
+        Index(
+            "ix_model_usage_organization_created",
+            "organization_id",
+            "created_at",
+            "id",
+        ),
+        Index(
+            "ix_model_usage_project_created",
+            "organization_id",
+            "project_id",
+            "created_at",
+        ),
+        Index(
+            "ix_model_usage_status",
+            "organization_id",
+            "status",
+            "created_at",
+        ),
+        CheckConstraint(
+            "status IN ('reserved', 'completed', 'failed', 'denied', 'released')",
+            name="ck_model_usage_status",
+        ),
+        CheckConstraint(
+            "data_classification IN "
+            "('public', 'internal', 'confidential', 'restricted')",
+            name="ck_model_usage_classification",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    policy_id: Mapped[str] = mapped_column(
+        ForeignKey("organization_model_policies.id", ondelete="RESTRICT")
+    )
+    policy_version: Mapped[int] = mapped_column(Integer)
+    policy_snapshot_digest: Mapped[str] = mapped_column(String(64))
+    project_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    actor_principal_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    request_id: Mapped[str] = mapped_column(String(64))
+    task_type: Mapped[str] = mapped_column(String(80))
+    data_classification: Mapped[str] = mapped_column(String(30))
+    requested_profile: Mapped[str] = mapped_column(String(180))
+    actual_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    actual_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    fallback_from_profile: Mapped[str | None] = mapped_column(
+        String(180),
+        nullable=True,
+    )
+    status: Mapped[str] = mapped_column(String(20), default="reserved")
+    reservation_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    estimated_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    rate_limit_scope: Mapped[str] = mapped_column(String(30), default="")
+    denial_reason: Mapped[str] = mapped_column(String(120), default="")
+    soft_limit_exceeded: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+
+@event.listens_for(ModelUsageLedger, "before_delete")
+def _guard_model_usage_ledger_delete(_mapper, _connection, _target) -> None:
+    raise ValueError("Model usage ledger entries cannot be deleted")
 
 
 class GoldenDataset(TenantOwnedMixin, Base):

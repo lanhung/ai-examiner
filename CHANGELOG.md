@@ -86,6 +86,16 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   separate privileged aging role.
 - Add deterministic audit rollback, leakage, isolation, correlation, immutability,
   API/export and migration tests, plus PostgreSQL runtime mutation verification.
+- Add WP-09 organization model policy with provider/model/task allowlists,
+  project data classification and fail-closed external-provider boundaries.
+- Add durable quota reservations, immutable usage evidence, actual provider/model
+  settlement and organization/project/task cost summaries.
+- Add atomic Redis request, token and concurrency admission with hard/soft quotas,
+  stable denial codes, bounded fallback and explicit fail-open behavior.
+- Govern text, multimodal, dataset, benchmark and realtime voice connection paths
+  before provider construction, with redacted policy/quota/usage APIs and export.
+- Add migration `20260728_0015`, forced PostgreSQL tenant RLS, runtime DELETE
+  revocation and deterministic governance, concurrency, voice and rollback tests.
 
 - Add complete Planner v6 reciprocal real-provider evidence for all seven built-in
   templates: 30 unique cases per template, 420 case evaluations and 840 anonymous

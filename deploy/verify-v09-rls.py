@@ -42,6 +42,8 @@ REQUIRED_TENANT_TABLES = (
     "knowledge_states",
     "knowledge_evidence_events",
     "adaptive_decisions",
+    "organization_model_policies",
+    "model_usage_ledger",
 )
 
 RLS_TABLES = REQUIRED_TENANT_TABLES + (
@@ -140,6 +142,25 @@ def verify() -> dict:
         if audit_runtime_update or audit_runtime_delete:
             raise RuntimeError(
                 "Runtime role must not have UPDATE or DELETE on audit_events"
+            )
+        governance_runtime_delete = {
+            table_name: bool(
+                connection.scalar(
+                    text(
+                        "SELECT has_table_privilege("
+                        "'ai_examiner_runtime', :table_name, 'DELETE')"
+                    ),
+                    {"table_name": table_name},
+                )
+            )
+            for table_name in (
+                "organization_model_policies",
+                "model_usage_ledger",
+            )
+        }
+        if any(governance_runtime_delete.values()):
+            raise RuntimeError(
+                "Runtime role must not delete model governance evidence"
             )
 
         transaction = connection.begin_nested()
@@ -299,6 +320,7 @@ def verify() -> dict:
             "audit_runtime_delete": audit_runtime_delete,
             "audit_update_blocked": audit_update_blocked,
             "audit_delete_blocked": audit_delete_blocked,
+            "governance_runtime_delete": governance_runtime_delete,
             "legacy_organization": LEGACY_ORGANIZATION_ID,
         }
     engine.dispose()

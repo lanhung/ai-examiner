@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 from ..agents.base import AgentContext, BaseAgent
 from ..model_catalog import estimate_cost
 from ..models import Document, JointAnalysis, UsageEvent
-from ..providers.factory import build_provider
 from .budget import assert_budget
+from .model_governance import governed_provider
 from .prompts import prompt_contents
 
 
@@ -65,7 +65,12 @@ class JointAnalysisService:
 
     def run(self, documents: list[Document], profile: str, language: str) -> JointAnalysis:
         assert_budget(self.db, self.settings, self.project_id)
-        provider = build_provider(self.settings, profile)
+        provider = governed_provider(
+            self.db,
+            self.settings,
+            profile,
+            project_id=self.project_id,
+        )
         payload = [
             {
                 "document_id": doc.id,

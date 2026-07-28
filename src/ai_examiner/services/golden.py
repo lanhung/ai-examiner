@@ -20,9 +20,8 @@ from ..config import Settings
 from ..model_catalog import estimate_cost
 from ..models import Document, EvidenceAsset, GoldenDataset, UsageEvent
 from ..providers.base import ModelProvider, ProviderResult
-from ..providers.factory import build_provider
-from ..providers.mock import MockProvider
 from .budget import assert_budget
+from .model_governance import governed_provider
 from .prompts import prompt_contents, prompt_manifest
 
 
@@ -164,7 +163,12 @@ class GoldenDatasetService:
 
         for profile in profiles:
             assert_budget(self.db, self.settings, self.project_id)
-            provider = build_provider(self.settings, profile)
+            provider = governed_provider(
+                self.db,
+                self.settings,
+                profile,
+                project_id=self.project_id,
+            )
             annotator = GoldenAnnotator(self._context(provider, profile))
             try:
                 candidate = self._timed(
@@ -174,20 +178,10 @@ class GoldenDatasetService:
                     language=language,
                     question_count=question_count,
                 )
-            except ValueError as exc:
-                if "returned no cases" not in str(exc):
-                    raise
-                fallback_profile = "mock:heuristic-v2"
-                fallback = GoldenAnnotator(self._context(MockProvider(), fallback_profile))
-                candidate = self._timed(
-                    fallback.generate,
-                    document_text=self.document.content_text,
-                    filename=self.document.filename,
-                    language=language,
-                    question_count=question_count,
-                )
-                candidate["fallback_from_profile"] = profile
-                candidate["fallback_reason"] = str(exc)
+            except ValueError:
+                # Model fallback is centralized in GovernedModelProvider so a
+                # hard-coded Mock provider cannot bypass organization policy.
+                raise
             candidate["generator_profile"] = profile
             candidates.append(candidate)
 
@@ -195,7 +189,12 @@ class GoldenDatasetService:
         # is still useful but is explicitly marked in provenance.
         for index, candidate in enumerate(candidates):
             critic_profile = profiles[(index + 1) % len(profiles)]
-            provider = build_provider(self.settings, critic_profile)
+            provider = governed_provider(
+                self.db,
+                self.settings,
+                critic_profile,
+                project_id=self.project_id,
+            )
             critic = AnnotationCritic(self._context(provider, critic_profile))
             critique = self._timed(
                 critic.review,
@@ -207,7 +206,12 @@ class GoldenDatasetService:
             critiques.append(critique)
 
         assert_budget(self.db, self.settings, self.project_id)
-        consensus_provider = build_provider(self.settings, consensus_profile)
+        consensus_provider = governed_provider(
+            self.db,
+            self.settings,
+            consensus_profile,
+            project_id=self.project_id,
+        )
         consensus = ConsensusSynthesizer(
             self._context(consensus_provider, consensus_profile)
         )
