@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, inspect, select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from ai_examiner.config import get_settings
 from ai_examiner.db import SessionLocal
@@ -410,14 +410,17 @@ def test_human_review_decision_is_append_only_and_ai_cannot_decide(client):
         with pytest.raises(ValueError, match="append-only"):
             db.flush()
         db.rollback()
-        with pytest.raises(IntegrityError, match="append-only"):
-            db.execute(
-                text(
-                    "UPDATE human_review_events SET actor_id = 'tampered' "
-                    "WHERE id = :event_id"
-                ),
-                {"event_id": decision.id},
-            )
+        # PostgreSQL migration triggers are verified before pytest recreates
+        # its isolated schema in deploy/verify-v09-rls.py.
+        if db.bind.dialect.name == "sqlite":
+            with pytest.raises(DBAPIError, match="append-only"):
+                db.execute(
+                    text(
+                        "UPDATE human_review_events SET actor_id = 'tampered' "
+                        "WHERE id = :event_id"
+                    ),
+                    {"event_id": decision.id},
+                )
 
 
 def test_data_lifecycle_migration_refuses_compliance_evidence_loss(tmp_path):

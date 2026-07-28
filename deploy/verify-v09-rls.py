@@ -44,6 +44,12 @@ REQUIRED_TENANT_TABLES = (
     "adaptive_decisions",
     "organization_model_policies",
     "model_usage_ledger",
+    "organization_retention_policies",
+    "legal_holds",
+    "organization_export_artifacts",
+    "data_subject_requests",
+    "human_review_cases",
+    "human_review_events",
 )
 
 RLS_TABLES = REQUIRED_TENANT_TABLES + (
@@ -81,6 +87,8 @@ def verify() -> dict:
     project_b = str(uuid4())
     cross_tenant_project = str(uuid4())
     audit_event_id = str(uuid4())
+    review_case_id = str(uuid4())
+    review_event_id = str(uuid4())
     result: dict[str, object] = {}
 
     with engine.connect() as connection:
@@ -162,6 +170,47 @@ def verify() -> dict:
             raise RuntimeError(
                 "Runtime role must not delete model governance evidence"
             )
+        review_runtime_update = bool(
+            connection.scalar(
+                text(
+                    "SELECT has_table_privilege("
+                    "'ai_examiner_runtime', 'human_review_events', 'UPDATE')"
+                )
+            )
+        )
+        review_runtime_delete = bool(
+            connection.scalar(
+                text(
+                    "SELECT has_table_privilege("
+                    "'ai_examiner_runtime', 'human_review_events', 'DELETE')"
+                )
+            )
+        )
+        if review_runtime_update or review_runtime_delete:
+            raise RuntimeError(
+                "Runtime role must not mutate human review events"
+            )
+        review_trigger_count = int(
+            connection.scalar(
+                text(
+                    "SELECT COUNT(*) FROM pg_trigger "
+                    "WHERE tgrelid = 'human_review_events'::regclass "
+                    "AND NOT tgisinternal "
+                    "AND tgname = ANY(:trigger_names)"
+                ),
+                {
+                    "trigger_names": [
+                        "human_review_events_no_update",
+                        "human_review_events_no_delete",
+                    ]
+                },
+            )
+            or 0
+        )
+        if review_trigger_count != 2:
+            raise RuntimeError(
+                "Expected immutable human review update/delete triggers"
+            )
 
         transaction = connection.begin_nested()
         connection.execute(
@@ -214,6 +263,66 @@ def verify() -> dict:
                 "digest": "0" * 64,
             },
         )
+        connection.execute(
+            text(
+                "INSERT INTO human_review_cases "
+                "(id, organization_id, case_type, resource_type, resource_id, "
+                "status, title, summary, evidence_json, "
+                "created_by_actor_type, created_by_actor_id, final_decision, "
+                "created_at) "
+                "VALUES (:id, :organization_id, 'compliance', 'organization', "
+                ":organization_id, 'open', 'RLS review proof', '', '[]', "
+                "'system', NULL, '', now())"
+            ),
+            {
+                "id": review_case_id,
+                "organization_id": organization_a,
+            },
+        )
+        connection.execute(
+            text(
+                "INSERT INTO human_review_events "
+                "(id, organization_id, case_id, event_type, actor_type, "
+                "actor_id, payload_json, created_at) "
+                "VALUES (:id, :organization_id, :case_id, 'created', "
+                "'system', NULL, '{}', now())"
+            ),
+            {
+                "id": review_event_id,
+                "organization_id": organization_a,
+                "case_id": review_case_id,
+            },
+        )
+        review_update_blocked = False
+        savepoint = connection.begin_nested()
+        try:
+            connection.execute(
+                text(
+                    "UPDATE human_review_events SET actor_id = 'tampered' "
+                    "WHERE id = :id"
+                ),
+                {"id": review_event_id},
+            )
+            savepoint.commit()
+        except Exception:
+            savepoint.rollback()
+            review_update_blocked = True
+        if not review_update_blocked:
+            raise RuntimeError("Human review event update was not blocked")
+
+        review_delete_blocked = False
+        savepoint = connection.begin_nested()
+        try:
+            connection.execute(
+                text("DELETE FROM human_review_events WHERE id = :id"),
+                {"id": review_event_id},
+            )
+            savepoint.commit()
+        except Exception:
+            savepoint.rollback()
+            review_delete_blocked = True
+        if not review_delete_blocked:
+            raise RuntimeError("Human review event delete was not blocked")
 
         connection.execute(text("SET LOCAL ROLE ai_examiner_runtime"))
         missing_context_count = int(
@@ -321,6 +430,11 @@ def verify() -> dict:
             "audit_update_blocked": audit_update_blocked,
             "audit_delete_blocked": audit_delete_blocked,
             "governance_runtime_delete": governance_runtime_delete,
+            "review_runtime_update": review_runtime_update,
+            "review_runtime_delete": review_runtime_delete,
+            "review_trigger_count": review_trigger_count,
+            "review_update_blocked": review_update_blocked,
+            "review_delete_blocked": review_delete_blocked,
             "legacy_organization": LEGACY_ORGANIZATION_ID,
         }
     engine.dispose()
