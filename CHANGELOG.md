@@ -6,6 +6,13 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ### Added
 
+- Add WP-13 enterprise administration UI with OIDC login state, safe organization
+  switching, capability-gated members, model governance, audit, lifecycle and
+  human-review workflows.
+- Add organization display metadata to `/api/v1/me` and a tenant-scoped,
+  filterable data-subject request list endpoint.
+- Abort and invalidate organization-scoped browser requests on tenant changes,
+  clear stale views and require explicit confirmation for high-risk operations.
 - Add WP-12 recoverable enterprise Docker Compose with PostgreSQL, Redis, API,
   worker and Caddy plus optional private MinIO and observability overlays.
 - Separate migration and runtime database credentials, force external schema

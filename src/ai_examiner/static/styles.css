@@ -19,6 +19,7 @@ p { color: var(--muted); line-height: 1.65; margin: 5px 0; }
 .eyebrow { color: var(--accent); text-transform: uppercase; font-size: 12px; letter-spacing: .16em; font-weight: 800; }
 .badge { padding: 8px 12px; border-radius: 999px; background: var(--accent); color: white; font-size: 13px; white-space: nowrap; }
 .badge.secondary { background: var(--accent-soft); color: var(--accent); }
+.header-actions { display: flex; align-items: center; gap: 8px; }
 main { max-width: 1280px; margin: 0 auto; padding: 0 28px 40px; display: grid; grid-template-columns: minmax(300px, 420px) minmax(420px, 1fr); gap: 20px; align-items: start; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px; box-shadow: 0 10px 35px rgba(26,44,37,.05); }
 .setup { grid-row: span 2; }

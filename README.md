@@ -42,6 +42,9 @@ Research implementation progress:
   lifecycle and privacy-preserving OpenTelemetry operations;
 - WP-12 implemented: recoverable enterprise Compose, separate database roles,
   consistent database/object backups and guarded isolated restore;
+- WP-13 implemented: dedicated enterprise administration UI with OIDC state,
+  organization switching, capability-gated membership, model governance, audit,
+  retention and human-review workflows;
 - the v0.9 research branch remains non-deployable until the complete gate passes.
 
 Authoritative research documents:
@@ -50,6 +53,7 @@ Authoritative research documents:
 - `docs/architecture/V0_9_ENTERPRISE_PLATFORM.md`;
 - `docs/architecture/V0_9_JOB_DELIVERY_HARDENING.md`;
 - `docs/architecture/V0_9_IMMUTABLE_AUDIT_SYSTEM.md`;
+- `docs/architecture/V0_9_ENTERPRISE_UI.md`;
 - `docs/api/V0_9_ENTERPRISE_API.md`;
 - `docs/security/V0_9_ENTERPRISE_THREAT_MODEL.md`;
 - `docs/security/V0_9_RESOURCE_AND_CAPABILITY_MATRIX.md`;

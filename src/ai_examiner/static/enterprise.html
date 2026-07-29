@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Examiner 企业控制台</title>
+  <link rel="stylesheet" href="/static/enterprise.css?v=0.9.0-wp13" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">AE</span>
+      <div>
+        <strong>AI Examiner</strong>
+        <span>企业控制台</span>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <label class="organization-picker">
+        <span>当前组织</span>
+        <select id="organizationSelect" aria-label="切换组织"></select>
+      </label>
+      <span id="authBadge" class="status-badge neutral">检查登录状态</span>
+      <button id="refreshCurrent" class="icon-button" title="刷新当前页面" aria-label="刷新当前页面">↻</button>
+      <a class="button secondary" href="/">返回答辩工作台</a>
+      <button id="logoutButton" class="button secondary hidden">退出</button>
+    </div>
+  </header>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="organization-summary">
+        <strong id="organizationName">尚未选择组织</strong>
+        <span id="organizationMeta">等待身份上下文</span>
+      </div>
+      <nav id="navigation" aria-label="企业控制台导航">
+        <button data-view="overview" class="active">总览</button>
+        <button data-view="members" data-capability="member.read">成员与权限</button>
+        <button data-view="governance" data-capability="policy.read">模型治理</button>
+        <button data-view="audit" data-capability="audit.read">审计日志</button>
+        <button data-view="lifecycle" data-capability="retention.read">数据保留</button>
+        <button data-view="reviews" data-capability="review_case.review">人工复核</button>
+      </nav>
+      <div class="sidebar-footer">
+        <span>v0.9.0 · WP-13</span>
+        <span id="requestState">就绪</span>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section id="developerAccess" class="notice warning hidden">
+        <div>
+          <strong>本地开发身份</strong>
+          <p>认证当前已禁用。输入已有的组织和主体 ID 后，控制台会通过开发请求头执行权限检查。</p>
+        </div>
+        <form id="developerContextForm" class="inline-form">
+          <label>组织 ID<input id="developerOrganizationId" required /></label>
+          <label>主体 ID<input id="developerPrincipalId" required /></label>
+          <button class="button" type="submit">应用上下文</button>
+        </form>
+      </section>
+
+      <section id="loginRequired" class="empty-state hidden">
+        <h1>需要登录</h1>
+        <p>使用企业身份提供商登录后，才能访问组织配置和受保护数据。</p>
+        <a class="button" href="/api/v1/auth/login">使用企业账号登录</a>
+      </section>
+
+      <div id="workspace" class="hidden">
+        <section id="view-overview" class="view active">
+          <div class="page-heading">
+            <div><span class="eyebrow">Organization</span><h1>企业运行总览</h1></div>
+            <span id="overviewUpdated" class="muted"></span>
+          </div>
+          <div id="overviewMetrics" class="metrics-grid"></div>
+          <div class="two-column">
+            <section class="surface">
+              <div class="surface-heading"><h2>身份与授权</h2></div>
+              <dl id="authorizationSummary" class="definition-list"></dl>
+            </section>
+            <section class="surface">
+              <div class="surface-heading"><h2>有效能力</h2></div>
+              <div id="capabilityList" class="tag-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="view-members" class="view">
+          <div class="page-heading">
+            <div><span class="eyebrow">Access control</span><h1>成员与权限</h1></div>
+            <button id="openAddMember" class="button" data-requires="member.manage">添加成员</button>
+          </div>
+          <section class="surface table-surface">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>成员</th><th>角色</th><th>状态</th><th>版本</th><th>最近更新</th><th class="actions">操作</th></tr></thead>
+                <tbody id="memberRows"></tbody>
+              </table>
+            </div>
+          </section>
+          <form id="memberForm" class="drawer-form hidden">
+            <div class="surface-heading"><h2>添加组织成员</h2><button type="button" class="icon-button" data-close-form="memberForm" aria-label="关闭">×</button></div>
+            <div class="form-grid">
+              <label>主体 ID<input name="principal_id" required maxlength="36" /></label>
+              <label>角色<select name="role"></select></label>
+              <label>初始状态<select name="status"><option value="active">active</option><option value="invited">invited</option></select></label>
+            </div>
+            <div class="form-actions"><button class="button" type="submit">添加成员</button></div>
+          </form>
+        </section>
+
+        <section id="view-governance" class="view">
+          <div class="page-heading">
+            <div><span class="eyebrow">Model governance</span><h1>模型策略、配额与使用量</h1></div>
+            <button id="downloadUsage" class="button secondary" data-requires="usage.read">导出使用记录</button>
+          </div>
+          <div id="usageMetrics" class="metrics-grid"></div>
+          <div class="two-column governance-grid">
+            <form id="modelPolicyForm" class="surface">
+              <div class="surface-heading"><h2>模型策略</h2><span id="modelPolicyVersion" class="status-badge neutral"></span></div>
+              <label>允许的模型配置
+                <textarea name="allowed_profiles" rows="8" placeholder="openai:gpt-* | planner,analyzer&#10;qwen:qwen-plus | *"></textarea>
+                <small>每行格式：provider:model-pattern | task1,task2</small>
+              </label>
+              <label>有序降级模型
+                <textarea name="fallback_profiles" rows="4" placeholder="openai:gpt-5.4-mini&#10;qwen:qwen-plus"></textarea>
+              </label>
+              <div class="form-grid">
+                <label>外部模型最高数据级别<select name="external_provider_max_classification"><option>public</option><option>internal</option><option>confidential</option><option>restricted</option></select></label>
+                <label>降级模式<select name="fallback_mode"><option value="deny">deny</option><option value="ordered">ordered</option></select></label>
+              </div>
+              <label class="checkbox"><input type="checkbox" name="provider_retention_allowed" />允许供应商保留请求数据</label>
+              <div class="form-actions"><button class="button" type="submit" data-requires="policy.manage">保存模型策略</button></div>
+            </form>
+
+            <form id="quotaForm" class="surface">
+              <div class="surface-heading"><h2>预算与限流</h2><span id="quotaVersion" class="status-badge neutral"></span></div>
+              <div class="form-grid">
+                <label>配额模式<select name="quota_mode"><option value="hard">hard</option><option value="soft">soft</option></select></label>
+                <label>月预算 USD<input name="monthly_budget_usd" type="number" min="0" step="0.01" /></label>
+                <label>单会话预算 USD<input name="per_session_budget_usd" type="number" min="0" step="0.01" /></label>
+                <label>单请求预算 USD<input name="per_request_budget_usd" type="number" min="0" step="0.01" /></label>
+                <label>软阈值比例<input name="soft_limit_ratio" type="number" min="0.1" max="1" step="0.05" /></label>
+                <label>组织 RPM<input name="organization_requests_per_minute" type="number" min="1" /></label>
+                <label>成员 RPM<input name="principal_requests_per_minute" type="number" min="1" /></label>
+                <label>组织 TPM<input name="organization_tokens_per_minute" type="number" min="1" /></label>
+                <label>最大并发<input name="max_concurrent_calls" type="number" min="1" /></label>
+              </div>
+              <div class="form-actions"><button class="button" type="submit" data-requires="policy.manage">保存配额</button></div>
+            </form>
+          </div>
+        </section>
+
+        <section id="view-audit" class="view">
+          <div class="page-heading">
+            <div><span class="eyebrow">Immutable audit</span><h1>审计事件浏览器</h1></div>
+            <button id="downloadAudit" class="button secondary">导出当前筛选</button>
+          </div>
+          <form id="auditFilters" class="filter-bar">
+            <label>操作<input name="action" placeholder="membership.update" /></label>
+            <label>资源类型<input name="resource_type" placeholder="organization" /></label>
+            <label>结果<select name="outcome"><option value="">全部</option><option value="succeeded">succeeded</option><option value="denied">denied</option><option value="failed">failed</option></select></label>
+            <label>请求 ID<input name="request_id" /></label>
+            <button class="button" type="submit">筛选</button>
+          </form>
+          <section class="surface table-surface">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>时间</th><th>操作</th><th>主体</th><th>资源</th><th>结果</th><th>请求 ID</th></tr></thead>
+                <tbody id="auditRows"></tbody>
+              </table>
+            </div>
+            <div class="pagination"><span id="auditRetention" class="muted"></span><button id="auditNext" class="button secondary hidden">下一页</button></div>
+          </section>
+        </section>
+
+        <section id="view-lifecycle" class="view">
+          <div class="page-heading">
+            <div><span class="eyebrow">Data lifecycle</span><h1>保留、法务保全与数据请求</h1></div>
+          </div>
+          <form id="retentionForm" class="surface">
+            <div class="surface-heading"><h2>组织保留策略</h2><span id="retentionVersion" class="status-badge neutral"></span></div>
+            <div class="form-grid retention-grid">
+              <label>执行模式<select name="policy_mode"><option value="monitor">monitor</option><option value="enforce">enforce</option></select></label>
+              <label>项目保留天数<input name="project_days" type="number" min="30" max="3650" /></label>
+              <label>会话保留天数<input name="session_days" type="number" min="30" max="3650" /></label>
+              <label>文档保留天数<input name="document_days" type="number" min="30" max="3650" /></label>
+              <label>学习记忆天数<input name="learner_memory_days" type="number" min="30" max="3650" /></label>
+              <label>导出有效小时<input name="export_ttl_hours" type="number" min="1" max="168" /></label>
+              <label>删除宽限天数<input name="deletion_grace_days" type="number" min="0" max="90" /></label>
+            </div>
+            <div class="form-actions"><button class="button" type="submit" data-requires="retention.manage">保存保留策略</button></div>
+          </form>
+
+          <div class="two-column lifecycle-grid">
+            <section class="surface">
+              <div class="surface-heading"><h2>法务保全</h2><button id="openLegalHold" class="button secondary" data-requires="retention.manage">新建</button></div>
+              <div id="legalHoldList" class="record-list"></div>
+              <form id="legalHoldForm" class="subform hidden">
+                <label>范围<select name="scope_type"><option value="organization">organization</option><option value="project">project</option><option value="learner_identity">learner_identity</option><option value="data_subject_request">data_subject_request</option></select></label>
+                <label>范围 ID<input name="scope_id" maxlength="36" /></label>
+                <label>原因<textarea name="reason" rows="3" required minlength="5"></textarea></label>
+                <div class="form-actions"><button class="button" type="submit">创建保全</button><button class="button secondary" type="button" data-close-form="legalHoldForm">取消</button></div>
+              </form>
+            </section>
+
+            <section class="surface">
+              <div class="surface-heading"><h2>数据主体请求</h2><button id="openDataRequest" class="button secondary" data-requires="review_case.create">新建</button></div>
+              <div class="compact-filters">
+                <select id="dataRequestStatus"><option value="">全部状态</option><option>requested</option><option>blocked</option><option>failed</option><option>completed</option><option>denied</option><option>cancelled</option></select>
+                <select id="dataRequestType"><option value="">全部类型</option><option>export</option><option>delete</option></select>
+              </div>
+              <div id="dataRequestList" class="record-list"></div>
+              <form id="dataRequestForm" class="subform hidden">
+                <div class="form-grid">
+                  <label>请求类型<select name="request_type"><option value="export">export</option><option value="delete">delete</option></select></label>
+                  <label>目标类型<select name="target_type"><option value="project">project</option><option value="learner_identity">learner_identity</option></select></label>
+                  <label>目标 ID<input name="target_id" required maxlength="36" /></label>
+                </div>
+                <label>原因<textarea name="reason" rows="3"></textarea></label>
+                <label class="checkbox"><input name="include_objects" type="checkbox" />导出时包含对象文件</label>
+                <div class="form-actions"><button class="button" type="submit">创建请求</button><button class="button secondary" type="button" data-close-form="dataRequestForm">取消</button></div>
+              </form>
+            </section>
+          </div>
+        </section>
+
+        <section id="view-reviews" class="view">
+          <div class="page-heading">
+            <div><span class="eyebrow">Human review</span><h1>人工复核工作台</h1></div>
+          </div>
+          <div class="split-view">
+            <section class="surface case-list-panel">
+              <div class="surface-heading">
+                <h2>复核队列</h2>
+                <select id="reviewStatus"><option value="">全部状态</option><option>open</option><option>assigned</option><option>decided</option><option>appealed</option><option>closed</option></select>
+              </div>
+              <div id="reviewCaseList" class="record-list"></div>
+            </section>
+            <section id="reviewDetail" class="surface detail-panel">
+              <div class="empty-state compact"><p>选择一个复核案例查看证据和不可变事件时间线。</p></div>
+            </section>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="confirmDialog">
+    <form method="dialog">
+      <h2 id="confirmTitle">确认操作</h2>
+      <p id="confirmMessage"></p>
+      <label id="confirmPhraseWrap" class="hidden">输入确认文本 <strong id="confirmPhrase"></strong>
+        <input id="confirmInput" autocomplete="off" />
+      </label>
+      <div class="form-actions">
+        <button class="button secondary" value="cancel">取消</button>
+        <button id="confirmAction" class="button danger" value="confirm">确认</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toastRegion" class="toast-region" aria-live="polite"></div>
+  <script src="/static/enterprise.js?v=0.9.0-wp13" defer></script>
+</body>
+</html>

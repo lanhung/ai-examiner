@@ -23,6 +23,7 @@ from ..enterprise_constants import ROLE_CAPABILITIES
 from ..models import (
     BrowserAuthSession,
     OIDCLoginTransaction,
+    Organization,
     OrganizationMembership,
     Principal,
     utcnow,
@@ -749,6 +750,16 @@ class OIDCAuthenticator:
                 OrganizationMembership.status == "active",
             )
         ).all()
+        organizations = {
+            organization.id: organization
+            for organization in db.scalars(
+                select(Organization).where(
+                    Organization.id.in_(
+                        [membership.organization_id for membership in memberships]
+                    )
+                )
+            ).all()
+        }
         return {
             "principal": {
                 "id": principal.id,
@@ -758,6 +769,21 @@ class OIDCAuthenticator:
             "organizations": [
                 {
                     "id": membership.organization_id,
+                    "slug": (
+                        organizations[membership.organization_id].slug
+                        if membership.organization_id in organizations
+                        else membership.organization_id
+                    ),
+                    "display_name": (
+                        organizations[membership.organization_id].display_name
+                        if membership.organization_id in organizations
+                        else membership.organization_id
+                    ),
+                    "status": (
+                        organizations[membership.organization_id].status
+                        if membership.organization_id in organizations
+                        else "unknown"
+                    ),
                     "role": membership.role,
                     "membership_id": membership.id,
                     "capabilities": sorted(

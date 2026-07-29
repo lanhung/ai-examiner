@@ -9,14 +9,14 @@
 - Deployment status: research only; not approved for production
 - Alembic head: `20260728_0014`
 
-v0.9 WP-01 through WP-08 are implemented. WP-07 adds tenant-scoped immutable task
-envelopes, idempotency, atomic leases, heartbeats, execution-time authorization,
-bounded retry, cancellation, dead-letter state and stale-worker recovery. The
-WP-08 adds append-only tenant audit evidence, request/trace correlation, redacted
-audit APIs, authorization-denial coverage, task-terminal evidence and privileged
-retention boundaries. The package version intentionally remains `0.8.0.dev0`.
+v0.9 WP-01 through WP-13 are implemented. The enterprise line now includes
+organization tenancy, OIDC, capability RBAC, PostgreSQL RLS, S3-compatible
+storage, durable jobs, immutable audit, model governance, retention and review,
+OpenTelemetry operations, recoverable Compose and a dedicated enterprise
+administration UI. WP-14 release hardening and Vultr evidence remain. The package
+version intentionally remains `0.8.0.dev0`.
 
-WP-08 local verification:
+Current enterprise verification baseline before WP-13:
 
 ```text
 Full pytest                   250 passed
@@ -28,6 +28,31 @@ OpenAPI paths                 97
 Alembic head                  20260728_0014
 Secret scan                   clean
 ```
+
+WP-13 adds `/enterprise` with login state, organization switching, member and
+role administration, model policy and quota controls, audit exploration,
+retention/deletion status and human review. Organization switches abort pending
+requests, clear old tenant state and reject stale responses. High-risk mutations
+use explicit confirmation phrases while backend capability and dual-control
+checks remain authoritative.
+
+WP-13 local verification:
+
+```text
+Full pytest                   293 passed
+WP-13 focused tests           6 passed
+Ruff                          passed
+Python compileall             passed
+JavaScript syntax             passed
+Route-policy completeness     passed
+Tracked-source secret scan    clean
+git diff --check              passed
+```
+
+The Windows interpreter printed the previously documented AnyIO/TestClient
+shutdown access-violation diagnostic after pytest reached 100%. The process
+returned exit code 0 and no test failed. Linux CI remains the authoritative
+async-cleanup gate.
 
 The known Windows AnyIO/TestClient cleanup access-violation diagnostic may print
 after pytest reports success; the pytest process exits successfully. Linux GitHub CI

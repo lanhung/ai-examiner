@@ -325,6 +325,10 @@ Implementation evidence:
 
 ## WP-13: Enterprise UI
 
+Status: implemented on `research/v0.9.0`; deterministic UI/API and tenant-stale
+state tests pass. OIDC staging and desktop/mobile screenshot evidence remain
+part of WP-14.
+
 Deliver:
 
 - login state;
@@ -341,6 +345,14 @@ Acceptance:
 - destructive actions require explicit confirmation;
 - mobile and desktop layouts remain usable;
 - text/template/voice core workflows remain direct.
+
+Implementation evidence:
+
+- `src/ai_examiner/static/enterprise.html`;
+- `src/ai_examiner/static/enterprise.css`;
+- `src/ai_examiner/static/enterprise.js`;
+- `tests/test_enterprise_ui_v09.py`;
+- `docs/architecture/V0_9_ENTERPRISE_UI.md`.
 
 ## WP-14: Release hardening
 

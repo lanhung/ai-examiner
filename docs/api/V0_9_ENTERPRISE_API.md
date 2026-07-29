@@ -273,6 +273,25 @@ rate_limiter_unavailable
 Detailed runtime semantics are in
 `docs/architecture/V0_9_MODEL_GOVERNANCE.md`.
 
+## Enterprise UI support
+
+`GET /api/v1/me` includes active organization display metadata (`display_name`,
+`slug`, `status`) beside role, membership ID and capabilities so the enterprise
+console can render an organization switcher without a global organization list.
+
+```text
+GET /api/v1/organizations/{organization_id}/data-subject-requests
+```
+
+requires `retention.read` and accepts:
+
+- `status`;
+- `request_type=export|delete`;
+- `limit=1..200`.
+
+The path organization and authorization context define the tenant boundary. The
+endpoint never accepts a separate organization filter.
+
 ## 9. Audit
 
 ```text

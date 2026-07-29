@@ -762,6 +762,11 @@ def index():
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@app.get("/enterprise", include_in_schema=False)
+def enterprise_index():
+    return FileResponse(STATIC_DIR / "enterprise.html")
+
+
 @app.get("/health")
 def health():
     profile = f"{settings.model_provider}:{settings.default_model_for(settings.model_provider)}"
@@ -4516,6 +4521,43 @@ def create_data_subject_request(
     }
     db.commit()
     return serialize_data_subject_request(request)
+
+
+@app.get("/api/v1/organizations/{organization_id}/data-subject-requests")
+def list_data_subject_requests(
+    organization_id: str,
+    _context: RetentionReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+    status: str | None = Query(
+        default=None,
+        pattern=(
+            "^(requested|approved|running|verifying|completed|blocked|failed|"
+            "cancelled|denied)$"
+        ),
+    ),
+    request_type: str | None = Query(
+        default=None,
+        pattern="^(export|delete)$",
+    ),
+    limit: int = Query(default=100, ge=1, le=200),
+):
+    query = select(DataSubjectRequest).where(
+        DataSubjectRequest.organization_id == organization_id
+    )
+    if status:
+        query = query.where(DataSubjectRequest.status == status)
+    if request_type:
+        query = query.where(DataSubjectRequest.request_type == request_type)
+    requests = db.scalars(
+        query.order_by(
+            DataSubjectRequest.requested_at.desc(),
+            DataSubjectRequest.id.desc(),
+        ).limit(limit)
+    ).all()
+    return {
+        "items": [serialize_data_subject_request(item) for item in requests],
+        "count": len(requests),
+    }
 
 
 @app.get("/api/v1/data-subject-requests/{request_id}")

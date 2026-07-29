@@ -223,6 +223,12 @@ ROUTE_POLICIES: dict[tuple[str, str], RoutePolicy] = {
         "required", "retention.manage", "organization_export", "read_sensitive"
     ),
     (
+        "GET",
+        "/api/v1/organizations/{organization_id}/data-subject-requests",
+    ): RoutePolicy(
+        "required", "retention.read", "organization", "read_sensitive"
+    ),
+    (
         "POST",
         "/api/v1/organizations/{organization_id}/data-subject-requests",
     ): RoutePolicy(
