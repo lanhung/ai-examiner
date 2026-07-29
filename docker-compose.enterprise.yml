@@ -59,10 +59,21 @@ services:
   database-bootstrap:
     build: .
     command: ["python", "/app/deploy/enterprise/bootstrap_database.py", "migrate"]
+    env_file:
+      - ${APP_ENV_FILE:-.env}
     environment:
       DATABASE_URL: ${ENTERPRISE_MIGRATION_DATABASE_URL:?Set ENTERPRISE_MIGRATION_DATABASE_URL}
       POSTGRES_APP_USER: ${POSTGRES_APP_USER:?Set POSTGRES_APP_USER}
       POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD}
+      STORAGE_LOCAL_ROOT: /app/data/objects
+      UPLOAD_DIR: /app/data/uploads
+      EVIDENCE_DIR: /app/data/evidence
+      EXPORT_DIR: /app/data/exports
+      BACKUP_DIR: /app/data/backups
+      PROMPT_DIR: /app/prompts
+    volumes:
+      - ${HOST_DATA_DIR:-./data}:/app/data
+      - ./prompts:/app/prompts:ro
     depends_on:
       postgres:
         condition: service_healthy

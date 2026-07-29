@@ -42,6 +42,17 @@ def test_enterprise_compose_separates_runtime_and_migration_roles() -> None:
     )
     assert services["database-bootstrap"]["read_only"] is True
     assert services["database-bootstrap"]["restart"] == "no"
+    assert services["database-bootstrap"]["env_file"] == [
+        "${APP_ENV_FILE:-.env}"
+    ]
+    assert services["database-bootstrap"]["volumes"] == [
+        "${HOST_DATA_DIR:-./data}:/app/data",
+        "./prompts:/app/prompts:ro",
+    ]
+    assert (
+        services["database-bootstrap"]["environment"]["STORAGE_LOCAL_ROOT"]
+        == "/app/data/objects"
+    )
     assert services["postgres"]["volumes"] == [
         "postgres-data:/var/lib/postgresql/data"
     ]
