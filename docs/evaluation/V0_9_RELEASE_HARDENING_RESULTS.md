@@ -88,5 +88,21 @@ prompt/response/key retained         no
 ```
 
 The accepted probe is bound to source commit
-`94cedb8c2dae4ff04ad4c2af51fd71de9e4fd5dd` and archived as
+`a0b01c2b40649bc93bdf45065808c51e4d36b322` and archived as
 `docs/evaluation/evidence/v0_9/quota-model-policy.json`.
+
+## SeetaCloud compatibility rehearsal on 2026-07-29
+
+The current research branch replaced the v0.5 process on its existing port
+`6008`, migrated the copied SQLite database to Alembic head `20260728_0016`, and
+passed `/health`, `/ready`, the main UI, enterprise UI and provider API checks.
+The bounded Qwen Plus governance probe passed in 514 ms.
+
+The available host did not expose a Docker daemon. This was therefore a
+direct-process compatibility rehearsal, not the required Vultr enterprise
+Compose deployment. PostgreSQL, Redis, MinIO, OIDC, TLS, observability, disaster
+recovery and 24-hour observation gates remain blocked.
+
+See
+`docs/deployment/V0_9_SEETACLOUD_DIRECT_PROCESS_REHEARSAL.md`
+for the sanitized deployment record and rollback boundary.
