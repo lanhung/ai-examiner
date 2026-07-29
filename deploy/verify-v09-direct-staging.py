@@ -321,9 +321,15 @@ def run_acceptance(run: AcceptanceRun) -> None:
             "mode": "defense",
         },
     ).json()
+    blueprint_data = blueprint.get("data") or {}
     run.assert_condition(
         "qwen_questions_created",
-        bool(blueprint.get("questions") or blueprint.get("question_plan")),
+        bool(
+            blueprint.get("questions")
+            or blueprint.get("question_plan")
+            or blueprint_data.get("questions")
+            or blueprint_data.get("question_plan")
+        ),
         f"no questions in blueprint: {list(blueprint)}",
     )
     usage = run.check(
@@ -333,7 +339,7 @@ def run_acceptance(run: AcceptanceRun) -> None:
     ).json()
     run.assert_condition(
         "usage_ledger_populated",
-        usage.get("total_requests", 0) >= 1,
+        usage.get("completed_calls", 0) >= 1,
         str(usage),
     )
     usage_export = run.check(
@@ -541,13 +547,14 @@ def run_acceptance(run: AcceptanceRun) -> None:
     ).json()
     run.assert_condition(
         "job_history_present",
-        len(jobs["items"]) >= 1,
+        len(jobs) >= 1,
         "job history is empty",
     )
     run.check(
         "job_recovery",
         "POST",
         f"/api/v1/organizations/{org}/jobs/recover",
+        expected=202,
     )
     audit = run.check(
         "audit_list",
@@ -585,7 +592,7 @@ def run_acceptance(run: AcceptanceRun) -> None:
     ).json()
     run.assert_condition(
         "voice_provider_configured",
-        voice["configured"] is True,
+        voice["ready"] is True,
         str(voice),
     )
 

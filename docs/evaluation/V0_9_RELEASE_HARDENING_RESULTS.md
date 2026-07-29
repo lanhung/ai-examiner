@@ -106,3 +106,9 @@ recovery and 24-hour observation gates remain blocked.
 See
 `docs/deployment/V0_9_SEETACLOUD_DIRECT_PROCESS_REHEARSAL.md`
 for the sanitized deployment record and rollback boundary.
+
+The subsequent isolated deployed acceptance passed 45 of 45 HTTP checks, including
+a real Qwen Plus blueprint. It also found and fixed a mismatch between public model
+policy task names and internal Agent names. See
+`docs/evaluation/V0_9_DEPLOYED_ACCEPTANCE_RESULTS.md` and
+`docs/evaluation/evidence/v0_9/direct-process-acceptance.json`.
