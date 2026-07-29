@@ -7,7 +7,7 @@ require_command sha256sum
 require_file "$ENTERPRISE_ENV_PATH"
 
 BACKUP_ROOT="${ENTERPRISE_BACKUP_ROOT:-$(
-  enterprise_env_value ENTERPRISE_BACKUP_ROOT "$ENTERPRISE_ROOT/data/enterprise-backups"
+  enterprise_env_value ENTERPRISE_BACKUP_ROOT "$ENTERPRISE_ROOT/backups/enterprise"
 )}"
 if [[ "$BACKUP_ROOT" != /* ]]; then
   BACKUP_ROOT="$ENTERPRISE_ROOT/${BACKUP_ROOT#./}"

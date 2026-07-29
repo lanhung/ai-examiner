@@ -27,4 +27,5 @@ data/backups/*
 !data/backups/.gitkeep
 dist/
 logs/
+backups/
 *.egg-info/

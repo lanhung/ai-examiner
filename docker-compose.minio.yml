@@ -77,7 +77,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
       S3_BUCKET: ${S3_BUCKET:-ai-examiner}
     volumes:
-      - ${ENTERPRISE_BACKUP_ROOT:-./data/enterprise-backups}:/backup
+      - ${ENTERPRISE_BACKUP_ROOT:-./backups/enterprise}:/backup
     entrypoint: ["/bin/sh"]
     depends_on:
       minio:

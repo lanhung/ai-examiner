@@ -137,7 +137,8 @@ objects-complete         # object mirror completion marker
 service remains online. Object data is copied with `mc mirror`. SHA-256 covers every
 artifact. `.env` and provider credentials are never included.
 
-The default path is `data/enterprise-backups`, but production should set
+The default path is `backups/enterprise`, deliberately outside the live
+application data bind mount. Production should set
 `ENTERPRISE_BACKUP_ROOT` to a separately mounted encrypted destination and copy
 completed sets off-host.
 
@@ -170,6 +171,11 @@ The script:
 7. runs additive migrations to the current head;
 8. verifies health, readiness, least privilege and RLS;
 9. writes `disaster-recovery.json` with measured RPO and RTO.
+
+The restore process also overrides `HOST_DATA_DIR` with a dedicated directory
+under `backups/restore-data/<restore-project>`. It refuses to reuse the live
+application bind mount, so local scratch files from the rehearsal cannot alter
+the production data directory.
 
 The restored project is retained for human inspection. Volume removal is a
 separate, explicit operator action after evidence review.

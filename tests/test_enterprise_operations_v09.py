@@ -110,6 +110,9 @@ def test_enterprise_scripts_are_fail_closed_and_non_destructive() -> None:
     assert "ai-examiner-restore-" in restore
     assert "refusing non-empty target" in restore
     assert "pg_restore --exit-on-error" in restore
+    assert "backups/restore-data" in restore
+    assert 'export HOST_DATA_DIR="$RESTORE_HOST_DATA_DIR"' in restore
+    assert "isolated from live application data" in restore
 
     verify = scripts["verify-enterprise.sh"]
     assert "WHERE rolname = :'app_user';" in verify
@@ -158,6 +161,8 @@ def test_enterprise_example_contains_placeholders_without_provider_keys() -> Non
     )
     for name in required:
         assert name in example
+    assert "ENTERPRISE_BACKUP_ROOT=./backups/enterprise" in example
+    assert "ENTERPRISE_BACKUP_ROOT=./data/" not in example
     assert not re.search(
         r"(sk-proj-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|"
         r"AIza[0-9A-Za-z_-]{20,})",

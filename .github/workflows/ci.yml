@@ -113,7 +113,7 @@ jobs:
           MODEL_GOVERNANCE_ENABLED=true
           MODEL_RATE_LIMIT_BACKEND=redis
           MODEL_RATE_LIMIT_REQUIRED=true
-          ENTERPRISE_BACKUP_ROOT=./data/enterprise-backups-ci
+          ENTERPRISE_BACKUP_ROOT=./backups/enterprise-ci
           ENTERPRISE_RPO_HOURS=24
           ENTERPRISE_RTO_SECONDS=14400
           EOF
@@ -179,3 +179,4 @@ jobs:
             -f docker-compose.prod.yml \
             -f docker-compose.enterprise.yml \
             down --remove-orphans -v || true
+          rm -rf "backups/restore-data/$RESTORE_PROJECT_NAME"

@@ -18,7 +18,7 @@ require_file "$BACKUP_SET/metadata.json"
 
 BACKUP_SET="$(realpath "$BACKUP_SET")"
 BACKUP_ROOT="${ENTERPRISE_BACKUP_ROOT:-$(
-  enterprise_env_value ENTERPRISE_BACKUP_ROOT "$ENTERPRISE_ROOT/data/enterprise-backups"
+  enterprise_env_value ENTERPRISE_BACKUP_ROOT "$ENTERPRISE_ROOT/backups/enterprise"
 )}"
 if [[ "$BACKUP_ROOT" != /* ]]; then
   BACKUP_ROOT="$ENTERPRISE_ROOT/${BACKUP_ROOT#./}"
@@ -60,6 +60,20 @@ export APP_BIND_ADDRESS=127.0.0.1
 export APP_PORT="${RESTORE_APP_PORT:-18080}"
 export USE_HTTPS=false
 export USE_OBSERVABILITY=false
+LIVE_HOST_DATA_DIR="${HOST_DATA_DIR:-$(
+  enterprise_env_value HOST_DATA_DIR "$ENTERPRISE_ROOT/data"
+)}"
+RESTORE_HOST_DATA_DIR="${RESTORE_HOST_DATA_DIR:-$(
+  printf '%s/backups/restore-data/%s' "$ENTERPRISE_ROOT" "$RESTORE_PROJECT_NAME"
+)}"
+LIVE_HOST_DATA_DIR="$(realpath -m "$LIVE_HOST_DATA_DIR")"
+RESTORE_HOST_DATA_DIR="$(realpath -m "$RESTORE_HOST_DATA_DIR")"
+if [[ "$RESTORE_HOST_DATA_DIR" == "$LIVE_HOST_DATA_DIR" ]]; then
+  echo "Restore data directory must be isolated from live application data" >&2
+  exit 3
+fi
+mkdir -p "$RESTORE_HOST_DATA_DIR"
+export HOST_DATA_DIR="$RESTORE_HOST_DATA_DIR"
 enterprise_compose_files
 
 enterprise_compose up -d postgres
