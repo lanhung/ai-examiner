@@ -121,12 +121,18 @@ jobs:
           chmod +x deploy/enterprise/*.sh
       - name: Start and verify enterprise profile
         run: |
-          docker compose \
-            --env-file "$APP_ENV_FILE" \
-            -f docker-compose.yml \
-            -f docker-compose.prod.yml \
-            -f docker-compose.enterprise.yml \
-            up -d --build --remove-orphans
+          compose=(
+            docker compose
+            --env-file "$APP_ENV_FILE"
+            -f docker-compose.yml
+            -f docker-compose.prod.yml
+            -f docker-compose.enterprise.yml
+          )
+          if ! "${compose[@]}" up -d --build --remove-orphans; then
+            "${compose[@]}" ps -a || true
+            "${compose[@]}" logs --no-color postgres database-bootstrap || true
+            exit 1
+          fi
           deploy/enterprise/verify-enterprise.sh
       - name: Verify restart persistence
         run: |

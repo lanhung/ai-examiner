@@ -41,17 +41,16 @@ def prepare_roles() -> str:
     with psycopg.connect(_database_dsn(), autocommit=True) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
-                sql.SQL(
-                    "DO $$ BEGIN "
-                    "IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {runtime}) "
-                    "THEN CREATE ROLE {runtime_identifier} NOLOGIN NOSUPERUSER "
-                    "NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; "
-                    "END IF; END $$"
-                ).format(
-                    runtime=sql.Literal(RUNTIME_ROLE),
-                    runtime_identifier=sql.Identifier(RUNTIME_ROLE),
-                )
+                "SELECT 1 FROM pg_roles WHERE rolname = %s",
+                (RUNTIME_ROLE,),
             )
+            if cursor.fetchone() is None:
+                cursor.execute(
+                    sql.SQL(
+                        "CREATE ROLE {} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE "
+                        "NOINHERIT NOBYPASSRLS"
+                    ).format(sql.Identifier(RUNTIME_ROLE))
+                )
             cursor.execute(
                 "SELECT 1 FROM pg_roles WHERE rolname = %s",
                 (username,),
