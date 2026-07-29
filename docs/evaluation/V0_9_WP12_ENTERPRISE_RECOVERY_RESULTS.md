@@ -1,8 +1,8 @@
 # v0.9 WP-12 Enterprise Compose and Recovery Evaluation
 
-Status: implementation and deterministic local gates complete; Linux Compose and
-isolated restore run in GitHub Actions. Vultr staging evidence remains an external
-promotion gate until the operator runs the documented rehearsal.
+Status: implementation, deterministic local gates, Linux Compose and isolated
+restore are complete. Vultr staging evidence remains an external promotion gate
+until the operator runs the documented rehearsal.
 
 ## Local result
 
@@ -57,6 +57,21 @@ The `enterprise-compose` GitHub Actions job:
 8. re-runs application and RLS verification;
 9. checks the 24-hour RPO and four-hour RTO targets;
 10. removes only the disposable CI project volumes.
+
+Accepted CI evidence:
+
+- run:
+  [30417244788](https://github.com/lanhung/ai-examiner/actions/runs/30417244788);
+- source commit: `4058921695c76ab1e895ac951d828d94627416a6`;
+- Alembic revision: `20260728_0016`;
+- runtime login, FORCE RLS and immutable-audit checks: passed;
+- manifest and database restore verification: passed;
+- measured RPO: 0 seconds against an 86,400-second target;
+- measured RTO: 27 seconds against a 14,400-second target.
+
+The CI drill uses Mock model execution and omits MinIO to keep the process gate
+deterministic. The Vultr promotion drill below must enable MinIO so database and
+object recovery are both exercised on the target deployment topology.
 
 ## Held external gate
 

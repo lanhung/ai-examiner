@@ -14,6 +14,9 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   RPO/RTO evidence and non-destructive update/application rollback scripts.
 - Add deterministic operations tests and a Linux Compose restart plus
   backup/restore rehearsal in GitHub Actions.
+- Verify the Linux enterprise recovery process against PostgreSQL 17, including
+  least-privilege roles, FORCE RLS, immutable audit controls, restart persistence,
+  manifest validation and an isolated 27-second restore rehearsal.
 - Add WP-11 failure-isolated OpenTelemetry instrumentation for FastAPI,
   SQLAlchemy, HTTPX and Celery with allowlist-based span redaction.
 - Add backward-compatible worker task envelope v2 request and W3C trace

@@ -293,9 +293,9 @@ Implementation evidence:
 
 ## WP-12: Enterprise Compose and recovery
 
-Status: implemented on `research/v0.9.0`; deterministic gates are complete.
-Linux Compose backup/restore rehearsal and the Vultr staging report remain required
-before release promotion.
+Status: implemented on `research/v0.9.0`; deterministic gates and the Linux
+Compose backup/restore rehearsal are complete. The Vultr staging report remains
+required before release promotion.
 
 Deliver:
 
