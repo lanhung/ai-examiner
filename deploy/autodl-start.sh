@@ -2,7 +2,7 @@
 set -uo pipefail
 
 umask 077
-ROOT="/root/autodl-tmp/ai-examiner-mvp/ai-examiner-mvp-v0.4.0"
+ROOT="${AI_EXAMINER_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 OLLAMA_MODELS="${OLLAMA_MODELS:-/root/autodl-tmp/ollama-models}"
 export OLLAMA_MODELS
 
@@ -18,6 +18,16 @@ fi
 
 cd "$ROOT"
 mkdir -p logs
+
+PORT="${APP_PORT:-}"
+if [[ -z "$PORT" && -f .env ]]; then
+  PORT="$(sed -nE 's/^APP_PORT=([0-9]+)$/\1/p' .env | tail -1)"
+fi
+PORT="${PORT:-6008}"
+if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+  echo "Invalid APP_PORT: $PORT" >&2
+  exit 1
+fi
 
 ollama_api_ready() {
   curl -fsS --max-time 3 http://127.0.0.1:11434/api/tags >/dev/null 2>&1
@@ -53,30 +63,30 @@ if [[ "$start_ollama" == true ]]; then
   done
 fi
 
-if ! curl -fsS --max-time 3 http://127.0.0.1:6008/health >/dev/null 2>&1; then
+if ! curl -fsS --max-time 3 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
   existing_pid=$(cat logs/uvicorn.pid 2>/dev/null || true)
   if [[ -n "$existing_pid" ]] && kill -0 "$existing_pid" 2>/dev/null; then
     for _ in $(seq 1 30); do
-      curl -fsS --max-time 3 http://127.0.0.1:6008/health >/dev/null 2>&1 && break
+      curl -fsS --max-time 3 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 && break
       sleep 1
     done
   else
     stamp=$(date +%Y%m%d-%H%M%S)
-    log="logs/uvicorn-6008-$stamp.log"
+    log="logs/uvicorn-$PORT-$stamp.log"
     nohup .venv/bin/uvicorn ai_examiner.main:app \
-      --host 0.0.0.0 --port 6008 >"$log" 2>&1 &
+      --host 0.0.0.0 --port "$PORT" >"$log" 2>&1 &
     echo $! >logs/uvicorn.pid
-    ln -sfn "$(basename "$log")" logs/uvicorn-6008.log
+    ln -sfn "$(basename "$log")" "logs/uvicorn-$PORT.log"
   fi
 fi
 
 for _ in $(seq 1 30); do
-  if curl -fsS --max-time 3 http://127.0.0.1:6008/health >/dev/null 2>&1; then
-    echo "AI Examiner is ready on port 6008"
+  if curl -fsS --max-time 3 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+    echo "AI Examiner is ready on port $PORT"
     exit 0
   fi
   sleep 1
 done
 
-echo "AI Examiner failed to become healthy; check $ROOT/logs/uvicorn-6008.log" >&2
+echo "AI Examiner failed to become healthy; check $ROOT/logs/uvicorn-$PORT.log" >&2
 exit 1

@@ -13,6 +13,9 @@
   desktop/mobile UI, staging observation and recovery evidence are complete.
 - Fixed Alembic configuration discovery for Wheel/direct-process deployments that
   start from the repository root.
+- Removed the historical v0.4 path and port assumptions from the AutoDL/SeetaCloud
+  startup script so each worktree starts its own virtual environment and configured
+  port.
 
 AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Versioning；开发版本使用 PEP 440 标识，例如 `0.5.0.dev0`。
 
