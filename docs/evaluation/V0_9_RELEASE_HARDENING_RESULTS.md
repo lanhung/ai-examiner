@@ -73,7 +73,7 @@ tracked-source provider-key scan     zero findings
 Alembic heads                        1 (20260728_0016)
 route-policy metadata                complete
 Planner v6 frozen evidence           7 templates / 210 cases
-release evidence                     13 blocked external artifacts
+release evidence                     1 passed / 12 blocked external artifacts
 ```
 
 The bounded Qwen Plus governance probe passed:
@@ -81,12 +81,12 @@ The bounded Qwen Plus governance probe passed:
 ```text
 input Token                          126
 output Token                         6
-observed latency                     1,537 ms
+observed latency                     1,674 ms
 estimated cost                       USD 0.00001565
 provider/model ledger match          yes
 prompt/response/key retained         no
 ```
 
-This first probe was run before the WP-14 source commit and is not itself promotion
-evidence. A second probe must be run against the committed source and archived as
+The accepted probe is bound to source commit
+`94cedb8c2dae4ff04ad4c2af51fd71de9e4fd5dd` and archived as
 `docs/evaluation/evidence/v0_9/quota-model-policy.json`.

@@ -28,11 +28,12 @@ Tracked-source secret scan    clean
 Alembic heads                 1 (20260728_0016)
 Route-policy completeness     passed
 Planner v6 frozen evidence    passed (7 templates / 210 cases)
-Real Qwen governance probe    passed
-Release promotion             held (13 external artifacts)
+Real Qwen governance probe    passed and committed
+Release promotion             held (12 external artifacts)
 ```
 
-The Qwen Plus probe recorded 126 input Token, 6 output Token, 1,537 ms observed
+The committed-source Qwen Plus probe recorded 126 input Token, 6 output Token,
+1,674 ms observed
 latency and an estimated cost of USD 0.00001565. Provider/model identity matched the
 immutable usage ledger; prompt, response and key values were not retained.
 

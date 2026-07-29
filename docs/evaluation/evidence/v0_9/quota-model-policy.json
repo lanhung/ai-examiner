@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-29T06:09:18.348502+00:00",
+  "source_commit": "94cedb8c2dae4ff04ad4c2af51fd71de9e4fd5dd",
+  "environment": "real_provider_governance_probe",
+  "status": "passed",
+  "requested_profile": "qwen:qwen-plus",
+  "actual_provider": "qwen",
+  "actual_model": "qwen-plus",
+  "ledger_status": "completed",
+  "policy_version": 1,
+  "policy_digest": "f5ae4f6c639b8bc74774287a9b5469e085463a41618ae7c49bc1d80f930112f9",
+  "input_tokens": 126,
+  "output_tokens": 6,
+  "latency_ms": 1674,
+  "estimated_cost_usd": 1.565e-05,
+  "provider_result_matches_ledger": true,
+  "prompt_content_recorded": false,
+  "response_content_recorded": false,
+  "api_key_recorded": false
+}
