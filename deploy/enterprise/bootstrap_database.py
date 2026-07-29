@@ -14,6 +14,8 @@ from sqlalchemy.engine import make_url
 
 ROLE_PATTERN = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
 RUNTIME_ROLE = "ai_examiner_runtime"
+AUDIT_MAINTENANCE_ROLE = "ai_examiner_audit_maintenance"
+GLOBAL_NOLOGIN_ROLES = (RUNTIME_ROLE, AUDIT_MAINTENANCE_ROLE)
 
 
 def _database_dsn() -> str:
@@ -40,17 +42,18 @@ def prepare_roles() -> str:
     username, password = _app_credentials()
     with psycopg.connect(_database_dsn(), autocommit=True) as connection:
         with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT 1 FROM pg_roles WHERE rolname = %s",
-                (RUNTIME_ROLE,),
-            )
-            if cursor.fetchone() is None:
+            for role in GLOBAL_NOLOGIN_ROLES:
                 cursor.execute(
-                    sql.SQL(
-                        "CREATE ROLE {} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE "
-                        "NOINHERIT NOBYPASSRLS"
-                    ).format(sql.Identifier(RUNTIME_ROLE))
+                    "SELECT 1 FROM pg_roles WHERE rolname = %s",
+                    (role,),
                 )
+                if cursor.fetchone() is None:
+                    cursor.execute(
+                        sql.SQL(
+                            "CREATE ROLE {} NOLOGIN NOSUPERUSER NOCREATEDB "
+                            "NOCREATEROLE NOINHERIT NOBYPASSRLS"
+                        ).format(sql.Identifier(role))
+                    )
             cursor.execute(
                 "SELECT 1 FROM pg_roles WHERE rolname = %s",
                 (username,),

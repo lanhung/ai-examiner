@@ -53,6 +53,10 @@ def test_enterprise_compose_separates_runtime_and_migration_roles() -> None:
         services["database-bootstrap"]["environment"]["STORAGE_LOCAL_ROOT"]
         == "/app/data/objects"
     )
+    bootstrap = (
+        ROOT / "deploy" / "enterprise" / "bootstrap_database.py"
+    ).read_text(encoding="utf-8")
+    assert 'AUDIT_MAINTENANCE_ROLE = "ai_examiner_audit_maintenance"' in bootstrap
     assert services["postgres"]["volumes"] == [
         "postgres-data:/var/lib/postgresql/data"
     ]
@@ -117,6 +121,7 @@ def test_enterprise_scripts_are_fail_closed_and_non_destructive() -> None:
     verify = scripts["verify-enterprise.sh"]
     assert "WHERE rolname = :'app_user';" in verify
     assert "printf '%s\\n'" in verify
+    assert "Audit maintenance role does not satisfy" in verify
 
 
 def test_enterprise_shell_scripts_parse_when_bash_is_available() -> None:

@@ -39,6 +39,19 @@ if [[ "$ROLE_RESULT" != "true,false,false" ]]; then
   exit 5
 fi
 
+AUDIT_ROLE_RESULT="$(
+  enterprise_compose exec -T postgres sh -ec \
+    'psql --no-psqlrc --tuples-only --no-align \
+      --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+      --command "SELECT rolcanlogin::text || chr(44) || rolsuper::text ||
+        chr(44) || rolbypassrls::text FROM pg_roles
+        WHERE rolname = '\''ai_examiner_audit_maintenance'\''"'
+)"
+if [[ "$AUDIT_ROLE_RESULT" != "false,false,false" ]]; then
+  echo "Audit maintenance role does not satisfy least-privilege checks" >&2
+  exit 5
+fi
+
 RLS_RESULT="$(
   enterprise_compose run --rm --no-deps database-bootstrap \
     python /app/deploy/verify-v09-rls.py
