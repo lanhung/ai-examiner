@@ -6,6 +6,7 @@ from ai_examiner.config import Settings
 from ai_examiner.model_governance_probe import run_probe
 from ai_examiner.providers.base import ModelProvider, ProviderResult
 from ai_examiner.release_hardening import (
+    _evidence_validation_errors,
     ai_regression_check,
     build_release_report,
     migration_head_check,
@@ -118,3 +119,55 @@ def test_real_provider_probe_records_governed_ledger_without_content(monkeypatch
     assert report["prompt_content_recorded"] is False
     assert report["response_content_recorded"] is False
     assert report["api_key_recorded"] is False
+
+
+def test_specialized_release_evidence_requires_real_measurements():
+    base = {
+        "generated_at": "2026-07-29T00:00:00+00:00",
+        "source_commit": "a" * 40,
+        "status": "passed",
+    }
+
+    assert _evidence_validation_errors(
+        "quota_model_policy",
+        {
+            **base,
+            "actual_provider": "qwen",
+            "actual_model": "qwen-plus",
+            "ledger_status": "completed",
+            "provider_result_matches_ledger": True,
+            "prompt_content_recorded": False,
+            "response_content_recorded": False,
+            "api_key_recorded": False,
+        },
+    ) == []
+    assert _evidence_validation_errors(
+        "staging_observation",
+        {
+            **base,
+            "observation_hours": 2,
+            "open_release_blockers": 1,
+            "tls_verified": False,
+            "oidc_verified": False,
+        },
+    ) == [
+        "observation_period_too_short",
+        "open_release_blockers",
+        "tls_not_verified",
+        "oidc_not_verified",
+    ]
+    assert _evidence_validation_errors(
+        "disaster_recovery",
+        {
+            **base,
+            "rpo_seconds": 90_000,
+            "rto_seconds": 15_000,
+            "object_restore_verified": False,
+            "rollback_success": False,
+        },
+    ) == [
+        "rpo_target_missed",
+        "rto_target_missed",
+        "object_restore_not_verified",
+        "rollback_not_verified",
+    ]

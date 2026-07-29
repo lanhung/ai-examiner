@@ -66,7 +66,7 @@ promotion decision. It exits with status 2 while these artifacts are absent.
 ## Local verification on 2026-07-29
 
 ```text
-pytest collection                    296 tests
+complete pytest suite                297 passed
 complete deterministic gate          passed
 dependency audit                     no known vulnerabilities
 tracked-source provider-key scan     zero findings

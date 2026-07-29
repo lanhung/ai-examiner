@@ -21,7 +21,7 @@ version intentionally stays `0.8.0.dev0`.
 WP-14 local verification:
 
 ```text
-Full pytest                   296 passed
+Full pytest                   297 passed
 Deterministic release gate    ready
 Dependency audit              no known vulnerabilities
 Tracked-source secret scan    clean
