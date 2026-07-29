@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 
 from ai_examiner.config import Settings
+from ai_examiner.db import _alembic_config_path
 from ai_examiner.model_governance_probe import run_probe
 from ai_examiner.providers.base import ModelProvider, ProviderResult
 from ai_examiner.release_hardening import (
@@ -171,3 +172,11 @@ def test_specialized_release_evidence_requires_real_measurements():
         "object_restore_not_verified",
         "rollback_not_verified",
     ]
+
+
+def test_wheel_runtime_finds_repository_alembic_config(monkeypatch, tmp_path):
+    config = tmp_path / "alembic.ini"
+    config.write_text("[alembic]\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    assert _alembic_config_path() == config

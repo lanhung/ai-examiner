@@ -77,7 +77,7 @@ def init_db() -> None:
 
     from . import models  # noqa: F401
 
-    config_path = Path(__file__).resolve().parents[2] / "alembic.ini"
+    config_path = _alembic_config_path()
     if config_path.exists():
         from alembic import command
         from alembic.config import Config
@@ -95,6 +95,14 @@ def init_db() -> None:
         db.commit()
         seed_prompt_registry(db, settings.prompt_dir)
         seed_builtin_templates(db)
+
+
+def _alembic_config_path() -> Path:
+    candidates = (
+        Path.cwd() / "alembic.ini",
+        Path(__file__).resolve().parents[2] / "alembic.ini",
+    )
+    return next((path for path in candidates if path.is_file()), candidates[-1])
 
 
 def get_db() -> Generator[Session, None, None]:

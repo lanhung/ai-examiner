@@ -11,6 +11,8 @@
   enterprise operator manual.
 - Preserved the research package version and held the RC tag until Vultr, OIDC,
   desktop/mobile UI, staging observation and recovery evidence are complete.
+- Fixed Alembic configuration discovery for Wheel/direct-process deployments that
+  start from the repository root.
 
 AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Versioning；开发版本使用 PEP 440 标识，例如 `0.5.0.dev0`。
 
