@@ -16,6 +16,8 @@
 - Removed the historical v0.4 path and port assumptions from the AutoDL/SeetaCloud
   startup script so each worktree starts its own virtual environment and configured
   port.
+- Limited local Ollama startup and model waits to deployments that explicitly select
+  `MODEL_PROVIDER=ollama`.
 
 AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Versioning；开发版本使用 PEP 440 标识，例如 `0.5.0.dev0`。
 
