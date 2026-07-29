@@ -17,6 +17,31 @@ jobs:
           APP_ENV_FILE: .env.example
           GRAFANA_ADMIN_PASSWORD: ci-observability-only
         run: docker compose -f docker-compose.yml -f docker-compose.observability.yml config --quiet
+      - name: Validate enterprise Compose profiles and shell syntax
+        env:
+          APP_ENV_FILE: .env.enterprise.example
+          ENTERPRISE_DATABASE_URL: postgresql+psycopg://runtime:runtime-ci-password@postgres:5432/ai_examiner
+          ENTERPRISE_MIGRATION_DATABASE_URL: postgresql+psycopg://migration:migration-ci-password@postgres:5432/ai_examiner
+          POSTGRES_MIGRATION_USER: migration
+          POSTGRES_MIGRATION_PASSWORD: migration-ci-password
+          POSTGRES_APP_USER: runtime
+          POSTGRES_APP_PASSWORD: runtime-ci-password
+          MINIO_ROOT_USER: minio-root
+          MINIO_ROOT_PASSWORD: minio-root-ci-password
+          S3_ACCESS_KEY_ID: examiner-storage
+          S3_SECRET_ACCESS_KEY: examiner-storage-ci-password
+          GRAFANA_ADMIN_PASSWORD: grafana-ci-password
+        run: |
+          bash -n deploy/enterprise/*.sh
+          docker compose \
+            --env-file .env.enterprise.example \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            -f docker-compose.enterprise.yml \
+            -f docker-compose.minio.yml \
+            -f docker-compose.observability.yml \
+            -f docker-compose.https.yml \
+            config --quiet
       - run: uv run pytest --cov=ai_examiner --cov-report=term-missing
   postgres:
     runs-on: ubuntu-latest
@@ -50,3 +75,101 @@ jobs:
       - run: uv run alembic current
       - run: uv run python deploy/verify-v09-rls.py
       - run: uv run pytest --cov=ai_examiner --cov-report=term-missing
+  enterprise-compose:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV_FILE: .env.enterprise-ci
+      COMPOSE_PROJECT_NAME: ai-examiner-enterprise-ci
+      RESTORE_PROJECT_NAME: ai-examiner-restore-ci
+      RESTORE_APP_PORT: "18080"
+      USE_MINIO: "false"
+      USE_OBSERVABILITY: "false"
+      USE_HTTPS: "false"
+      VERIFY_READY: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create isolated enterprise test environment
+        run: |
+          cat > .env.enterprise-ci <<'EOF'
+          APP_ENV=production
+          APP_BIND_ADDRESS=127.0.0.1
+          APP_PORT=8000
+          POSTGRES_DB=ai_examiner
+          POSTGRES_MIGRATION_USER=examiner_migration
+          POSTGRES_MIGRATION_PASSWORD=migration-ci-password-0001
+          POSTGRES_APP_USER=examiner_runtime_login
+          POSTGRES_APP_PASSWORD=runtime-ci-password-0000001
+          ENTERPRISE_MIGRATION_DATABASE_URL=postgresql+psycopg://examiner_migration:migration-ci-password-0001@postgres:5432/ai_examiner
+          ENTERPRISE_DATABASE_URL=postgresql+psycopg://examiner_runtime_login:runtime-ci-password-0000001@postgres:5432/ai_examiner
+          AUTH_MODE=oidc
+          OIDC_ISSUER_URL=https://identity.invalid
+          OIDC_AUDIENCE=ai-examiner-ci
+          OIDC_CLIENT_ID=ai-examiner-ci
+          OIDC_REDIRECT_URI=https://examiner.invalid/api/v1/auth/callback
+          AUTH_SESSION_SECRET=ci-auth-session-secret-000000000000000000000000
+          AUDIT_IP_HASH_KEY=ci-audit-ip-secret-000000000000000000000000
+          MEMORY_IDENTITY_SECRET=ci-memory-secret-000000000000000000000000
+          MODEL_PROVIDER=mock
+          MODEL_GOVERNANCE_ENABLED=true
+          MODEL_RATE_LIMIT_BACKEND=redis
+          MODEL_RATE_LIMIT_REQUIRED=true
+          ENTERPRISE_BACKUP_ROOT=./data/enterprise-backups-ci
+          ENTERPRISE_RPO_HOURS=24
+          ENTERPRISE_RTO_SECONDS=14400
+          EOF
+          chmod 600 .env.enterprise-ci
+          chmod +x deploy/enterprise/*.sh
+      - name: Start and verify enterprise profile
+        run: |
+          docker compose \
+            --env-file "$APP_ENV_FILE" \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            -f docker-compose.enterprise.yml \
+            up -d --build --remove-orphans
+          deploy/enterprise/verify-enterprise.sh
+      - name: Verify restart persistence
+        run: |
+          BEFORE="$(
+            docker compose \
+              --env-file "$APP_ENV_FILE" \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              -f docker-compose.enterprise.yml \
+              exec -T postgres sh -ec \
+              'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT version_num FROM alembic_version"'
+          )"
+          docker compose \
+            --env-file "$APP_ENV_FILE" \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            -f docker-compose.enterprise.yml \
+            restart postgres
+          deploy/enterprise/verify-enterprise.sh
+          AFTER="$(
+            docker compose \
+              --env-file "$APP_ENV_FILE" \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              -f docker-compose.enterprise.yml \
+              exec -T postgres sh -ec \
+              'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT version_num FROM alembic_version"'
+          )"
+          test "$BEFORE" = "$AFTER"
+      - name: Rehearse backup and isolated restore
+        run: deploy/enterprise/rehearse-enterprise.sh
+      - name: Clean isolated Compose projects
+        if: always()
+        run: |
+          COMPOSE_PROJECT_NAME="$RESTORE_PROJECT_NAME" docker compose \
+            --env-file "$APP_ENV_FILE" \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            -f docker-compose.enterprise.yml \
+            down --remove-orphans -v || true
+          COMPOSE_PROJECT_NAME=ai-examiner-enterprise-ci docker compose \
+            --env-file "$APP_ENV_FILE" \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            -f docker-compose.enterprise.yml \
+            down --remove-orphans -v || true

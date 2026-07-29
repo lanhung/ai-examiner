@@ -38,6 +38,10 @@ Research implementation progress:
 - WP-08 implemented: append-only tenant audit events, request/trace correlation,
   denial and task-terminal evidence, redacted list/export APIs and privileged
   retention boundaries;
+- WP-09 through WP-11 implemented: model governance, quota, reviewed data
+  lifecycle and privacy-preserving OpenTelemetry operations;
+- WP-12 implemented: recoverable enterprise Compose, separate database roles,
+  consistent database/object backups and guarded isolated restore;
 - the v0.9 research branch remains non-deployable until the complete gate passes.
 
 Authoritative research documents:
@@ -52,6 +56,7 @@ Authoritative research documents:
 - `docs/evaluation/V0_9_ENTERPRISE_EVALUATION_PLAN.md`;
 - `docs/product/V0_9_IMPLEMENTATION_BACKLOG.md`;
 - `docs/deployment/V0_9_DATA_AND_DEPLOYMENT_MIGRATION.md`.
+- `docs/deployment/V0_9_ENTERPRISE_COMPOSE_AND_RECOVERY.md`.
 
 ## v0.8 current implementation
 

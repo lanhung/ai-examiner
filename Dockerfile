@@ -13,6 +13,8 @@ COPY src /app/src
 COPY prompts /app/prompts
 COPY alembic.ini /app/alembic.ini
 COPY migrations /app/migrations
+COPY deploy/enterprise /app/deploy/enterprise
+COPY deploy/verify-v09-rls.py /app/deploy/verify-v09-rls.py
 RUN pip install --upgrade pip && pip install ".[providers]"
 RUN mkdir -p /app/data/uploads /app/data/evidence /app/data/exports /app/data/backups
 

@@ -275,14 +275,14 @@ contract.
 The final implementation must retain a simple operator workflow:
 
 ```bash
-./deploy/backup-enterprise.sh
+./deploy/enterprise/backup-enterprise.sh
 git pull --ff-only origin main
 docker compose -f docker-compose.yml -f docker-compose.enterprise.yml build
 docker compose -f docker-compose.yml -f docker-compose.enterprise.yml \
   run --rm api alembic upgrade head
 docker compose -f docker-compose.yml -f docker-compose.enterprise.yml \
   up -d --remove-orphans
-./deploy/verify-enterprise.sh
+./deploy/enterprise/verify-enterprise.sh
 ```
 
 Normal updates never use `docker compose down -v`.

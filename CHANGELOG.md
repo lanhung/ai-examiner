@@ -6,6 +6,14 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ### Added
 
+- Add WP-12 recoverable enterprise Docker Compose with PostgreSQL, Redis, API,
+  worker and Caddy plus optional private MinIO and observability overlays.
+- Separate migration and runtime database credentials, force external schema
+  management and verify the application login remains subject to RLS.
+- Add consistent PostgreSQL/object backup manifests, guarded isolated restore,
+  RPO/RTO evidence and non-destructive update/application rollback scripts.
+- Add deterministic operations tests and a Linux Compose restart plus
+  backup/restore rehearsal in GitHub Actions.
 - Add WP-11 failure-isolated OpenTelemetry instrumentation for FastAPI,
   SQLAlchemy, HTTPX and Celery with allowlist-based span redaction.
 - Add backward-compatible worker task envelope v2 request and W3C trace

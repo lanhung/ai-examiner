@@ -293,6 +293,10 @@ Implementation evidence:
 
 ## WP-12: Enterprise Compose and recovery
 
+Status: implemented on `research/v0.9.0`; deterministic gates are complete.
+Linux Compose backup/restore rehearsal and the Vultr staging report remain required
+before release promotion.
+
 Deliver:
 
 - PostgreSQL/Redis/API/worker/Caddy profile;
@@ -308,6 +312,16 @@ Acceptance:
 - restart preserves all authoritative data;
 - disaster rehearsal meets agreed RPO/RTO;
 - normal update never removes volumes.
+
+Implementation evidence:
+
+- `docker-compose.enterprise.yml`;
+- `.env.enterprise.example`;
+- `deploy/enterprise/`;
+- `tests/test_enterprise_operations_v09.py`;
+- `.github/workflows/ci.yml` enterprise process rehearsal;
+- `docs/deployment/V0_9_ENTERPRISE_COMPOSE_AND_RECOVERY.md`;
+- `docs/evaluation/V0_9_WP12_ENTERPRISE_RECOVERY_RESULTS.md`.
 
 ## WP-13: Enterprise UI
 

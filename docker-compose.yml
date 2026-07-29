@@ -2,7 +2,7 @@ services:
   ai-examiner:
     build: .
     ports:
-      - "${APP_PORT:-8000}:8000"
+      - "${APP_BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-8000}:8000"
     env_file:
       - ${APP_ENV_FILE:-.env}
     environment:
