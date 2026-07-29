@@ -356,6 +356,10 @@ Implementation evidence:
 
 ## WP-14: Release hardening
 
+Status: implemented on `research/v0.9.0`; deterministic release tooling is complete.
+Promotion remains held until the Vultr/OIDC/UI observation and complete sanitized
+evidence set pass the machine-readable release gate.
+
 Deliver:
 
 - complete enterprise evaluation evidence;
@@ -365,12 +369,32 @@ Deliver:
 - release notes and operator manual;
 - `0.9.0rc1`.
 
+Implementation evidence:
+
+- `src/ai_examiner/release_hardening.py`;
+- `src/ai_examiner/model_governance_probe.py`;
+- `tests/test_release_hardening_v09.py`;
+- `.github/workflows/ci.yml`;
+- `docs/deployment/V0_9_OPERATOR_MANUAL.md`;
+- `docs/evaluation/V0_9_RELEASE_HARDENING_RESULTS.md`;
+- `docs/evaluation/evidence/v0_9/README.md`;
+- `RELEASE_NOTES_v0.9.0-rc.1.md`.
+
 Acceptance:
 
 - every v0.9 release blocker cleared;
 - v0.8 AI behavior gates remain passing;
 - staging observation period completed;
 - rollback rehearsal successful.
+
+Promotion rule:
+
+```bash
+uv run ai-examiner-verify-v09-release --require-release-ready
+```
+
+The command must exit zero and report `status=release_ready`. Until then the package
+version remains `0.8.0.dev0` and no v0.9 tag may be created.
 
 ## Recommended commit sequence
 

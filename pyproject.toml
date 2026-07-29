@@ -50,6 +50,7 @@ dev = [
   "pytest>=8.4,<10.0",
   "pytest-cov>=6.2,<8.0",
   "httpx>=0.28,<1.0",
+  "pip-audit>=2.9,<3.0",
   "ruff>=0.12,<1.0",
 ]
 
@@ -63,6 +64,8 @@ ai-examiner-evaluate-template-relevance = "ai_examiner.template_relevance_cli:ru
 ai-examiner-probe-template-relevance = "ai_examiner.template_relevance_probe_cli:run_template_relevance_probe"
 ai-examiner-bootstrap-admin = "ai_examiner.enterprise_cli:bootstrap_admin"
 ai-examiner-migrate-storage = "ai_examiner.storage_cli:run_storage_migration"
+ai-examiner-verify-v09-release = "ai_examiner.release_hardening:main"
+ai-examiner-probe-model-governance = "ai_examiner.model_governance_probe:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ai_examiner"]

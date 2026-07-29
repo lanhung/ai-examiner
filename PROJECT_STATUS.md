@@ -7,16 +7,36 @@
 - Base candidate: `v0.7.0-rc.2`
 - Release tag: not created
 - Deployment status: research only; not approved for production
-- Alembic head: `20260728_0014`
+- Alembic head: `20260728_0016`
 
-v0.9 WP-01 through WP-13 are implemented. The enterprise line now includes
+v0.9 WP-01 through WP-14 are implemented. The enterprise line now includes
 organization tenancy, OIDC, capability RBAC, PostgreSQL RLS, S3-compatible
 storage, durable jobs, immutable audit, model governance, retention and review,
 OpenTelemetry operations, recoverable Compose and a dedicated enterprise
-administration UI. WP-14 release hardening and Vultr evidence remain. The package
-version intentionally remains `0.8.0.dev0`.
+administration UI. WP-14 adds deterministic release gates, dependency and secret
+scans, a bounded real-provider governance probe, an external evidence contract and
+an operator manual. Vultr/OIDC/UI observation evidence remains, so the package
+version intentionally stays `0.8.0.dev0`.
 
-Current enterprise verification baseline before WP-13:
+WP-14 local verification:
+
+```text
+Full pytest                   296 passed
+Deterministic release gate    ready
+Dependency audit              no known vulnerabilities
+Tracked-source secret scan    clean
+Alembic heads                 1 (20260728_0016)
+Route-policy completeness     passed
+Planner v6 frozen evidence    passed (7 templates / 210 cases)
+Real Qwen governance probe    passed
+Release promotion             held (13 external artifacts)
+```
+
+The Qwen Plus probe recorded 126 input Token, 6 output Token, 1,537 ms observed
+latency and an estimated cost of USD 0.00001565. Provider/model identity matched the
+immutable usage ledger; prompt, response and key values were not retained.
+
+Previous enterprise verification baseline before WP-13:
 
 ```text
 Full pytest                   250 passed

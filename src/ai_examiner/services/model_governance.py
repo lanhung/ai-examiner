@@ -1064,12 +1064,18 @@ class GovernedModelProvider(ModelProvider):
             )
             try:
                 provider = build_provider(self.settings, profile)
+                started = time.perf_counter()
                 result = getattr(provider, method)(
                     agent=agent,
                     instructions=instructions,
                     payload=payload,
                     **kwargs,
                 )
+                if result.latency_ms <= 0:
+                    result.latency_ms = max(
+                        1,
+                        int((time.perf_counter() - started) * 1000),
+                    )
             except Exception as exc:
                 self.governance.fail(reservation)
                 last_error = exc

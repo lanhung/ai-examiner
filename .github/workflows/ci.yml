@@ -11,7 +11,11 @@ jobs:
         with:
           python-version: "3.12"
       - run: uv sync --extra dev
-      - run: uv run ruff check src tests
+      - name: Run tracked-source secret scan
+        run: |
+          uv run ai-examiner-verify-v09-release \
+            --scan-only \
+            --output "$RUNNER_TEMP/v09-static-release-gate.json"
       - name: Validate observability Compose configuration
         env:
           APP_ENV_FILE: .env.example
@@ -42,7 +46,17 @@ jobs:
             -f docker-compose.observability.yml \
             -f docker-compose.https.yml \
             config --quiet
-      - run: uv run pytest --cov=ai_examiner --cov-report=term-missing
+      - name: Run deterministic v0.9 release gate
+        run: |
+          uv run ai-examiner-verify-v09-release \
+            --output "$RUNNER_TEMP/v09-release-gate.json"
+      - name: Upload release-gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v09-release-gate
+          path: ${{ runner.temp }}/v09-*-release-gate.json
+          if-no-files-found: error
   postgres:
     runs-on: ubuntu-latest
     services:

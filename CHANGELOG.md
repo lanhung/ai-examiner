@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.9.0 research - WP-14 release hardening
+
+- Added a machine-readable release gate for tests, lint, JavaScript, migrations,
+  authorization metadata, dependency vulnerabilities, tracked-source secrets and
+  frozen v0.8 AI evidence.
+- Added a bounded real-provider governance probe that records only policy, provider,
+  model, usage, latency and cost metadata.
+- Added sanitized external evidence schemas, CI artifacts, draft RC notes and an
+  enterprise operator manual.
+- Preserved the research package version and held the RC tag until Vultr, OIDC,
+  desktop/mobile UI, staging observation and recovery evidence are complete.
+
 AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Versioning；开发版本使用 PEP 440 标识，例如 `0.5.0.dev0`。
 
 ## [Unreleased]

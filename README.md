@@ -1,6 +1,7 @@
 # AI Examiner v0.8.0 Development and v0.9.0 Research
 
-Current development branch: `develop/v0.8.0` (`0.8.0.dev0`). The v0.7 release
+Current working branch: `research/v0.9.0` (`0.8.0.dev0`). The v0.8 implementation
+line remains available at `develop/v0.8.0`. The v0.7 release
 candidate remains available at `develop/v0.7.0` / `v0.7.0-rc.2`. The stable production
 line remains v0.4.1 and the preserved v0.5 release snapshot remains
 `release/v0.5.0` / `v0.5.0-rc.4` until final acceptance.
@@ -45,6 +46,9 @@ Research implementation progress:
 - WP-13 implemented: dedicated enterprise administration UI with OIDC state,
   organization switching, capability-gated membership, model governance, audit,
   retention and human-review workflows;
+- WP-14 implemented: machine-readable release gates, dependency and tracked-source
+  secret scans, bounded real-provider policy verification, sanitized evidence
+  contracts and an enterprise operator manual;
 - the v0.9 research branch remains non-deployable until the complete gate passes.
 
 Authoritative research documents:
@@ -61,6 +65,8 @@ Authoritative research documents:
 - `docs/product/V0_9_IMPLEMENTATION_BACKLOG.md`;
 - `docs/deployment/V0_9_DATA_AND_DEPLOYMENT_MIGRATION.md`.
 - `docs/deployment/V0_9_ENTERPRISE_COMPOSE_AND_RECOVERY.md`.
+- `docs/deployment/V0_9_OPERATOR_MANUAL.md`.
+- `docs/evaluation/V0_9_RELEASE_HARDENING_RESULTS.md`.
 
 ## v0.8 current implementation
 
