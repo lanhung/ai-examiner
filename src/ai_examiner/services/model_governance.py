@@ -35,6 +35,11 @@ CLASSIFICATION_ORDER = {
     "restricted": 3,
 }
 EXTERNAL_PROVIDERS = frozenset({"openai", "anthropic", "gemini", "qwen"})
+TASK_FAMILY_ALIASES = {
+    "session_planner": "planner",
+    "answer_analyzer": "analyzer",
+    "report_generator": "reporter",
+}
 
 
 class ModelGovernanceError(RuntimeError):
@@ -426,12 +431,17 @@ def _profile_allowed(
         > CLASSIFICATION_ORDER[policy.external_provider_max_classification]
     ):
         return False
+    task_alias = TASK_FAMILY_ALIASES.get(task_type)
     for rule in policy.allowed_profiles_json:
         tasks = rule.get("tasks") or ["*"]
         if (
             rule.get("provider") == provider
             and fnmatchcase(model, str(rule.get("model_pattern") or ""))
-            and ("*" in tasks or task_type in tasks)
+            and (
+                "*" in tasks
+                or task_type in tasks
+                or (task_alias is not None and task_alias in tasks)
+            )
         ):
             return True
     return False

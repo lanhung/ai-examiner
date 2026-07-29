@@ -52,6 +52,11 @@ latency without inventing unavailable audio token counts.
 `OrganizationModelPolicy` is unique per organization and versioned. Its digest is
 copied into each usage row.
 
+Task rules use stable public task families. `planner`, `analyzer`, and `reporter`
+also authorize the internal agent names `session_planner`, `answer_analyzer`, and
+`report_generator`. Exact internal names remain accepted for narrow policies, and
+`*` authorizes every task for the matching provider/model rule.
+
 Policy controls:
 
 - provider and model-pattern allowlist;

@@ -95,6 +95,30 @@ def test_default_policy_is_versioned_and_digest_bound():
     )
 
 
+def test_policy_task_families_match_public_agent_names():
+    _replace_policy(
+        allowed_profiles_json=[
+            {
+                "provider": "mock",
+                "model_pattern": "heuristic-v2",
+                "tasks": ["planner", "analyzer", "reporter"],
+            }
+        ]
+    )
+
+    for task_type in (
+        "session_planner",
+        "answer_analyzer",
+        "report_generator",
+    ):
+        result = _provider().complete_text(
+            agent=task_type,
+            instructions="Run the governed task.",
+            payload={"document_text": "Evidence"},
+        )
+        assert result.provider == "mock"
+
+
 def test_production_requires_governance_and_redis_admission():
     disabled = _settings(
         app_env="production",

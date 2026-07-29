@@ -18,6 +18,11 @@
   port.
 - Limited local Ollama startup and model waits to deployments that explicitly select
   `MODEL_PROVIDER=ollama`.
+- Added an isolated direct-process staging acceptance runner covering enterprise
+  identity, RBAC, local storage, real Qwen planning, governance, audit, jobs,
+  retention, verified deletion, human review, templates and voice configuration.
+- Made public model-policy task families (`planner`, `analyzer`, and `reporter`)
+  authorize their corresponding runtime agent names.
 
 AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Versioning；开发版本使用 PEP 440 标识，例如 `0.5.0.dev0`。
 
