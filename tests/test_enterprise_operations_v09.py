@@ -111,6 +111,10 @@ def test_enterprise_scripts_are_fail_closed_and_non_destructive() -> None:
     assert "refusing non-empty target" in restore
     assert "pg_restore --exit-on-error" in restore
 
+    verify = scripts["verify-enterprise.sh"]
+    assert "WHERE rolname = :'app_user';" in verify
+    assert "printf '%s\\n'" in verify
+
 
 def test_enterprise_shell_scripts_parse_when_bash_is_available() -> None:
     bash = shutil.which("bash")

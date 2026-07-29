@@ -25,13 +25,14 @@ ALEMBIC_VERSION="$(
 )"
 
 ROLE_RESULT="$(
-  enterprise_compose exec -T postgres sh -ec '
-    psql --no-psqlrc --tuples-only --no-align \
-      --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-      --set app_user="$POSTGRES_APP_USER" \
-      --command "SELECT rolcanlogin::text || chr(44) || rolsuper::text || chr(44) ||
-        rolbypassrls::text FROM pg_roles WHERE rolname = :'app_user'"
-  '
+  printf '%s\n' \
+    "SELECT rolcanlogin::text || chr(44) || rolsuper::text || chr(44) ||" \
+    "rolbypassrls::text FROM pg_roles WHERE rolname = :'app_user';" |
+    enterprise_compose exec -T postgres sh -ec '
+      psql --no-psqlrc --tuples-only --no-align \
+        --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+        --set app_user="$POSTGRES_APP_USER"
+    '
 )"
 if [[ "$ROLE_RESULT" != "true,false,false" ]]; then
   echo "Runtime database login does not satisfy least-privilege checks" >&2
