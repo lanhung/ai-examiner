@@ -18,7 +18,7 @@ This file is the authoritative version and branch status for Codex and other cod
 | v0.7 candidate | 0.7.0rc2 | `v0.7.0-rc.2` | Candidate release; Vultr Compose promotion gate remains | Staging only |
 | Upcoming research | 0.8.0 | `research/v0.8.0` | Industry template architecture, API, evaluation and implementation design | Not deployable |
 | Current implementation | 0.8.0.dev0 | `develop/v0.8.0` | Software and AI quality gates pass, including three reciprocal 30-case templates; Docker/Vultr promotion rehearsal remains held | Local evaluation only |
-| Current research | 0.9.0 | `research/v0.9.0` | WP-01 through WP-14 implemented; deterministic hardening passes, Vultr/OIDC/UI observation evidence remains | Staging rehearsal only |
+| Current research | 0.9.0.dev0 | `research/v0.9.0` | WP-01 through WP-14 implemented; deterministic hardening passes, Vultr/OIDC/UI observation evidence remains | Staging rehearsal only |
 | Release candidate | 0.5.0rc4 | `v0.5.0-rc.4` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 
@@ -264,6 +264,6 @@ PostgreSQL parity
 -> UI, security evaluation and release hardening
 ```
 
-No v0.9 tag is created during research. The branch remains on package version
-`0.8.0.dev0`. The first implementation branch uses `0.9.0.dev0` only after this gate
-is accepted.
+No v0.9 tag is created during research. WP-01 through WP-14 are now implemented, so
+the branch uses package version `0.9.0.dev0`. Promotion to `0.9.0rc1` remains
+forbidden until the external enterprise release gate is accepted.

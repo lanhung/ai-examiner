@@ -2,6 +2,9 @@
 
 ## v0.9.0 research - WP-14 release hardening
 
+- Advanced the implemented research branch package and visible UI identity to
+  `0.9.0.dev0`; release-candidate promotion and tags remain held by the external
+  enterprise evidence gate.
 - Added a machine-readable release gate for tests, lint, JavaScript, migrations,
   authorization metadata, dependency vulnerabilities, tracked-source secrets and
   frozen v0.8 AI evidence.

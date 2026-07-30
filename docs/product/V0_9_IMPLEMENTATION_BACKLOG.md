@@ -394,7 +394,7 @@ uv run ai-examiner-verify-v09-release --require-release-ready
 ```
 
 The command must exit zero and report `status=release_ready`. Until then the package
-version remains `0.8.0.dev0` and no v0.9 tag may be created.
+version remains `0.9.0.dev0` and no v0.9 release-candidate tag may be created.
 
 ## Recommended commit sequence
 

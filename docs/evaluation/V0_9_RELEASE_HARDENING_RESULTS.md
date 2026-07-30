@@ -47,7 +47,7 @@ They do not contain:
 
 ## Current promotion decision
 
-The package remains `0.8.0.dev0` on `research/v0.9.0`. No `0.9.0rc1` tag is
+The package is `0.9.0.dev0` on `research/v0.9.0`. No `0.9.0rc1` tag is
 authorized yet.
 
 The following external gates must still produce accepted evidence:
