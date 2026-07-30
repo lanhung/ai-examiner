@@ -12,6 +12,7 @@ from typing import Annotated
 from urllib.parse import urlencode
 from uuid import uuid4
 
+import httpx
 import websockets
 from fastapi import (
     BackgroundTasks,
@@ -5204,6 +5205,18 @@ async def create_voice_sdp(
             session=voice,
             settings=settings,
         )
+    except httpx.RequestError as exc:
+        governance.fail(reservation)
+        raise HTTPException(
+            502,
+            {
+                "code": "realtime_upstream_unreachable",
+                "message": (
+                    "OpenAI Realtime is unreachable from this server. "
+                    "Check outbound HTTPS connectivity or select Qwen realtime voice."
+                ),
+            },
+        ) from exc
     except Exception:
         governance.fail(reservation)
         raise

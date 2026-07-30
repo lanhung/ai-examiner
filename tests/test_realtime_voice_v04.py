@@ -4,6 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 
+import httpx
 from sqlalchemy import select
 
 from ai_examiner.db import SessionLocal
@@ -175,6 +176,43 @@ def test_voice_policy_denial_happens_before_upstream_connection(client):
             )
         )
         assert denied.status == "denied"
+
+
+def test_voice_sdp_reports_upstream_connectivity_failure(client, monkeypatch):
+    project, blueprint = create_project_and_blueprint(client)
+    created = client.post(
+        "/api/voice/sessions",
+        json={
+            "project_id": project["id"],
+            "blueprint_id": blueprint["id"],
+            "provider": "openai",
+        },
+    )
+    assert created.status_code == 201
+
+    async def unreachable_call(**_kwargs):
+        request = httpx.Request(
+            "POST",
+            "https://api.openai.com/v1/realtime/calls",
+        )
+        raise httpx.ConnectTimeout("timed out", request=request)
+
+    monkeypatch.setattr("ai_examiner.main.create_realtime_call", unreachable_call)
+    response = client.post(
+        f"/api/voice/sessions/{created.json()['id']}/sdp",
+        content="v=0\r\na=setup:actpass\r\n",
+        headers={"Content-Type": "application/sdp"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "realtime_upstream_unreachable"
+    with SessionLocal() as db:
+        usage = db.scalar(
+            select(ModelUsageLedger).where(
+                ModelUsageLedger.task_type == "voice"
+            )
+        )
+        assert usage.status == "failed"
 
 
 def test_adaptive_voice_finalizes_transcript_into_knowledge_events(client):

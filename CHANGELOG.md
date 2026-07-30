@@ -65,6 +65,8 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   failed quality gates from being frozen.
 - Add an idempotent AutoDL stop script that validates the recorded PID before
   terminating Uvicorn, preventing stale application processes after deployment.
+- Return a structured 502 error when the server cannot reach OpenAI Realtime,
+  so the browser can distinguish infrastructure connectivity from media failure.
 - Add WP-13 enterprise administration UI with OIDC login state, safe organization
   switching, capability-gated members, model governance, audit, lifecycle and
   human-review workflows.
