@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 import yaml
@@ -12,6 +13,7 @@ from ai_examiner.models import (
     Concept,
     Document,
     Organization,
+    OrganizationMembership,
     Principal,
     Project,
     PromptVersion,
@@ -242,6 +244,69 @@ def test_default_local_tenant_remains_legacy():
         db.add(project)
         db.flush()
         assert project.organization_id == LEGACY_ORGANIZATION_ID
+
+
+def test_workbench_requests_bind_project_document_and_download_to_selected_tenant(client):
+    suffix = uuid4().hex[:10]
+    with SessionLocal() as db:
+        organization = Organization(
+            slug=f"workbench-{suffix}",
+            display_name=f"Workbench {suffix}",
+            status="active",
+        )
+        principal = Principal(
+            issuer="urn:test:workbench",
+            subject=suffix,
+            display_name="Workbench owner",
+            status="active",
+        )
+        db.add_all([organization, principal])
+        db.flush()
+        db.add(
+            OrganizationMembership(
+                organization_id=organization.id,
+                principal_id=principal.id,
+                role="owner",
+                status="active",
+            )
+        )
+        db.commit()
+        headers = {
+            "X-AI-Examiner-Organization": organization.id,
+            "X-AI-Examiner-Principal": principal.id,
+        }
+
+    project = client.post(
+        "/api/projects",
+        headers=headers,
+        json={"name": "Tenant workbench project"},
+    )
+    assert project.status_code == 201
+    assert project.json()["organization_id"] == organization.id
+    listed = client.get("/api/projects", headers=headers)
+    assert listed.status_code == 200
+    assert {item["organization_id"] for item in listed.json()} == {organization.id}
+
+    uploaded = client.post(
+        f"/api/projects/{project.json()['id']}/documents",
+        headers=headers,
+        files={
+            "file": (
+                "tenant.txt",
+                b"Tenant-isolated source material for authorized download.",
+                "text/plain",
+            )
+        },
+    )
+    assert uploaded.status_code == 201
+    downloaded = client.get(
+        f"/api/v1/documents/{uploaded.json()['id']}/file",
+        headers=headers,
+    )
+    assert downloaded.status_code == 200
+    assert downloaded.content == (
+        b"Tenant-isolated source material for authorized download."
+    )
 
 
 def test_enforced_rls_requires_external_schema_management():

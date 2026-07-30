@@ -40,6 +40,7 @@ from .db import SessionLocal, engine, get_db, init_db
 from .enterprise_constants import (
     CAPABILITIES,
     HIGH_RISK_CAPABILITIES,
+    LEGACY_ORGANIZATION_ID,
     ROLE_CAPABILITIES,
 )
 from .model_catalog import CATALOG
@@ -174,6 +175,7 @@ from .services.authorization import (
     bind_and_validate_route_policies,
     require_authenticated_principal,
     require_capability,
+    require_workbench_capability,
     resolve_authorization_context,
 )
 from .services.benchmark import BenchmarkService
@@ -374,6 +376,33 @@ ReviewAppealAccess = Annotated[
     AuthorizationContext,
     Depends(require_capability("review_case.appeal")),
 ]
+WorkbenchProjectCreateAccess = Annotated[
+    AuthorizationContext | None,
+    Depends(require_workbench_capability("project.create")),
+]
+WorkbenchProjectReadAccess = Annotated[
+    AuthorizationContext | None,
+    Depends(require_workbench_capability("project.read")),
+]
+WorkbenchDocumentCreateAccess = Annotated[
+    AuthorizationContext | None,
+    Depends(require_workbench_capability("document.create")),
+]
+WorkbenchBlueprintCreateAccess = Annotated[
+    AuthorizationContext | None,
+    Depends(require_workbench_capability("blueprint.create")),
+]
+
+
+def authorize_workbench_resource(
+    context: AuthorizationContext | None,
+    resource_organization_id: str | None,
+) -> None:
+    expected_organization_id = (
+        context.organization_id if context else LEGACY_ORGANIZATION_ID
+    )
+    if resource_organization_id != expected_organization_id:
+        raise HTTPException(404, "Resource not found")
 
 
 @asynccontextmanager
@@ -1583,8 +1612,15 @@ def clear_project_template_binding(
 
 
 @app.post("/api/projects", status_code=201)
-def create_project(payload: ProjectCreate, db: Annotated[Session, Depends(get_db)]):
+def create_project(
+    payload: ProjectCreate,
+    _context: WorkbenchProjectCreateAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
     project = Project(
+        organization_id=(
+            _context.organization_id if _context else LEGACY_ORGANIZATION_ID
+        ),
         name=payload.name,
         domain=payload.domain,
         language=payload.language,
@@ -1604,8 +1640,18 @@ def create_project(payload: ProjectCreate, db: Annotated[Session, Depends(get_db
 
 
 @app.get("/api/projects")
-def list_projects(db: Annotated[Session, Depends(get_db)]):
-    projects = db.scalars(select(Project).order_by(Project.created_at.desc())).all()
+def list_projects(
+    context: WorkbenchProjectReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    organization_id = (
+        context.organization_id if context else LEGACY_ORGANIZATION_ID
+    )
+    projects = db.scalars(
+        select(Project)
+        .where(Project.organization_id == organization_id)
+        .order_by(Project.created_at.desc())
+    ).all()
     return [
         {
             "id": project.id,
@@ -1624,11 +1670,13 @@ def list_projects(db: Annotated[Session, Depends(get_db)]):
 async def upload_document(
     project_id: str,
     file: Annotated[UploadFile, File()],
+    context: WorkbenchDocumentCreateAccess,
     db: Annotated[Session, Depends(get_db)],
 ):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
+    authorize_workbench_resource(context, project.organization_id)
     destination = settings.upload_dir / project_id
     try:
         path, raw = await save_upload(file, destination, settings.max_upload_bytes)
@@ -1698,6 +1746,7 @@ async def upload_document(
 @app.post("/api/projects/{project_id}/blueprints", status_code=201)
 def generate_blueprint(
     project_id: str,
+    context: WorkbenchBlueprintCreateAccess,
     db: Annotated[Session, Depends(get_db)],
     document_id: Annotated[str | None, Query()] = None,
     payload: Annotated[BlueprintCreate | None, Body()] = None,
@@ -1709,6 +1758,7 @@ def generate_blueprint(
     document = db.get(Document, selected_document_id)
     if not project or not document or document.project_id != project_id:
         raise HTTPException(404, "Project or document not found")
+    authorize_workbench_resource(context, project.organization_id)
     mode = payload.mode if payload else "defense"
     profile = payload.profile if payload else None
     provider_or_503(profile, db=db, project_id=project_id)
@@ -1741,6 +1791,7 @@ def generate_blueprint_async(
     project_id: str,
     payload: BlueprintCreate,
     background_tasks: BackgroundTasks,
+    context: WorkbenchBlueprintCreateAccess,
     db: Annotated[Session, Depends(get_db)],
     idempotency_key: Annotated[
         str | None,
@@ -1751,6 +1802,7 @@ def generate_blueprint_async(
     document = db.get(Document, payload.document_id)
     if not project or not document or document.project_id != project_id:
         raise HTTPException(404, "Project or document not found")
+    authorize_workbench_resource(context, project.organization_id)
     provider_or_503(payload.profile, db=db, project_id=project_id)
     SessionTemplateService(db).resolve(
         project,

@@ -10,7 +10,11 @@ from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..db import get_db
-from ..enterprise_constants import CAPABILITIES, ROLE_CAPABILITIES
+from ..enterprise_constants import (
+    CAPABILITIES,
+    LEGACY_ORGANIZATION_ID,
+    ROLE_CAPABILITIES,
+)
 from ..models import Organization, OrganizationMembership, Principal
 from .authentication import CurrentAuthentication
 from .oidc import AuthenticationContext
@@ -449,6 +453,53 @@ def require_capability(capability: str):
             request.state.audit_actor_id = (
                 authentication.principal_id
                 or request.headers.get("X-AI-Examiner-Principal")
+            )
+            raise authorization_http_error(exc) from exc
+
+    return dependency
+
+
+def require_workbench_capability(capability: str):
+    """Authorize core workbench routes while preserving local legacy mode."""
+    if capability not in CAPABILITIES:
+        raise RuntimeError(f"Unknown capability: {capability}")
+
+    def dependency(
+        request: Request,
+        authentication: CurrentAuthentication,
+        db: Annotated[Session, Depends(get_db)],
+    ) -> AuthorizationContext | None:
+        settings = get_settings()
+        organization_id = request.headers.get("X-AI-Examiner-Organization")
+        disabled_principal_id = request.headers.get("X-AI-Examiner-Principal")
+        if (
+            settings.auth_mode == "disabled"
+            and settings.app_env != "production"
+            and not organization_id
+            and not disabled_principal_id
+        ):
+            set_tenant_context(
+                db,
+                organization_id=LEGACY_ORGANIZATION_ID,
+                principal_id=None,
+            )
+            return None
+        try:
+            context = resolve_authorization_context(
+                db,
+                authentication=authentication,
+                organization_id=organization_id,
+                required_capability=capability,
+                disabled_principal_id=disabled_principal_id,
+            )
+            request.state.audit_actor_type = "principal"
+            request.state.audit_actor_id = context.principal_id
+            request.state.audit_authentication_method = context.authentication_method
+            return context
+        except AuthorizationError as exc:
+            request.state.audit_reason_code = exc.code
+            request.state.audit_actor_id = (
+                authentication.principal_id or disabled_principal_id
             )
             raise authorization_http_error(exc) from exc
 
