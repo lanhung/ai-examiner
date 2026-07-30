@@ -289,6 +289,12 @@ async function activateOrganization(organizationId) {
     }
     state.context = context;
     state.capabilities = new Set(context.capabilities || []);
+    const organization = state.organizations.find((item) => item.id === organizationId);
+    if (organization) Object.assign(organization, context.organization);
+    else state.organizations.push(context.organization);
+    populateOrganizationSelect();
+    $("#organizationSelect").title =
+      `${context.organization.display_name} · ${context.organization.id}`;
     $("#organizationName").textContent = context.organization.display_name;
     $("#organizationMeta").textContent = `${context.organization.slug} · ${context.role || "context"}`;
     $("#workspace").classList.remove("hidden");

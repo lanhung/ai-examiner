@@ -69,6 +69,8 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   so the browser can distinguish infrastructure connectivity from media failure.
 - Render structured realtime errors as readable code and message text instead
   of the JavaScript string `[object Object]`.
+- Refresh the organization switcher with the authorized display name after
+  developer-context resolution, avoiding clipped UUID labels on mobile.
 - Add WP-13 enterprise administration UI with OIDC login state, safe organization
   switching, capability-gated members, model governance, audit, lifecycle and
   human-review workflows.
