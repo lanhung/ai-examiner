@@ -476,6 +476,26 @@ def require_workbench_capability(capability: str):
             settings.auth_mode == "disabled"
             and settings.app_env != "production"
             and not organization_id
+            and disabled_principal_id
+        ):
+            memberships = db.scalars(
+                select(OrganizationMembership)
+                .join(
+                    Organization,
+                    Organization.id == OrganizationMembership.organization_id,
+                )
+                .where(
+                    OrganizationMembership.principal_id == disabled_principal_id,
+                    OrganizationMembership.status == "active",
+                    Organization.status == "active",
+                )
+            ).all()
+            if len(memberships) == 1:
+                organization_id = memberships[0].organization_id
+        if (
+            settings.auth_mode == "disabled"
+            and settings.app_env != "production"
+            and not organization_id
             and not disabled_principal_id
         ):
             set_tenant_context(

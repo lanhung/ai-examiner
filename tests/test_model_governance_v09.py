@@ -13,6 +13,8 @@ from ai_examiner.enterprise_constants import LEGACY_ORGANIZATION_ID
 from ai_examiner.models import (
     AuditEvent,
     ModelUsageLedger,
+    Organization,
+    OrganizationMembership,
     OrganizationModelPolicy,
     Project,
 )
@@ -546,6 +548,51 @@ def test_project_data_classification_is_persisted(client):
     with SessionLocal() as db:
         project = db.get(Project, response.json()["id"])
         assert project.data_classification == "restricted"
+
+
+def test_workbench_requires_explicit_organization_for_multi_org_principal(client):
+    with SessionLocal() as db:
+        first, owner, _membership = bootstrap_owner(
+            db,
+            issuer="https://issuer.example.test",
+            subject="multi-org-project-owner",
+        )
+        second = Organization(
+            slug="second-workbench-organization",
+            display_name="Second workbench organization",
+            status="active",
+            version=1,
+        )
+        db.add(second)
+        db.flush()
+        db.add(
+            OrganizationMembership(
+                organization_id=second.id,
+                principal_id=owner.id,
+                role="owner",
+                status="active",
+                version=1,
+            )
+        )
+        db.commit()
+
+    ambiguous = client.post(
+        "/api/projects",
+        headers={"X-AI-Examiner-Principal": owner.id},
+        json={"name": "Ambiguous project"},
+    )
+    assert ambiguous.status_code == 400
+
+    selected = client.post(
+        "/api/projects",
+        headers={
+            "X-AI-Examiner-Principal": owner.id,
+            "X-AI-Examiner-Organization": first.id,
+        },
+        json={"name": "Selected project"},
+    )
+    assert selected.status_code == 201
+    assert selected.json()["organization_id"] == first.id
 
 
 def test_usage_ledger_is_immutable_through_orm():
