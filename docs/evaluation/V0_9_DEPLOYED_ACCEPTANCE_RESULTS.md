@@ -108,3 +108,35 @@ is still unavailable:
 - 24-hour staging observation.
 
 This result does not authorize `0.9.0rc1`.
+
+## Post-acceptance optimization
+
+On 2026-07-30, commit
+`e2713368dd409deb4a460dee07906d8e6db763f3` moved interactive blueprint
+planning onto a persisted, idempotent and recoverable background job.
+
+The real Qwen Plus asynchronous path on the staging service measured:
+
+```text
+enqueue latency           41.7 ms
+terminal latency          80,331.4 ms
+initial/terminal status   queued / completed
+questions                 6
+duplicate reused job      yes
+health during planning    200
+```
+
+The complete isolated acceptance protocol was then rerun:
+
+```text
+tests                     45
+passed                    45
+failed                    0
+sync compatibility call  44,058 ms
+GitHub CI run             30505778777 (success)
+```
+
+This closes the blocking-browser defect and preserves the synchronous API
+contract. It does not change the enterprise release blockers listed above. Full
+implementation and measurement details are in
+`docs/evaluation/V0_9_POST_ACCEPTANCE_OPTIMIZATION.md`.

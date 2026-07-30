@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-30T00:00:00Z",
+  "branch": "research/v0.9.0",
+  "source_commit": "e2713368dd409deb4a460dee07906d8e6db763f3",
+  "environment": {
+    "name": "seetacloud-direct-process-staging",
+    "service_port": 6008,
+    "runtime_worktree": "ai-examiner-v0.9-staging",
+    "database": "sqlite",
+    "storage": "local",
+    "auth_mode": "disabled",
+    "celery_always_eager": true
+  },
+  "provider": {
+    "name": "qwen",
+    "model": "qwen-plus",
+    "thinking_enabled": false
+  },
+  "asynchronous_blueprint": {
+    "enqueue_http_status": 202,
+    "enqueue_latency_ms": 41.7,
+    "initial_status": "queued",
+    "terminal_status": "completed",
+    "terminal_latency_ms": 80331.4,
+    "attempts": 1,
+    "question_count": 6,
+    "health_during_job_http_status": 200,
+    "duplicate_enqueue_latency_ms": 36.8,
+    "duplicate_reused_existing_job": true
+  },
+  "comparison": {
+    "baseline_synchronous_latency_ms": 153742,
+    "optimized_provider_stage_reduction_percent": 47.8,
+    "synchronous_compatibility_latency_ms": 44058
+  },
+  "acceptance": {
+    "tests": 45,
+    "passed": 45,
+    "failed": 0,
+    "template_health_latency_ms": 252,
+    "deletion_retry_latency_ms": 145
+  },
+  "continuous_integration": {
+    "provider": "github-actions",
+    "run_id": 30505778777,
+    "conclusion": "success"
+  },
+  "content_retention": {
+    "api_keys_recorded": false,
+    "prompts_recorded": false,
+    "document_bodies_recorded": false,
+    "model_responses_recorded": false
+  },
+  "release_decision": {
+    "direct_process_optimization_gate": "passed",
+    "enterprise_release_gate": "held",
+    "release_candidate_tag_authorized": false
+  }
+}

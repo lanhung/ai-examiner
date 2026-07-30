@@ -4,8 +4,7 @@ Date: 2026-07-30
 
 Branch: `research/v0.9.0`
 
-Status: implementation and local regression passed; deployed Qwen verification is
-recorded after staging promotion.
+Status: implemented, deployed and accepted on direct-process staging.
 
 ## Trigger
 
@@ -101,3 +100,74 @@ Before this optimization is accepted on staging:
 8. run GitHub Linux CI.
 
 No API key, prompt, document body or model response is stored in this report.
+
+## Deployed verification
+
+The exact optimization commit was deployed to the SeetaCloud direct-process
+staging service:
+
+```text
+source commit             e2713368dd409deb4a460dee07906d8e6db763f3
+service port              6008
+runtime worktree          ai-examiner-v0.9-staging
+GET /health               200
+GET /ready                ready
+provider/model            qwen / qwen-plus
+QWEN_ENABLE_THINKING      false
+```
+
+The asynchronous blueprint request produced:
+
+```text
+enqueue HTTP status       202
+enqueue latency           41.7 ms
+initial job status        queued
+terminal job status       completed
+terminal latency          80,331.4 ms
+worker attempts           1
+questions                 6
+browser health during job 200
+duplicate enqueue latency 36.8 ms
+duplicate reused job      yes
+```
+
+Compared with the original synchronous `153,742 ms` staging measurement, the
+provider stage was about 47.8 percent faster in this run. More importantly, the
+interactive HTTP request returned in under 50 ms and no longer held the browser
+request open while Qwen planned the blueprint.
+
+The old synchronous endpoint was retained and rechecked during the isolated
+acceptance run. It completed successfully in `44,058 ms`.
+
+## Deployed acceptance
+
+The complete destructive acceptance protocol was rerun on an isolated service and
+fresh SQLite database:
+
+```text
+tests                      45
+passed                     45
+failed                     0
+real Qwen planner          44,058 ms
+template health            252 ms
+deletion retry             145 ms
+```
+
+The first rehearsal seeded the independent approval actor with the ordinary
+`reviewer` role, which correctly lacked `retention.manage`. The clean rerun used
+an administrator as the independent approver, matching the documented acceptance
+protocol, and passed all 45 workflows. This was test-fixture correction rather
+than a product permission change.
+
+GitHub Linux CI run `30505778777` completed successfully for the optimization
+commit.
+
+The sanitized machine-readable result is stored in
+`docs/evaluation/evidence/v0_9/post-acceptance-optimization.json`.
+
+## Release decision
+
+The latency and recoverability defect is closed for direct-process staging.
+Enterprise release promotion remains held because this host still cannot validate
+the PostgreSQL, Redis worker, MinIO/S3, OIDC, TLS and disaster-recovery gates. No
+v0.9 release-candidate tag is authorized by this result.

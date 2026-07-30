@@ -108,3 +108,36 @@ working directory and executable.
 The rehearsal is useful staging evidence but does not satisfy any missing
 enterprise release artifact by itself. The package remains `0.8.0.dev0`, the
 branch remains `research/v0.9.0`, and no v0.9 release-candidate tag is authorized.
+
+## Runtime correction and optimization deployment
+
+During the 2026-07-30 optimization deployment, process inspection found that the
+listener on port `6008` had been restarted with a Python path and current working
+directory from the previous v0.5 worktree, despite the earlier source verification
+record. The process still served compatible data, but it was not an acceptable
+source-of-truth deployment.
+
+The listener was stopped and restarted from:
+
+```text
+/root/autodl-tmp/ai-examiner-mvp/ai-examiner-v0.9-staging
+```
+
+The corrected runtime now uses commit:
+
+```text
+e2713368dd409deb4a460dee07906d8e6db763f3
+```
+
+The existing `.env` and `data-v05` state were preserved. A pre-deployment backup
+was created at:
+
+```text
+/root/autodl-tmp/ai-examiner-mvp/backups/
+  pre-blueprint-async-20260730T093112Z
+```
+
+After correction, `/health` and `/ready` passed, the real Qwen Plus asynchronous
+blueprint job completed, and the isolated 45-workflow acceptance suite passed.
+This correction strengthens the direct-process evidence but does not turn the host
+into an enterprise Compose environment.
