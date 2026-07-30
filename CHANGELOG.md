@@ -32,6 +32,12 @@
 - Added configurable Qwen thinking mode and defaulted interactive Qwen requests to
   non-thinking mode to reduce latency; quality-sensitive batch runs can opt in with
   `QWEN_ENABLE_THINKING=true`.
+- Made the direct-staging verifier ignore ambient HTTP proxy settings by default,
+  preventing localhost and private staging requests from being redirected through
+  a system proxy; operators can explicitly opt in with `--trust-env`.
+- Replaced the verifier's legacy synchronous Planner call with the real asynchronous
+  blueprint path, including fast enqueue, health-during-work, terminal polling and
+  duplicate-idempotency checks.
 
 AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Versioning；开发版本使用 PEP 440 标识，例如 `0.5.0.dev0`。
 

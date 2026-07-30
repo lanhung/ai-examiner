@@ -171,3 +171,51 @@ The latency and recoverability defect is closed for direct-process staging.
 Enterprise release promotion remains held because this host still cannot validate
 the PostgreSQL, Redis worker, MinIO/S3, OIDC, TLS and disaster-recovery gates. No
 v0.9 release-candidate tag is authorized by this result.
+
+## Codex local rerun
+
+On 2026-07-30, Codex started a clean direct-process instance on port `8020` with
+an isolated SQLite database and object directories. The configured real
+`qwen:qwen-plus` provider was used.
+
+The first verifier request returned `502` before reaching the application because
+the Python HTTP client inherited an ambient system proxy for the localhost URL.
+The verifier now ignores environment proxy settings by default and exposes
+`--trust-env` for deployments that intentionally require a proxy.
+
+The verifier was also upgraded from the legacy synchronous blueprint endpoint to
+the interactive asynchronous contract. It now verifies enqueue, service health
+during generation, terminal completion and idempotent duplicate submission.
+
+The clean rerun at code commit
+`3aadf924602270ad3edfbe5e4e762e57c5ce2c50` produced:
+
+```text
+acceptance tests                   48
+passed                             48
+failed                             0
+async enqueue                      32 ms
+health during generation           4 ms
+real Qwen terminal completion      102,684 ms
+idempotent duplicate               18 ms
+template health                    268 ms
+```
+
+Engineering verification:
+
+```text
+Ruff                               passed
+full pytest                        308 passed
+app.js syntax                      passed
+enterprise.js syntax               passed
+service log exceptions             0
+```
+
+The in-app browser automation bridge could not initialize because its local
+runtime asset path was unavailable. Consequently, this rerun verified the HTML,
+CSS and JavaScript delivery plus syntax and API behavior, but did not create new
+desktop/mobile pixel screenshots. That UI evidence remains part of the existing
+enterprise release hold.
+
+The sanitized machine-readable result is stored in
+`docs/evaluation/evidence/v0_9/codex-local-acceptance.json`.

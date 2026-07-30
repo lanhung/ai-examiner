@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-30T06:15:00Z",
+  "status": "passed",
+  "source_commit": "3aadf924602270ad3edfbe5e4e762e57c5ce2c50",
+  "branch": "research/v0.9.0",
+  "environment": {
+    "name": "codex-local-direct-process",
+    "service_port": 8020,
+    "database": "sqlite",
+    "storage": "local",
+    "auth_mode": "disabled",
+    "celery_always_eager": true,
+    "model_rate_limit_backend": "memory"
+  },
+  "provider": {
+    "name": "qwen",
+    "model": "qwen-plus",
+    "thinking_enabled": false
+  },
+  "acceptance": {
+    "tests": 48,
+    "passed": 48,
+    "failed": 0,
+    "async_enqueue_latency_ms": 32,
+    "health_during_generation_latency_ms": 4,
+    "async_terminal_latency_ms": 102684,
+    "idempotent_duplicate_latency_ms": 18,
+    "template_health_latency_ms": 268
+  },
+  "engineering": {
+    "ruff": "passed",
+    "pytest": {
+      "status": "passed",
+      "tests": 308
+    },
+    "app_javascript_syntax": "passed",
+    "enterprise_javascript_syntax": "passed",
+    "service_log_exceptions": 0
+  },
+  "fixes": {
+    "ambient_proxy_disabled_by_default": true,
+    "explicit_trust_env_option": true,
+    "async_blueprint_main_path_covered": true,
+    "health_during_generation_covered": true,
+    "idempotent_duplicate_covered": true
+  },
+  "ui_evidence": {
+    "static_assets_served": true,
+    "javascript_syntax_checked": true,
+    "interactive_browser_automation_completed": false,
+    "blocker": "local_browser_runtime_asset_path_unavailable"
+  },
+  "content_retention": {
+    "api_keys_recorded": false,
+    "prompts_recorded": false,
+    "document_bodies_recorded": false,
+    "model_responses_recorded": false
+  },
+  "release_decision": {
+    "direct_process_acceptance": "passed",
+    "enterprise_release_gate": "held",
+    "release_candidate_tag_authorized": false
+  }
+}
