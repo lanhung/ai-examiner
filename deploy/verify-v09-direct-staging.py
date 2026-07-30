@@ -151,6 +151,45 @@ class AcceptanceRun:
         return last_payload
 
 
+def prepare_candidate_membership(
+    run: AcceptanceRun,
+    *,
+    organization_id: str,
+    candidate_principal_id: str,
+    memberships: list[dict[str, Any]],
+) -> httpx.Response:
+    existing_candidate = next(
+        (
+            item
+            for item in memberships
+            if item["principal_id"] == candidate_principal_id
+        ),
+        None,
+    )
+    run.assert_condition(
+        "candidate_membership_unused",
+        existing_candidate is None,
+        (
+            "The destructive acceptance candidate already has an organization "
+            "membership. Use a fresh isolated database or provision a new "
+            "candidate principal; revoked memberships are intentionally terminal."
+        )
+        if existing_candidate is not None
+        else "",
+    )
+    return run.check(
+        "membership_create",
+        "POST",
+        f"/api/v1/organizations/{organization_id}/memberships",
+        expected=201,
+        json={
+            "principal_id": candidate_principal_id,
+            "role": "reviewer",
+            "status": "active",
+        },
+    )
+
+
 def run_acceptance(run: AcceptanceRun) -> None:
     org = run.organization_id
     ids = run.identities
@@ -218,16 +257,11 @@ def run_acceptance(run: AcceptanceRun) -> None:
         len(memberships["items"]) >= 2,
         "bootstrap owners are missing",
     )
-    created = run.check(
-        "membership_create",
-        "POST",
-        f"/api/v1/organizations/{org}/memberships",
-        expected=201,
-        json={
-            "principal_id": ids["candidate"],
-            "role": "reviewer",
-            "status": "active",
-        },
+    created = prepare_candidate_membership(
+        run,
+        organization_id=org,
+        candidate_principal_id=ids["candidate"],
+        memberships=memberships["items"],
     )
     membership = created.json()
     patched = run.check(
@@ -697,8 +731,9 @@ def run_acceptance(run: AcceptanceRun) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Run destructive v0.9 acceptance against an isolated staging "
-            "database. Never point this at production data."
+            "Run one-shot destructive v0.9 acceptance against a fresh isolated "
+            "staging database. Candidate principals must not have an existing "
+            "membership. Never point this at production data."
         )
     )
     parser.add_argument("--base-url", required=True)

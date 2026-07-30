@@ -85,6 +85,42 @@ def tracked_files(repo_root: Path) -> list[Path]:
     ]
 
 
+def working_tree_clean_check(repo_root: Path) -> GateCheck:
+    output = subprocess.run(
+        [
+            "git",
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+        ],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    ).stdout.rstrip("\r\n")
+    entries = [line for line in output.splitlines() if line.strip()]
+    return GateCheck(
+        id="working_tree_clean",
+        category="source_integrity",
+        status="passed" if not entries else "failed",
+        summary=(
+            "Git working tree is clean."
+            if not entries
+            else (
+                f"Git working tree has {len(entries)} uncommitted entr"
+                f"{'y' if len(entries) == 1 else 'ies'}."
+            )
+        ),
+        evidence={
+            "entry_count": len(entries),
+            "status_codes": sorted({entry[:2] for entry in entries}),
+            "entries_sha256": _sha256_text("\n".join(entries)),
+        },
+    )
+
+
 def scan_tracked_secrets(repo_root: Path) -> GateCheck:
     findings: list[dict[str, str]] = []
     scanned = 0
@@ -186,20 +222,28 @@ def dependency_audit(repo_root: Path) -> GateCheck:
     except (TypeError, ValueError):
         parse_error = True
     passed = result.returncode == 0 and not vulnerabilities and not parse_error
+    if passed:
+        summary = "No known dependency vulnerabilities found."
+    elif result.returncode != 0:
+        summary = (
+            "Dependency audit command failed with status "
+            f"{result.returncode}; its vulnerability result was not accepted."
+        )
+    elif parse_error:
+        summary = "Dependency audit returned an unreadable result."
+    else:
+        summary = f"Dependency audit found {len(vulnerabilities)} issue(s)."
     return GateCheck(
         id="dependency_audit",
         category="security",
         status="passed" if passed else "failed",
-        summary=(
-            "No known dependency vulnerabilities found."
-            if passed
-            else f"Dependency audit found {len(vulnerabilities)} issue(s)."
-        ),
+        summary=summary,
         evidence={
             "duration_ms": int((time.perf_counter() - started) * 1000),
             "return_code": result.returncode,
             "parse_error": parse_error,
             "vulnerabilities": vulnerabilities,
+            "stderr_sha256": _sha256_text(result.stderr),
         },
     )
 
@@ -413,6 +457,7 @@ def build_release_report(
     evidence_dir: Path,
 ) -> dict[str, Any]:
     checks: list[GateCheck] = [
+        working_tree_clean_check(repo_root),
         scan_tracked_secrets(repo_root),
         migration_head_check(repo_root),
         route_policy_check(),

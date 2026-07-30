@@ -10,9 +10,11 @@ from ai_examiner.release_hardening import (
     _evidence_validation_errors,
     ai_regression_check,
     build_release_report,
+    dependency_audit,
     migration_head_check,
     route_policy_check,
     scan_tracked_secrets,
+    working_tree_clean_check,
 )
 from ai_examiner.services import model_governance
 
@@ -63,6 +65,26 @@ def test_secret_scan_reports_rule_and_path_without_secret_value(tmp_path):
     assert secret not in json.dumps(result.evidence)
 
 
+def test_working_tree_gate_binds_release_evidence_to_committed_source(tmp_path):
+    _git(tmp_path, "init")
+    _git(tmp_path, "config", "user.email", "test@example.test")
+    _git(tmp_path, "config", "user.name", "Release Test")
+    source = tmp_path / "tracked.txt"
+    source.write_text("committed\n", encoding="utf-8")
+    _git(tmp_path, "add", "tracked.txt")
+    _git(tmp_path, "commit", "-m", "initial")
+
+    assert working_tree_clean_check(tmp_path).status == "passed"
+
+    source.write_text("uncommitted\n", encoding="utf-8")
+    result = working_tree_clean_check(tmp_path)
+
+    assert result.status == "failed"
+    assert result.evidence["entry_count"] == 1
+    assert result.evidence["status_codes"] == [" M"]
+    assert "tracked.txt" not in json.dumps(result.evidence)
+
+
 def test_release_static_gates_are_machine_readable(tmp_path):
     repo_root = Path(__file__).resolve().parents[1]
 
@@ -91,6 +113,29 @@ def test_release_static_gates_are_machine_readable(tmp_path):
         and item["status"] == "blocked"
         for item in report["checks"]
     )
+
+
+def test_dependency_audit_does_not_describe_command_failure_as_zero_issues(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setattr(
+        "ai_examiner.release_hardening.subprocess.run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            args=["pip_audit"],
+            returncode=1,
+            stdout='{"dependencies": []}',
+            stderr="temporary audit service failure",
+        ),
+    )
+
+    result = dependency_audit(tmp_path)
+
+    assert result.status == "failed"
+    assert "command failed with status 1" in result.summary
+    assert "found 0 issue" not in result.summary
+    assert result.evidence["vulnerabilities"] == []
+    assert "temporary audit service failure" not in json.dumps(result.evidence)
 
 
 def test_real_provider_probe_records_governed_ledger_without_content(monkeypatch):

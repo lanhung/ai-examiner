@@ -154,3 +154,45 @@ def test_direct_staging_rejects_failed_blueprint_job(monkeypatch):
         run.wait_for_job("job-1", poll_seconds=0)
 
     assert run.results[-1]["status"] == "failed"
+
+
+def test_direct_staging_rejects_a_previously_used_candidate_membership():
+    module = _load_verifier_module()
+    candidate_id = "candidate-principal"
+    calls: list[dict] = []
+
+    class FakeRun:
+        def check(self, name, method, path, **kwargs):
+            calls.append(
+                {
+                    "name": name,
+                    "method": method,
+                    "path": path,
+                    **kwargs,
+                }
+            )
+            raise AssertionError("membership create must not run")
+
+        @staticmethod
+        def assert_condition(name, condition, detail):
+            assert name == "candidate_membership_unused"
+            if not condition:
+                raise AssertionError(detail)
+
+    with pytest.raises(AssertionError, match="fresh isolated database"):
+        module.prepare_candidate_membership(
+            FakeRun(),
+            organization_id="org",
+            candidate_principal_id=candidate_id,
+            memberships=[
+                {
+                    "id": "membership-1",
+                    "principal_id": candidate_id,
+                    "role": "auditor",
+                    "status": "revoked",
+                    "version": 7,
+                }
+            ],
+        )
+
+    assert calls == []

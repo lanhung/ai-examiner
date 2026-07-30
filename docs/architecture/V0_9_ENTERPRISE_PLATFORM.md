@@ -1,8 +1,8 @@
 # v0.9 Enterprise Platform Architecture
 
-Status: Research draft
-Package version during research: unchanged (`0.8.0.dev0`)
-First implementation version after gate acceptance: `0.9.0.dev0`
+Status: WP-01 through WP-14 implemented; external release evidence pending
+Current package version: `0.9.0.dev0`
+First release-candidate version after gate acceptance: `0.9.0rc1`
 
 ## 1. Objective
 

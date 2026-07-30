@@ -5,6 +5,14 @@
 - Advanced the implemented research branch package and visible UI identity to
   `0.9.0.dev0`; release-candidate promotion and tags remain held by the external
   enterprise evidence gate.
+- Made the destructive direct-staging verifier fail early when its candidate
+  principal was already consumed, preserving the intentionally terminal revoked
+  membership state and directing reruns to a fresh isolated database.
+- Clarified dependency-audit command failures so a transient audit outage is not
+  misreported as a zero-vulnerability result, while keeping the release gate
+  fail-closed.
+- Added a clean-working-tree source-integrity gate so release evidence cannot bind
+  uncommitted code to the previous Git commit.
 - Added a machine-readable release gate for tests, lint, JavaScript, migrations,
   authorization metadata, dependency vulnerabilities, tracked-source secrets and
   frozen v0.8 AI evidence.
