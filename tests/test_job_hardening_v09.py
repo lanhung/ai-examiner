@@ -21,12 +21,14 @@ from ai_examiner.models import (
     Principal,
     Project,
 )
+from ai_examiner.providers.base import ModelOutputValidationError
 from ai_examiner.services import jobs as job_service
 from ai_examiner.services.job_control import (
     JobAuthorizationError,
     JobEnvelopeError,
     TaskEnvelope,
     claim_job,
+    classify_job_exception,
     fail_job,
     recover_stale_jobs,
     request_job_cancellation,
@@ -60,6 +62,14 @@ def test_job_heartbeat_configuration_fails_closed():
     assert settings.job_configuration_issues() == [
         "job_heartbeat_must_be_shorter_than_lease"
     ]
+
+
+def test_model_output_contract_failures_are_retryable_without_retrying_bad_inputs():
+    assert (
+        classify_job_exception(ModelOutputValidationError("Planner produced no questions"))
+        == "transient"
+    )
+    assert classify_job_exception(ValueError("Project or document not found")) == "permanent"
 
 
 def _tenant(

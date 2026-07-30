@@ -18,6 +18,7 @@ from ..models import (
     OrganizationMembership,
     Principal,
 )
+from ..providers.base import ModelOutputValidationError
 from .audit import append_audit_event
 from .authorization import effective_capabilities
 from .observability import current_correlation, trace_id_from_traceparent
@@ -584,6 +585,8 @@ class JobFailureDisposition:
 def classify_job_exception(exc: Exception) -> str:
     if isinstance(exc, JobCancelled):
         return "cancelled"
+    if isinstance(exc, ModelOutputValidationError):
+        return "transient"
     if isinstance(exc, (JobEnvelopeError, JobAuthorizationError, KeyError, ValueError)):
         return "permanent"
     if isinstance(exc, (TimeoutError, ConnectionError, OSError)):

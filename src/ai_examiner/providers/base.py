@@ -6,6 +6,10 @@ from pathlib import Path
 from typing import Any
 
 
+class ModelOutputValidationError(RuntimeError):
+    """The provider responded, but its generated output violated the agent contract."""
+
+
 @dataclass
 class ProviderResult:
     data: dict[str, Any] | str

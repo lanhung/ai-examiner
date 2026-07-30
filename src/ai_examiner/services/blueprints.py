@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..agents.orchestrator import ExamOrchestrator
 from ..config import Settings
 from ..models import Blueprint, Document, EvidenceAsset, Project
+from ..providers.base import ModelOutputValidationError
 from .model_governance import governed_provider
 from .session_templates import SessionTemplateService
 
@@ -49,18 +50,21 @@ class BlueprintGenerationService:
             profile,
             project_id=project.id,
         )
-        data, grounding = ExamOrchestrator(
-            self.db,
-            provider,
-            project_id=project.id,
-        ).build_blueprint(
-            document_text=document.content_text,
-            filename=document.filename,
-            language=project.language,
-            template_contract=(
-                resolved_template.snapshot if resolved_template else None
-            ),
-        )
+        try:
+            data, grounding = ExamOrchestrator(
+                self.db,
+                provider,
+                project_id=project.id,
+            ).build_blueprint(
+                document_text=document.content_text,
+                filename=document.filename,
+                language=project.language,
+                template_contract=(
+                    resolved_template.snapshot if resolved_template else None
+                ),
+            )
+        except ValueError as exc:
+            raise ModelOutputValidationError(str(exc)) from exc
         if resolved_template:
             data.setdefault("template_plan", {}).update(
                 {
