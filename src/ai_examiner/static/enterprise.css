@@ -210,6 +210,7 @@ dialog p { color: var(--muted); white-space: pre-wrap; }
 
 @media (max-width: 430px) {
   .brand div span, #authBadge, .topbar-actions > .button.secondary { display: none; }
+  .organization-picker span { display: none; }
   .sidebar { top: 64px; }
   .metrics-grid { grid-template-columns: 1fr; }
   .page-heading { flex-wrap: wrap; }

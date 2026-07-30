@@ -71,6 +71,8 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   of the JavaScript string `[object Object]`.
 - Refresh the organization switcher with the authorized display name after
   developer-context resolution, avoiding clipped UUID labels on mobile.
+- Hide the redundant organization field label below 430px so the accessible
+  switcher has enough width for its selected organization name.
 - Add WP-13 enterprise administration UI with OIDC login state, safe organization
   switching, capability-gated members, model governance, audit, lifecycle and
   human-review workflows.
