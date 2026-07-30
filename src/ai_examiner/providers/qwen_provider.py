@@ -25,9 +25,11 @@ class QwenProvider(ModelProvider):
         base_url: str,
         visual_model: str,
         timeout: float = 120.0,
+        enable_thinking: bool = False,
     ) -> None:
         self.model = model
         self.visual_model = visual_model
+        self.enable_thinking = enable_thinking
         self.client = httpx.Client(
             base_url=base_url.rstrip("/"),
             headers={"Authorization": f"Bearer {api_key}"},
@@ -71,6 +73,7 @@ class QwenProvider(ModelProvider):
             "messages": messages,
             "temperature": 0.2,
             "max_tokens": max_tokens,
+            "enable_thinking": self.enable_thinking,
         }
         if json_mode:
             request["response_format"] = {"type": "json_object"}

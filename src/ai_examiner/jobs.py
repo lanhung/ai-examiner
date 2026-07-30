@@ -21,6 +21,7 @@ from .models import (
     Project,
 )
 from .services.benchmark import BenchmarkService
+from .services.blueprints import BlueprintGenerationService, serialize_blueprint
 from .services.data_lifecycle import (
     DataSubjectRequestService,
     build_organization_export,
@@ -159,6 +160,70 @@ def _generate_golden_dataset(
             "version": dataset.version,
         }
     return result, "Golden Dataset completed"
+
+
+def _generate_blueprint(
+    envelope: TaskEnvelope,
+    lease_token: str,
+    heartbeat: JobHeartbeat,
+) -> TaskResult:
+    _progress(
+        envelope,
+        lease_token,
+        progress=0.08,
+        message="Preparing document and scenario policy",
+    )
+    heartbeat.checkpoint()
+    with _tenant_session(
+        envelope.organization_id,
+        envelope.actor_principal_id,
+    ) as db:
+        job = _job_or_error(db, envelope, lease_token)
+        payload = job.payload
+        project = db.get(Project, payload["project_id"])
+        document = db.get(Document, payload["document_id"])
+        if (
+            project is None
+            or document is None
+            or project.organization_id != envelope.organization_id
+            or document.organization_id != envelope.organization_id
+            or document.project_id != project.id
+        ):
+            raise ValueError("Project or document not found")
+        _progress(
+            envelope,
+            lease_token,
+            progress=0.2,
+            message="Planner is generating a grounded blueprint",
+        )
+        prepared = BlueprintGenerationService(db, settings).prepare(
+            project=project,
+            document=document,
+            profile=payload.get("profile"),
+            mode=str(payload.get("mode") or "defense"),
+            template_version_id=payload.get("template_version_id"),
+            template_overrides=payload.get("template_overrides") or {},
+        )
+        heartbeat.checkpoint()
+        _progress(
+            envelope,
+            lease_token,
+            progress=0.88,
+            message="Linking evidence and saving the blueprint",
+        )
+        blueprint = BlueprintGenerationService(db, settings).persist(
+            project=project,
+            document=document,
+            prepared=prepared,
+        )
+        result = {
+            "blueprint_id": blueprint.id,
+            "blueprint": serialize_blueprint(
+                blueprint,
+                grounding=prepared.grounding,
+            ),
+        }
+    return result, "Blueprint completed"
 
 
 def _analyze_visual_document(
@@ -424,6 +489,7 @@ def _delete_data_subject(
 
 
 TASK_HANDLERS: dict[str, TaskHandler] = {
+    "blueprint_generation": _generate_blueprint,
     "golden_dataset": _generate_golden_dataset,
     "visual_document": _analyze_visual_document,
     "benchmark": _run_benchmark,
@@ -538,6 +604,11 @@ def _execute_job_delivery(task, envelope: TaskEnvelope) -> dict:
 
 @celery_app.task(bind=True, name="ai_examiner.generate_golden_dataset")
 def generate_golden_dataset_task(task, envelope: dict) -> dict:
+    return execute_job_delivery(task, envelope)
+
+
+@celery_app.task(bind=True, name="ai_examiner.generate_blueprint")
+def generate_blueprint_task(task, envelope: dict) -> dict:
     return execute_job_delivery(task, envelope)
 
 

@@ -88,5 +88,6 @@ def build_provider(settings: Settings, profile: str | None = None) -> ModelProvi
             base_url=settings.dashscope_base_url,
             visual_model=settings.qwen_visual_model,
             timeout=settings.qwen_request_timeout_seconds,
+            enable_thinking=settings.qwen_enable_thinking,
         )
     raise RuntimeError(f"Unsupported provider: {provider_name}")

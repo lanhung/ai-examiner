@@ -2,6 +2,8 @@ const state = {
   projectId: null,
   documentId: null,
   blueprintId: null,
+  blueprintJobId: null,
+  blueprintRequestKey: null,
   datasetId: null,
   sessionId: null,
   learnerSubjectId: null,
@@ -724,17 +726,30 @@ $("uploadDocument").onclick = async () => {
 $("generateBlueprint").onclick = async () => {
   const profile = $("blueprintProfile").value;
   if (!profile) return setStatus("blueprintStatus", "请选择已就绪的蓝图模型", "error");
-  setStatus("blueprintStatus", `各 Agent 正在使用 ${profile} 生成并检查蓝图…`);
+  const requestKey = state.blueprintRequestKey
+    || (globalThis.crypto?.randomUUID?.() || `blueprint-${Date.now()}-${Math.random()}`);
+  state.blueprintRequestKey = requestKey;
+  $("generateBlueprint").disabled = true;
+  $("cancelBlueprint").classList.remove("hidden");
+  $("blueprintProgress").classList.remove("hidden");
+  setStatus("blueprintStatus", `已提交给 ${profile}，可以继续留在页面查看进度。`);
   try {
-    const blueprint = await api(`/api/projects/${state.projectId}/blueprints`, {
+    const queued = await api(`/api/projects/${state.projectId}/blueprints/async`, {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": requestKey,
+      },
       body: JSON.stringify({
         document_id: state.documentId,
         profile,
         ...selectedTemplateRequest(),
       }),
     });
+    state.blueprintJobId = queued.id;
+    const job = await pollBlueprintJob(queued.id);
+    const blueprint = job.result?.blueprint;
+    if (!blueprint) throw new Error("任务已完成，但没有返回蓝图结果");
     state.blueprintId = blueprint.id;
     if ([...$("textProfile").options].some((option) => option.value === profile)) {
       $("textProfile").value = profile;
@@ -746,7 +761,52 @@ $("generateBlueprint").onclick = async () => {
     const preview = $("blueprintPreview");
     preview.classList.remove("hidden");
     preview.innerHTML = `<strong>${escapeHtml(blueprint.data.title)}</strong><p>${escapeHtml(blueprint.data.summary)}</p><ol>${blueprint.data.questions.map((question) => `<li>${escapeHtml(question.text)}</li>`).join("")}</ol>`;
-  } catch (error) { setStatus("blueprintStatus", error.message, "error"); }
+    state.blueprintRequestKey = null;
+  } catch (error) {
+    setStatus("blueprintStatus", error.message, "error");
+    if (/取消|失败|dead.?letter/i.test(error.message)) state.blueprintRequestKey = null;
+  } finally {
+    state.blueprintJobId = null;
+    $("generateBlueprint").disabled = false;
+    $("cancelBlueprint").classList.add("hidden");
+  }
+};
+
+async function pollBlueprintJob(jobId) {
+  const startedAt = Date.now();
+  for (let attempt = 0; attempt < 450; attempt += 1) {
+    const job = await api(`/api/jobs/${jobId}`);
+    const percent = Math.max(0, Math.min(100, Math.round(Number(job.progress || 0) * 100)));
+    const elapsed = Math.round((Date.now() - startedAt) / 1000);
+    $("blueprintProgress").querySelector("span").style.width = `${percent}%`;
+    $("blueprintProgress").querySelector("small").textContent =
+      `${job.message || job.status} · ${percent}% · 已用时 ${elapsed} 秒`;
+    if (job.status === "completed") return job;
+    if (job.status === "cancelled") throw new Error("蓝图生成已取消");
+    if (job.status === "failed") throw new Error(job.error || "蓝图生成失败");
+    if (job.status === "dead_letter") {
+      throw new Error(job.error || "蓝图生成多次重试后仍失败");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  throw new Error("蓝图仍在后台运行，请稍后从任务列表检查状态");
+}
+
+$("cancelBlueprint").onclick = async () => {
+  if (!state.blueprintJobId) return;
+  $("cancelBlueprint").disabled = true;
+  try {
+    await api(`/api/jobs/${state.blueprintJobId}/cancel`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({reason: "User cancelled blueprint generation"}),
+    });
+    setStatus("blueprintStatus", "已请求取消；若模型调用已经发出，系统会丢弃其结果。");
+  } catch (error) {
+    setStatus("blueprintStatus", error.message, "error");
+  } finally {
+    $("cancelBlueprint").disabled = false;
+  }
 };
 
 function renderQuality(dataset) {

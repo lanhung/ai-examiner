@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     qwen_text_model: str = "qwen-plus"
     qwen_visual_model: str = "qwen3-vl-plus"
     qwen_request_timeout_seconds: float = Field(default=120.0, ge=5.0, le=900.0)
+    qwen_enable_thinking: bool = False
     qwen_realtime_model: str = "qwen3-omni-flash-realtime"
     qwen_realtime_voice: str = "Cherry"
     qwen_realtime_ws_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"

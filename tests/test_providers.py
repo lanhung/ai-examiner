@@ -64,8 +64,48 @@ def test_qwen_provider_uses_text_and_visual_models(tmp_path):
     assert text_result.data == {"summary": "ok"}
     assert text_result.input_tokens == 11
     assert requests[0]["response_format"] == {"type": "json_object"}
+    assert requests[0]["enable_thinking"] is False
     assert image_result.model == "qwen3-vl-plus"
     assert requests[1]["model"] == "qwen3-vl-plus"
     image_content = requests[1]["messages"][1]["content"][1]
     assert image_content["type"] == "image_url"
     assert image_content["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+def test_qwen_provider_can_enable_thinking():
+    import httpx
+
+    from ai_examiner.providers.qwen_provider import QwenProvider
+
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(__import__("json").loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"summary":"ok"}'}}],
+                "usage": {},
+            },
+        )
+
+    provider = QwenProvider(
+        "test-key",
+        "qwen-plus",
+        base_url="https://example.test/v1",
+        visual_model="qwen3-vl-plus",
+        enable_thinking=True,
+    )
+    provider.client.close()
+    provider.client = httpx.Client(
+        base_url="https://example.test/v1",
+        transport=httpx.MockTransport(handler),
+    )
+    provider.complete_json(
+        agent="planner",
+        instructions="Return a summary.",
+        payload={"document_text": "untrusted"},
+        schema_hint={"summary": "string"},
+    )
+
+    assert requests[0]["enable_thinking"] is True

@@ -14,6 +14,7 @@ from uuid import uuid4
 
 import websockets
 from fastapi import (
+    BackgroundTasks,
     Body,
     Depends,
     FastAPI,
@@ -175,6 +176,7 @@ from .services.authorization import (
     resolve_authorization_context,
 )
 from .services.benchmark import BenchmarkService
+from .services.blueprints import BlueprintGenerationService, serialize_blueprint
 from .services.cognitive import CognitiveStateService
 from .services.conversation_policy import effective_conversation_policy
 from .services.data_lifecycle import (
@@ -205,6 +207,7 @@ from .services.golden import GoldenDatasetService
 from .services.jobs import (
     JobQueueUnavailable,
     cancel_persisted_job,
+    dispatch_job_by_id,
     enqueue_job,
     recover_and_dispatch_jobs,
     retry_persisted_job,
@@ -1705,82 +1708,77 @@ def generate_blueprint(
     if not project or not document or document.project_id != project_id:
         raise HTTPException(404, "Project or document not found")
     mode = payload.mode if payload else "defense"
-    resolved_template = SessionTemplateService(db).resolve(
-        project,
-        mode=mode,
-        template_version_id=payload.template_version_id if payload else None,
-        template_overrides=payload.template_overrides if payload else {},
-        request_overrides={},
-    )
-    provider = provider_or_503(
-        payload.profile if payload else None,
-        db=db,
-        project_id=project_id,
-    )
-    orchestrator = ExamOrchestrator(db, provider, project_id=project_id)
+    profile = payload.profile if payload else None
+    provider_or_503(profile, db=db, project_id=project_id)
     try:
-        data, grounding = orchestrator.build_blueprint(
-            document_text=document.content_text,
-            filename=document.filename,
-            language=project.language,
-            template_contract=(
-                resolved_template.snapshot if resolved_template else None
-            ),
+        service = BlueprintGenerationService(db, settings)
+        prepared = service.prepare(
+            project=project,
+            document=document,
+            profile=profile,
+            mode=mode,
+            template_version_id=payload.template_version_id if payload else None,
+            template_overrides=payload.template_overrides if payload else {},
         )
-        if resolved_template:
-            data["template_plan"].update(
-                {
-                    "template_version_id": resolved_template.template_version_id,
-                    "fingerprint": resolved_template.fingerprint,
-                    "compiler_version": resolved_template.compiler_version,
-                    "resolution_source": resolved_template.resolution_source,
-                }
-            )
-        page_assets = {
-            asset.page_number: asset
-            for asset in db.scalars(
-                select(EvidenceAsset).where(
-                    EvidenceAsset.document_id == document.id,
-                    EvidenceAsset.kind == "page",
-                )
-            ).all()
-        }
-        for question in data.get("questions") or []:
-            page_number = int(question.get("source_page") or 1)
-            page_asset = page_assets.get(page_number)
-            question["evidence_asset_ids"] = [page_asset.id] if page_asset else []
-            question["page_preview_url"] = (
-                f"/api/evidence/{page_asset.id}/file" if page_asset else None
-            )
+        blueprint = service.persist(
+            project=project,
+            document=document,
+            prepared=prepared,
+        )
     except ModelGovernanceError:
         db.rollback()
         raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(502, f"Blueprint generation failed: {exc}") from exc
-    version = (
-        db.scalar(select(func.count(Blueprint.id)).where(Blueprint.project_id == project_id)) or 0
+    return serialize_blueprint(blueprint, grounding=prepared.grounding)
+
+
+@app.post("/api/projects/{project_id}/blueprints/async", status_code=202)
+def generate_blueprint_async(
+    project_id: str,
+    payload: BlueprintCreate,
+    background_tasks: BackgroundTasks,
+    db: Annotated[Session, Depends(get_db)],
+    idempotency_key: Annotated[
+        str | None,
+        Header(alias="Idempotency-Key", min_length=1, max_length=160),
+    ] = None,
+):
+    project = db.get(Project, project_id)
+    document = db.get(Document, payload.document_id)
+    if not project or not document or document.project_id != project_id:
+        raise HTTPException(404, "Project or document not found")
+    provider_or_503(payload.profile, db=db, project_id=project_id)
+    SessionTemplateService(db).resolve(
+        project,
+        mode=payload.mode,
+        template_version_id=payload.template_version_id,
+        template_overrides=payload.template_overrides,
+        request_overrides={},
     )
-    blueprint = Blueprint(
+    job = enqueue_job(
+        db,
+        kind="blueprint_generation",
         project_id=project_id,
-        document_id=selected_document_id,
-        version=version + 1,
-        data=data,
-        provider=provider.name,
-        model=provider.model,
+        payload={
+            "project_id": project_id,
+            "document_id": document.id,
+            "profile": payload.profile,
+            "mode": payload.mode,
+            "template_version_id": payload.template_version_id,
+            "template_overrides": payload.template_overrides,
+        },
+        idempotency_key=idempotency_key,
+        dispatch=not settings.celery_always_eager,
     )
-    db.add(blueprint)
-    db.commit()
-    db.refresh(blueprint)
-    return {
-        "id": blueprint.id,
-        "version": blueprint.version,
-        "provider": blueprint.provider,
-        "model": blueprint.model,
-        "grounding": grounding,
-        "template_plan": blueprint.data.get("template_plan"),
-        "data": blueprint.data,
-    }
+    if (
+        settings.celery_always_eager
+        and job.status == "queued"
+        and not job.celery_task_id
+    ):
+        background_tasks.add_task(dispatch_job_by_id, job.id)
+    return serialize_job(job)
 
 
 @app.post("/api/projects/{project_id}/golden-datasets", status_code=201)
@@ -3700,6 +3698,27 @@ def get_job(job_id: str, db: Annotated[Session, Depends(get_db)]):
     if not job:
         raise HTTPException(404, "Job not found")
     return serialize_job(job)
+
+
+@app.post("/api/jobs/{job_id}/cancel", include_in_schema=False)
+def cancel_local_job(
+    job_id: str,
+    payload: JobCancelCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    if settings.auth_mode != "disabled":
+        raise HTTPException(404, "Job not found")
+    job = db.get(BackgroundJob, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    return serialize_job(
+        cancel_persisted_job(
+            db,
+            job,
+            principal_id=job.actor_principal_id or "legacy-local-ui",
+            reason=payload.reason,
+        )
+    )
 
 
 @app.get("/api/projects/{project_id}/jobs")

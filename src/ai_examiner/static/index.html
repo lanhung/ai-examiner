@@ -96,7 +96,12 @@
       <label>场景模板<select id="sessionTemplateSelect"><option value="">兼容模式（论文答辩）</option></select></label>
       <div id="sessionTemplateHint" class="status">模板会同时约束蓝图、文本答辩和语音答辩。</div>
       <button id="generateBlueprint" disabled>生成蓝图</button>
+      <button id="cancelBlueprint" class="secondary-button hidden">取消生成</button>
       <div id="blueprintStatus" class="status"></div>
+      <div id="blueprintProgress" class="hidden" aria-live="polite">
+        <div class="job-progress"><span style="width: 0%"></span></div>
+        <small></small>
+      </div>
       <div id="blueprintPreview" class="blueprint hidden"></div>
 
       <div class="step"><span>4</span><div><h2>AI Golden Dataset</h2><p>模型独立标注、交叉批评、共识合成，并生成四档合成回答。</p></div></div>

@@ -13,6 +13,7 @@ from ..jobs import (
     delete_learner_memory_task,
     export_learner_memory_task,
     export_organization_task,
+    generate_blueprint_task,
     generate_golden_dataset_task,
     run_benchmark_task,
 )
@@ -28,6 +29,7 @@ from .job_control import (
 from .tenancy import current_tenant_context, tenant_organization_or_legacy
 
 TASKS = {
+    "blueprint_generation": generate_blueprint_task,
     "golden_dataset": generate_golden_dataset_task,
     "visual_document": analyze_visual_document_task,
     "benchmark": run_benchmark_task,
@@ -52,6 +54,7 @@ def enqueue_job(
     actor_principal_id: str | None = None,
     idempotency_key: str | None = None,
     max_attempts: int | None = None,
+    dispatch: bool = True,
 ) -> BackgroundJob:
     if kind not in TASKS:
         raise ValueError(f"Unsupported job kind: {kind}")
@@ -154,12 +157,14 @@ def enqueue_job(
             ) from None
         return existing
     db.refresh(job)
+    if not dispatch:
+        return job
     try:
         result = TASKS[kind].delay(envelope.as_dict())
     except Exception as exc:
         db.expire_all()
         failed_job = db.get(BackgroundJob, job.id)
-        if failed_job and failed_job.status == "failed":
+        if failed_job and failed_job.status != "queued":
             return failed_job
         job.status = "failed"
         job.error = "queue_unavailable"
@@ -180,6 +185,16 @@ def enqueue_job(
     db.commit()
     db.refresh(job)
     return job
+
+
+def dispatch_job_by_id(job_id: str) -> None:
+    from ..db import SessionLocal
+
+    with SessionLocal() as db:
+        job = db.get(BackgroundJob, job_id)
+        if job is None:
+            return
+        dispatch_persisted_job(db, job)
 
 
 def ensure_job_envelope(job: BackgroundJob) -> TaskEnvelope:
@@ -219,6 +234,10 @@ def dispatch_persisted_job(db: Session, job: BackgroundJob) -> BackgroundJob:
     try:
         result = TASKS[job.kind].delay(envelope.as_dict())
     except Exception as exc:
+        db.expire_all()
+        current = db.get(BackgroundJob, job.id)
+        if current is not None and current.status != "queued":
+            return current
         job.status = "failed"
         job.error = "queue_unavailable"
         job.terminal_reason = "queue_unavailable"

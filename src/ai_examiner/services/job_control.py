@@ -30,6 +30,7 @@ TERMINAL_JOB_STATUSES = frozenset(
 RETRYABLE_JOB_STATUSES = frozenset({"queued", "retry_scheduled"})
 
 JOB_CAPABILITIES: dict[str, str] = {
+    "blueprint_generation": "blueprint.create",
     "golden_dataset": "dataset.manage",
     "visual_document": "document.read",
     "benchmark": "benchmark.run",

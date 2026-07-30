@@ -23,6 +23,15 @@
   retention, verified deletion, human review, templates and voice configuration.
 - Made public model-policy task families (`planner`, `analyzer`, and `reporter`)
   authorize their corresponding runtime agent names.
+- Moved interactive blueprint generation onto the durable background-job path with
+  idempotent submission, progress polling, cooperative cancellation and result
+  recovery while retaining the synchronous API for compatibility.
+- Added a single-process background dispatcher for direct staging deployments and
+  preserved worker failure details instead of misreporting eager task failures as
+  queue outages.
+- Added configurable Qwen thinking mode and defaulted interactive Qwen requests to
+  non-thinking mode to reduce latency; quality-sensitive batch runs can opt in with
+  `QWEN_ENABLE_THINKING=true`.
 
 AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Versioning；开发版本使用 PEP 440 标识，例如 `0.5.0.dev0`。
 

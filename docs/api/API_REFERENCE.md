@@ -26,6 +26,58 @@ Detailed contracts: `docs/api/V0_7_LONG_TERM_MEMORY_API.md`.
 
 交互式文档：`/docs`。
 
+## Blueprint generation
+
+The compatibility endpoint remains synchronous:
+
+```http
+POST /api/projects/{project_id}/blueprints
+```
+
+The browser and other interactive clients should use the recoverable job endpoint:
+
+```http
+POST /api/projects/{project_id}/blueprints/async
+Idempotency-Key: <stable client request id>
+Content-Type: application/json
+```
+
+```json
+{
+  "document_id": "document-id",
+  "profile": "qwen:qwen-plus",
+  "mode": "defense",
+  "template_version_id": null,
+  "template_overrides": {}
+}
+```
+
+The endpoint returns `202` with a serialized background job. Poll:
+
+```http
+GET /api/jobs/{job_id}
+```
+
+On completion, `result.blueprint` contains the same public blueprint shape returned
+by the synchronous endpoint. Reusing an `Idempotency-Key` with the same payload
+returns the existing job and does not start a second billable model call. Reusing
+the key with a different payload is rejected.
+
+Local evaluation mode (`AUTH_MODE=disabled`) can cancel through:
+
+```http
+POST /api/jobs/{job_id}/cancel
+```
+
+OIDC deployments must use the capability-protected enterprise endpoint:
+
+```http
+POST /api/v1/jobs/{job_id}/cancel
+```
+
+Cancellation is cooperative. If the provider request is already in flight, its
+response is discarded before a blueprint is persisted.
+
 ## Documents
 
 ### Upload

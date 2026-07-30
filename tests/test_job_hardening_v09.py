@@ -31,7 +31,7 @@ from ai_examiner.services.job_control import (
     recover_stale_jobs,
     request_job_cancellation,
 )
-from ai_examiner.services.jobs import enqueue_job
+from ai_examiner.services.jobs import dispatch_persisted_job, enqueue_job
 from ai_examiner.services.tenancy import set_tenant_context
 
 
@@ -201,6 +201,49 @@ def test_duplicate_delivery_executes_billable_handler_once(monkeypatch):
     assert second["duplicate_delivery"] is True
     assert second["result"] == {"result_id": "one"}
     assert calls == ["called"]
+
+
+def test_eager_dispatch_preserves_worker_failure_instead_of_masking_queue(
+    monkeypatch,
+):
+    class EagerFailureTask:
+        @staticmethod
+        def delay(envelope):
+            with SessionLocal() as task_db:
+                persisted = task_db.get(BackgroundJob, envelope["job_id"])
+                persisted.status = "failed"
+                persisted.error = "provider_rejected"
+                persisted.terminal_reason = "permanent_failure"
+                task_db.commit()
+            raise RuntimeError("eager task propagated its worker failure")
+
+    StubTask.calls = []
+    monkeypatch.setitem(job_service.TASKS, "golden_dataset", StubTask)
+    organization, principal, _membership, project = _tenant(slug="eager-failure")
+    with SessionLocal() as db:
+        set_tenant_context(
+            db,
+            organization_id=organization.id,
+            principal_id=principal.id,
+        )
+        job = enqueue_job(
+            db,
+            kind="golden_dataset",
+            project_id=project.id,
+            payload={"project_id": project.id},
+            idempotency_key="eager-failure",
+            dispatch=False,
+        )
+        monkeypatch.setitem(
+            job_service.TASKS,
+            "golden_dataset",
+            EagerFailureTask,
+        )
+        result = dispatch_persisted_job(db, job)
+
+        assert result.status == "failed"
+        assert result.error == "provider_rejected"
+        assert result.terminal_reason == "permanent_failure"
 
 
 def test_worker_rechecks_current_capability_before_resource_access(monkeypatch):
