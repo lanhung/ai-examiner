@@ -949,6 +949,7 @@ def enterprise_context(
         raise HTTPException(404, "Organization context not found")
     return {
         **context.public_dict(),
+        "capabilities": sorted(ROLE_CAPABILITIES.get(context.role or "", set())),
         "organization": serialize_organization(organization),
     }
 

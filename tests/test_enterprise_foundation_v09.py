@@ -80,6 +80,8 @@ def test_bootstrap_owner_is_idempotent_and_context_resolves_membership(client):
     assert response.status_code == 200
     assert response.json()["role"] == "owner"
     assert response.json()["authorization_enforced"] is False
+    assert "organization.read" in response.json()["capabilities"]
+    assert "member.manage" in response.json()["capabilities"]
 
 
 def test_principal_status_lifecycle_is_bounded():
