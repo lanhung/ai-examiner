@@ -45,6 +45,7 @@ def test_enterprise_console_is_a_dedicated_operational_surface(client):
     assert "capturedOrganization !== state.organizationId" in script.text
     assert "X-AI-Examiner-Organization" in script.text
     assert "new Set(context.capabilities || [])" in script.text
+    assert 'item.status !== "revoked"' in script.text
     assert 'isDelete ? "DELETE" : "APPROVE"' in script.text
 
 

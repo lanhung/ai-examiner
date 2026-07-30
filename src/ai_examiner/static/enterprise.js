@@ -394,7 +394,7 @@ async function loadMembers() {
   const payload = await api(`/api/v1/organizations/${state.organizationId}/memberships`);
   $("#memberRows").innerHTML = payload.items.length
     ? payload.items.map((item) => {
-        const controls = can("member.manage") ? `
+        const controls = can("member.manage") && item.status !== "revoked" ? `
           <div class="row-actions" data-membership="${escapeHtml(item.id)}" data-version="${item.version}">
             <select class="member-role" aria-label="角色">${roles.map((role) => `<option ${role === item.role ? "selected" : ""}>${role}</option>`).join("")}</select>
             <select class="member-status" aria-label="状态">${["active", "suspended"].map((status) => `<option ${status === item.status ? "selected" : ""}>${status}</option>`).join("")}</select>
