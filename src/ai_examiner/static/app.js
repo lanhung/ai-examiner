@@ -71,6 +71,13 @@ function setStatus(id, text, kind = "") {
   node.textContent = text;
   node.className = `status ${kind}`;
 }
+function responseErrorMessage(body, status) {
+  const detail = body && typeof body === "object" && "detail" in body ? body.detail : body;
+  if (detail && typeof detail === "object") {
+    return `${detail.code ? `${detail.code}: ` : ""}${detail.message || JSON.stringify(detail)}`;
+  }
+  return detail || `HTTP ${status}`;
+}
 async function api(path, options = {}) {
   const response = await fetch(path, {cache: "no-store", ...options});
   const raw = await response.text();
@@ -79,11 +86,7 @@ async function api(path, options = {}) {
     try { body = JSON.parse(raw); } catch { body = { detail: raw }; }
   }
   if (!response.ok) {
-    const detail = body.detail;
-    const message = detail && typeof detail === "object"
-      ? `${detail.code ? `${detail.code}: ` : ""}${detail.message || JSON.stringify(detail)}`
-      : detail;
-    throw new Error(message || `HTTP ${response.status}`);
+    throw new Error(responseErrorMessage(body, response.status));
   }
   return body;
 }
@@ -1715,9 +1718,10 @@ async function connectVoice() {
     body: pc.localDescription.sdp,
   });
   if (!response.ok) {
-    let detail = await response.text();
-    try { detail = JSON.parse(detail).detail || detail; } catch {}
-    throw new Error(detail || `Realtime connection failed: ${response.status}`);
+    const raw = await response.text();
+    let body = raw;
+    try { body = JSON.parse(raw); } catch {}
+    throw new Error(responseErrorMessage(body, response.status));
   }
   await pc.setRemoteDescription({type: "answer", sdp: await response.text()});
   $("muteVoice").disabled = false;

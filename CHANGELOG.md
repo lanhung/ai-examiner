@@ -67,6 +67,8 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   terminating Uvicorn, preventing stale application processes after deployment.
 - Return a structured 502 error when the server cannot reach OpenAI Realtime,
   so the browser can distinguish infrastructure connectivity from media failure.
+- Render structured realtime errors as readable code and message text instead
+  of the JavaScript string `[object Object]`.
 - Add WP-13 enterprise administration UI with OIDC login state, safe organization
   switching, capability-gated members, model governance, audit, lifecycle and
   human-review workflows.

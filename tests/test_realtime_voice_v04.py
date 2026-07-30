@@ -339,3 +339,4 @@ def test_qwen_browser_gates_microphone_until_initial_response_finishes():
     assert 'const transcript = (data.transcript || "").trim()' in app_js
     assert "state.voiceInitialRequestAt = Date.now()" in app_js
     assert "qwen_initial_response_timeout" in app_js
+    assert "responseErrorMessage(body, response.status)" in app_js
