@@ -63,6 +63,8 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 - Normalize compound model citations into individually verified verbatim evidence
   anchors, detect unexpected text-script artifacts and prevent datasets with
   failed quality gates from being frozen.
+- Add an idempotent AutoDL stop script that validates the recorded PID before
+  terminating Uvicorn, preventing stale application processes after deployment.
 - Add WP-13 enterprise administration UI with OIDC login state, safe organization
   switching, capability-gated members, model governance, audit, lifecycle and
   human-review workflows.
