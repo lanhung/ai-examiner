@@ -2,6 +2,11 @@
 
 Status: implementation complete; release promotion held pending external evidence.
 
+The latest independent full-tree review is recorded in
+`docs/evaluation/V0_9_CODEX_FULL_AUDIT_2026_07_30.md`. Its tested code commit
+reached `deterministic_ready` with no failed checks; 12 external enterprise
+artifacts remain blocked.
+
 ## Implemented
 
 - deterministic release-gate CLI;

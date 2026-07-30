@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-30T07:49:20.380346+00:00",
+  "status": "deterministic_ready",
+  "source_commit": "08408234d33010834a15225689101e0c8054dc52",
+  "branch": "research/v0.9.0",
+  "package_version": "0.9.0.dev0",
+  "release_gate": {
+    "passed": 11,
+    "failed": 0,
+    "blocked": 12,
+    "release_ready": false
+  },
+  "engineering": {
+    "pytest_collected": 312,
+    "pytest_files": 48,
+    "ruff": "passed",
+    "app_javascript_syntax": "passed",
+    "enterprise_javascript_syntax": "passed",
+    "tracked_source_secret_scan": "passed",
+    "known_dependency_vulnerabilities": 0,
+    "migration_heads": [
+      "20260728_0016"
+    ],
+    "protected_route_method_pairs": 48,
+    "working_tree_clean": true
+  },
+  "runtime": {
+    "provider": "qwen",
+    "model": "qwen-plus",
+    "thinking_enabled": false,
+    "acceptance_passed": 48,
+    "acceptance_failed": 0,
+    "async_enqueue_latency_ms": 25,
+    "health_during_generation_latency_ms": 3,
+    "async_terminal_latency_ms": 194264,
+    "idempotent_duplicate_latency_ms": 17,
+    "log_exception_count": 0
+  },
+  "api": {
+    "openapi_paths": 117,
+    "openapi_operations": 140
+  },
+  "limitations": {
+    "enterprise_external_artifacts_blocked": 12,
+    "postgres_compose_rehearsal_completed": false,
+    "oidc_staging_completed": false,
+    "desktop_mobile_visual_acceptance_completed": false,
+    "vultr_observation_completed": false
+  },
+  "content_retention": {
+    "api_keys_recorded": false,
+    "prompts_recorded": false,
+    "document_bodies_recorded": false,
+    "model_responses_recorded": false
+  }
+}
