@@ -816,10 +816,15 @@ function renderQuality(dataset) {
     ["题目数", quality.case_count],
     ["材料忠实率", `${Math.round(quality.grounded_rate * 100)}%`],
     ["标注完整率", `${Math.round(quality.annotation_completeness * 100)}%`],
+    ["文本卫生", `${Math.round(Number(quality.text_hygiene_rate ?? 1) * 100)}%`],
     ["类型覆盖", quality.type_coverage],
     ["AI Panel", quality.mean_ai_panel_score ?? "—"],
     ["估算费用", `$${Number(quality.total_estimated_cost_usd || 0).toFixed(4)}`],
   ].map(([label, value]) => `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
+  $("freezeDataset").disabled = !quality.release_ready;
+  $("freezeDataset").title = quality.release_ready
+    ? "冻结为稳定回归基准"
+    : "质量门禁未通过，不能冻结";
 }
 
 $("generateGolden").onclick = async () => {
@@ -844,7 +849,7 @@ $("generateGolden").onclick = async () => {
     preview.classList.remove("hidden");
     preview.innerHTML = `<strong>${escapeHtml(dataset.data.paper_title)}</strong><p>${escapeHtml(dataset.data.scope_summary)}</p><ol>${dataset.data.cases.slice(0, 8).map((item) => `<li><b>${escapeHtml(item.type)}</b> · ${escapeHtml(item.question)}<small>${escapeHtml(item.rationale)}</small></li>`).join("")}</ol>`;
     $("runBenchmark").disabled = false;
-    $("freezeDataset").disabled = false;
+    $("freezeDataset").disabled = !dataset.quality_metrics.release_ready;
     $("exportGolden").href = `/api/golden-datasets/${dataset.id}/export`;
     $("exportGolden").classList.remove("hidden");
     setStatus("goldenStatus", `Golden Dataset v${dataset.version} 已生成；状态：${dataset.status}`, dataset.status === "ready" ? "success" : "");

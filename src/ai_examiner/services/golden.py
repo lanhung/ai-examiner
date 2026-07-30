@@ -39,22 +39,116 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip().lower()
 
 
+def _verbatim_source_evidence(
+    excerpt: str,
+    document_text: str,
+    page_map: list[dict],
+) -> list[dict]:
+    normalized_document = _normalize(document_text)
+    if not normalized_document:
+        return []
+    normalized_excerpt = _normalize(excerpt)
+    has_explicit_gap = bool(re.search(r"\.{3,}|\n\s*\.{3,}\s*\n", str(excerpt or "")))
+    if normalized_excerpt and normalized_excerpt in normalized_document and not has_explicit_gap:
+        candidates = [str(excerpt).strip()]
+    else:
+        candidates: list[str] = []
+        citation_groups = (
+            re.split(r"(?:\.{3,}|…+)", str(excerpt or ""))
+            if has_explicit_gap
+            else [str(excerpt or "")]
+        )
+        for group in citation_groups:
+            units = [
+                item.strip(" \t\r\n-")
+                for item in re.split(r"(?:\n+|(?<=[.!?。！？])\s+)", group)
+                if item.strip(" \t\r\n-")
+            ]
+            index = 0
+            while index < len(units):
+                best = ""
+                best_end = index
+                for end in range(index + 1, min(len(units), index + 10) + 1):
+                    candidate = " ".join(units[index:end]).strip()
+                    normalized_candidate = _normalize(candidate)
+                    if (
+                        len(normalized_candidate) >= 20
+                        and normalized_candidate in normalized_document
+                    ):
+                        best = candidate
+                        best_end = end
+                if best:
+                    candidates.append(best)
+                    index = best_end
+                else:
+                    index += 1
+
+    evidence = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        normalized_candidate = _normalize(candidate)
+        if not normalized_candidate or normalized_candidate in seen:
+            continue
+        seen.add(normalized_candidate)
+        page_number = next(
+            (
+                int(page.get("page") or 1)
+                for page in page_map
+                if normalized_candidate in _normalize(str(page.get("text") or ""))
+            ),
+            None,
+        )
+        evidence.append(
+            {
+                "excerpt": candidate,
+                "page": page_number,
+                "match": "verbatim_normalized",
+            }
+        )
+    return evidence
+
+
+def _has_unexpected_cyrillic(text: str, document_text: str) -> bool:
+    return bool(re.search(r"[\u0400-\u04ff]", text or "")) and not bool(
+        re.search(r"[\u0400-\u04ff]", document_text or "")
+    )
+
+
 def validate_dataset(data: dict, document_text: str) -> dict:
     cases = data.get("cases") or []
     normalized_document = _normalize(document_text)
     issues: list[str] = []
     grounded = 0
     complete = 0
+    clean_text = 0
     unique_questions: set[str] = set()
     type_counts: dict[str, int] = {}
 
     for case in cases:
         question = _normalize(case.get("question", ""))
-        excerpt = _normalize(case.get("source_excerpt", ""))
-        if excerpt and excerpt in normalized_document:
+        excerpts = list(case.get("source_excerpts") or [])
+        if not excerpts and case.get("source_excerpt"):
+            excerpts = [case.get("source_excerpt")]
+        normalized_excerpts = [_normalize(str(item)) for item in excerpts if str(item).strip()]
+        if normalized_excerpts and all(
+            excerpt in normalized_document for excerpt in normalized_excerpts
+        ):
             grounded += 1
         else:
             issues.append(f"{case.get('id', '?')}: source excerpt not found verbatim")
+        if _has_unexpected_cyrillic(
+            " ".join(
+                [
+                    str(case.get("question") or ""),
+                    str(case.get("ideal_answer") or ""),
+                    *[str(item) for item in case.get("required_points") or []],
+                ]
+            ),
+            document_text,
+        ):
+            issues.append(f"{case.get('id', '?')}: unexpected Cyrillic text artifact")
+        else:
+            clean_text += 1
         required = case.get("required_points") or []
         followups = case.get("followups") or []
         errors = case.get("common_errors") or []
@@ -88,12 +182,15 @@ def validate_dataset(data: dict, document_text: str) -> dict:
         "case_count": count,
         "grounded_rate": round(grounded / count, 3) if count else 0.0,
         "annotation_completeness": round(complete / count, 3) if count else 0.0,
+        "text_hygiene_rate": round(clean_text / count, 3) if count else 0.0,
         "unique_question_rate": round(len(unique_questions) / count, 3) if count else 0.0,
         "type_coverage": len(type_counts),
         "type_distribution": type_counts,
         "mean_ai_panel_score": round(mean(quality_values), 3) if quality_values else None,
         "issues": issues,
-        "release_ready": bool(count >= 4 and grounded == count and complete == count),
+        "release_ready": bool(
+            count >= 4 and grounded == count and complete == count and clean_text == count
+        ),
     }
 
 
@@ -212,9 +309,7 @@ class GoldenDatasetService:
             consensus_profile,
             project_id=self.project_id,
         )
-        consensus = ConsensusSynthesizer(
-            self._context(consensus_provider, consensus_profile)
-        )
+        consensus = ConsensusSynthesizer(self._context(consensus_provider, consensus_profile))
         data = self._timed(
             consensus.synthesize,
             document_text=self.document.content_text,
@@ -230,8 +325,7 @@ class GoldenDatasetService:
         )
         synthetic = self._timed(answer_generator.generate, cases=data.get("cases", []))
         variants_by_case = {
-            item.get("case_id"): item.get("variants", [])
-            for item in synthetic.get("answers", [])
+            item.get("case_id"): item.get("variants", []) for item in synthetic.get("answers", [])
         }
         page_assets = {
             asset.page_number: asset
@@ -250,23 +344,48 @@ class GoldenDatasetService:
         ).all()
         for case in data.get("cases", []):
             case["synthetic_answers"] = variants_by_case.get(case.get("id"), [])
+            proposed_excerpt = str(case.get("source_excerpt") or "")
+            source_evidence = _verbatim_source_evidence(
+                proposed_excerpt,
+                self.document.content_text,
+                list(self.document.page_map or []),
+            )
+            if source_evidence:
+                case["source_excerpt_candidate"] = proposed_excerpt
+                case["source_evidence"] = source_evidence
+                case["source_excerpts"] = [item["excerpt"] for item in source_evidence]
+                case["source_excerpt"] = source_evidence[0]["excerpt"]
+                if source_evidence[0]["page"] is not None:
+                    case["source_page"] = source_evidence[0]["page"]
             source_page = int(case.get("source_page") or 1)
-            excerpt = _normalize(str(case.get("source_excerpt") or ""))
-            linked = []
+            excerpts = [
+                _normalize(str(item))
+                for item in case.get("source_excerpts") or [case.get("source_excerpt") or ""]
+                if str(item).strip()
+            ]
+            linked = [
+                page_assets[page].id
+                for page in {
+                    int(item["page"]) for item in source_evidence if item.get("page") is not None
+                }
+                if page in page_assets
+            ]
             page_asset = page_assets.get(source_page)
-            if page_asset:
+            if page_asset and page_asset.id not in linked:
                 linked.append(page_asset.id)
             for asset in text_assets:
-                if asset.page_number != source_page:
+                if asset.page_number not in {
+                    int(item["page"]) for item in source_evidence if item.get("page") is not None
+                }:
                     continue
                 normalized_asset = _normalize(asset.text)
-                if excerpt and (excerpt in normalized_asset or normalized_asset in excerpt):
+                if any(
+                    excerpt and (excerpt in normalized_asset or normalized_asset in excerpt)
+                    for excerpt in excerpts
+                ):
                     linked.append(asset.id)
-                    break
             case["evidence_asset_ids"] = linked
-            case["page_preview_url"] = (
-                f"/api/evidence/{page_asset.id}/file" if page_asset else None
-            )
+            case["page_preview_url"] = f"/api/evidence/{page_asset.id}/file" if page_asset else None
 
         data["provenance"] = {
             "candidate_profiles": profiles,

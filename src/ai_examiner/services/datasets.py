@@ -12,6 +12,8 @@ ALLOWED_STATES = {"draft", "candidate", "frozen", "deprecated", "ready", "needs_
 def set_dataset_status(db: Session, dataset: GoldenDataset, status: str) -> GoldenDataset:
     if status not in ALLOWED_STATES:
         raise ValueError(f"Unsupported dataset status: {status}")
+    if status == "frozen" and not bool((dataset.quality_metrics or {}).get("release_ready")):
+        raise ValueError("Dataset cannot be frozen until all release quality gates pass")
     dataset.status = status
     db.commit()
     db.refresh(dataset)
@@ -35,7 +37,9 @@ def dataset_diff(left: GoldenDataset, right: GoldenDataset) -> dict:
                 changes[field] = {
                     "before": before.get(field),
                     "after": after.get(field),
-                    "similarity": round(difflib.SequenceMatcher(None, before_text, after_text).ratio(), 3),
+                    "similarity": round(
+                        difflib.SequenceMatcher(None, before_text, after_text).ratio(), 3
+                    ),
                 }
         if changes:
             modified.append({"case_id": case_id, "changes": changes})

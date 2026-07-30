@@ -60,6 +60,9 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   reuse detection and auditable aggregate score caps.
 - Require open-answer adjudication to be both defensible and functionally
   satisfied before promoting a rubric point to full coverage.
+- Normalize compound model citations into individually verified verbatim evidence
+  anchors, detect unexpected text-script artifacts and prevent datasets with
+  failed quality gates from being frozen.
 - Add WP-13 enterprise administration UI with OIDC login state, safe organization
   switching, capability-gated members, model governance, audit, lifecycle and
   human-review workflows.

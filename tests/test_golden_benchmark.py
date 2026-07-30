@@ -1,3 +1,10 @@
+from types import SimpleNamespace
+
+import pytest
+
+from ai_examiner.services.datasets import set_dataset_status
+from ai_examiner.services.golden import _verbatim_source_evidence, validate_dataset
+
 
 def _project_and_document(client):
     project = client.post("/api/projects", json={"name": "Golden 数据集测试"})
@@ -56,6 +63,67 @@ def test_ai_golden_dataset_and_benchmark_flow(client):
     assert run["results"][0]["planner"]["question_count"] >= 6
     assert run["results"][0]["analyzer"]["sample_count"] == 8
     assert 0 <= run["results"][0]["quality_score"] <= 100
+
+
+def test_compound_model_citation_is_split_into_verbatim_page_evidence():
+    document = (
+        "Primary metric: misconception recall. Secondary metric: latency.\n"
+        "Limitation: synthetic learners may not represent real students.\n"
+        "Figure 1 reports adaptive recall of 0.79."
+    )
+    evidence = _verbatim_source_evidence(
+        (
+            "Limitation: synthetic learners may not represent real students.\n"
+            "...\n"
+            "Figure 1 reports adaptive recall of 0.79."
+        ),
+        document,
+        [
+            {"page": 1, "text": document.splitlines()[0]},
+            {"page": 2, "text": "\n".join(document.splitlines()[1:])},
+        ],
+    )
+
+    assert [item["page"] for item in evidence] == [2, 2]
+    assert all(item["match"] == "verbatim_normalized" for item in evidence)
+    assert all("..." not in item["excerpt"] for item in evidence)
+
+
+def test_dataset_quality_rejects_unexpected_script_artifacts_and_freeze():
+    document = "The method compares fixed and adaptive questioning."
+    data = {
+        "cases": [
+            {
+                "id": f"Q{index}",
+                "question": (
+                    "How does the method support the claim?"
+                    if index > 1
+                    else "How бк does the method support the claim?"
+                ),
+                "type": "method",
+                "ideal_answer": "It compares fixed and adaptive questioning.",
+                "required_points": ["Describe the comparison.", "Bound the claim."],
+                "followups": ["What is the limitation?"],
+                "common_errors": ["Assuming causality."],
+                "scoring_rubric": {
+                    "excellent": "Complete",
+                    "acceptable": "Partial",
+                    "insufficient": "Missing",
+                },
+                "source_excerpt": document,
+            }
+            for index in range(1, 5)
+        ]
+    }
+
+    quality = validate_dataset(data, document)
+
+    assert quality["grounded_rate"] == 1.0
+    assert quality["text_hygiene_rate"] == 0.75
+    assert quality["release_ready"] is False
+    dataset = SimpleNamespace(quality_metrics=quality)
+    with pytest.raises(ValueError, match="quality gates"):
+        set_dataset_status(SimpleNamespace(), dataset, "frozen")
 
 
 def test_optional_expert_calibration_endpoint(client):
