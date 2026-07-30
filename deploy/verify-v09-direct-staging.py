@@ -21,11 +21,20 @@ class AcceptanceRun:
         base_url: str,
         organization_id: str,
         identities: dict[str, str],
+        trust_env: bool = False,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.organization_id = organization_id
         self.identities = identities
         self.results: list[dict[str, Any]] = []
+        self.client = httpx.Client(
+            base_url=self.base_url,
+            timeout=180,
+            trust_env=trust_env,
+        )
+
+    def close(self) -> None:
+        self.client.close()
 
     def headers(self, actor: str = "owner", **extra: str) -> dict[str, str]:
         return {
@@ -46,15 +55,14 @@ class AcceptanceRun:
         **kwargs: Any,
     ) -> httpx.Response:
         started = time.perf_counter()
-        response = httpx.request(
+        response = self.client.request(
             method,
-            f"{self.base_url}{path}",
+            path,
             headers=(
                 self.headers(actor)
                 if headers_override is None
                 else headers_override
             ),
-            timeout=180,
             **kwargs,
         )
         expected_values = (expected,) if isinstance(expected, int) else expected
@@ -84,6 +92,63 @@ class AcceptanceRun:
                 }
             )
             raise AssertionError(f"{name}: {detail}")
+
+    def wait_for_job(
+        self,
+        job_id: str,
+        *,
+        timeout_seconds: float = 240,
+        poll_seconds: float = 0.5,
+    ) -> dict[str, Any]:
+        started = time.perf_counter()
+        deadline = started + timeout_seconds
+        last_payload: dict[str, Any] = {}
+        while time.perf_counter() < deadline:
+            response = self.client.get(
+                f"/api/jobs/{job_id}",
+                headers=self.headers(),
+            )
+            if response.status_code != 200:
+                self.results.append(
+                    {
+                        "name": "real_qwen_planner_async_completion",
+                        "status": "failed",
+                        "http_status": response.status_code,
+                        "latency_ms": round((time.perf_counter() - started) * 1000),
+                    }
+                )
+                raise AssertionError(
+                    "real_qwen_planner_async_completion: "
+                    f"job poll returned {response.status_code}: "
+                    f"{response.text[:500]}"
+                )
+            last_payload = response.json()
+            if last_payload.get("status") in {
+                "completed",
+                "failed",
+                "cancelled",
+                "dead_letter",
+            }:
+                break
+            time.sleep(poll_seconds)
+        else:
+            last_payload = {"status": "timeout", "id": job_id}
+
+        passed = last_payload.get("status") == "completed"
+        self.results.append(
+            {
+                "name": "real_qwen_planner_async_completion",
+                "status": "passed" if passed else "failed",
+                "http_status": 200 if passed else None,
+                "latency_ms": round((time.perf_counter() - started) * 1000),
+            }
+        )
+        if not passed:
+            raise AssertionError(
+                "real_qwen_planner_async_completion: "
+                f"unexpected terminal job: {last_payload}"
+            )
+        return last_payload
 
 
 def run_acceptance(run: AcceptanceRun) -> None:
@@ -310,17 +375,49 @@ def run_acceptance(run: AcceptanceRun) -> None:
         f"/api/v1/evidence/{evidence['assets'][0]['id']}/file",
     )
 
-    blueprint = run.check(
-        "real_qwen_planner",
+    blueprint_payload = {
+        "document_id": document["id"],
+        "profile": "qwen:qwen-plus",
+        "mode": "defense",
+    }
+    blueprint_job = run.check(
+        "real_qwen_planner_async_enqueue",
         "POST",
-        f"/api/projects/{project['id']}/blueprints",
-        expected=(200, 201),
-        json={
-            "document_id": document["id"],
-            "profile": "qwen:qwen-plus",
-            "mode": "defense",
-        },
+        f"/api/projects/{project['id']}/blueprints/async",
+        expected=202,
+        headers_override=run.headers(
+            "owner",
+            **{"Idempotency-Key": "acceptance-blueprint-v09"},
+        ),
+        json=blueprint_payload,
     ).json()
+    run.check(
+        "health_during_async_blueprint",
+        "GET",
+        "/health",
+        headers_override={},
+    )
+    completed_blueprint_job = run.wait_for_job(blueprint_job["id"])
+    blueprint = completed_blueprint_job["result"]["blueprint"]
+    duplicate_blueprint_job = run.check(
+        "blueprint_async_idempotency",
+        "POST",
+        f"/api/projects/{project['id']}/blueprints/async",
+        expected=202,
+        headers_override=run.headers(
+            "owner",
+            **{"Idempotency-Key": "acceptance-blueprint-v09"},
+        ),
+        json=blueprint_payload,
+    ).json()
+    run.assert_condition(
+        "blueprint_async_job_reused",
+        duplicate_blueprint_job["id"] == blueprint_job["id"],
+        (
+            "duplicate async blueprint request created another job: "
+            f"{blueprint_job['id']} != {duplicate_blueprint_job['id']}"
+        ),
+    )
     blueprint_data = blueprint.get("data") or {}
     run.assert_condition(
         "qwen_questions_created",
@@ -608,12 +705,22 @@ def main() -> int:
     parser.add_argument("--organization-id", required=True)
     parser.add_argument("--identities", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--trust-env",
+        action="store_true",
+        help=(
+            "Honor HTTP(S)_PROXY and NO_PROXY from the process environment. "
+            "Disabled by default so localhost and private staging addresses "
+            "cannot be redirected through a system proxy."
+        ),
+    )
     args = parser.parse_args()
 
     run = AcceptanceRun(
         base_url=args.base_url,
         organization_id=args.organization_id,
         identities=json.loads(args.identities.read_text(encoding="utf-8")),
+        trust_env=args.trust_env,
     )
     status = "passed"
     error: str | None = None
@@ -631,6 +738,8 @@ def main() -> int:
                     "latency_ms": 0,
                 }
             )
+    finally:
+        run.close()
 
     report = {
         "schema_version": "1.0",
