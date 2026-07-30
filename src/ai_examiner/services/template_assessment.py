@@ -6,7 +6,7 @@ from typing import Any
 from ..assessment import assessment_components, clamp
 from ..template_engine.registries import ASSESSMENT_DIMENSIONS, DISCLAIMER_TEXTS
 
-TEMPLATE_ASSESSMENT_VERSION = "template-assessment-v1"
+TEMPLATE_ASSESSMENT_VERSION = "template-assessment-v2-relevance-gate"
 ASSISTED_BLEND = {"independent": 0.7, "assisted": 0.3}
 
 
@@ -177,12 +177,26 @@ def evaluate_with_policy(
         if total_weight > 0
         else 0.0
     )
-    computed_score = round(minimum + span * normalized_total, 4)
+    raw_computed_score = round(minimum + span * normalized_total, 4)
+    normalized_score_cap = analysis.get("assessment_score_cap")
+    score_cap = (
+        round(minimum + span * clamp(normalized_score_cap), 4)
+        if normalized_score_cap is not None
+        else None
+    )
+    computed_score = round(
+        min(raw_computed_score, score_cap)
+        if score_cap is not None
+        else raw_computed_score,
+        4,
+    )
     return {
         "assessment_version": TEMPLATE_ASSESSMENT_VERSION,
         "aggregate": effective.get("aggregate", "weighted_dimensions"),
         "score": round(computed_score, 1),
         "computed_score": computed_score,
+        "raw_computed_score": raw_computed_score,
+        "score_cap": score_cap,
         "show_aggregate": effective.get("aggregate") != "no_total",
         "max_score": maximum,
         "min_score": minimum,
@@ -197,6 +211,20 @@ def evaluate_with_policy(
         "confidence": analysis.get("confidence", 0.5),
         "question_type": question.get("type", "general"),
         "objective_ids": list(question.get("objective_ids") or []),
+        "quality_gates": {
+            "question_relevance": analysis.get("question_relevance", 1.0),
+            "directly_addresses_question": analysis.get(
+                "directly_addresses_question", True
+            ),
+            "cross_question_duplicate": analysis.get(
+                "cross_question_duplicate", False
+            ),
+            "max_prior_answer_similarity": analysis.get(
+                "max_prior_answer_similarity", 0.0
+            ),
+            "score_capped": score_cap is not None
+            and raw_computed_score > computed_score,
+        },
         "policy": {
             "assisted_performance": effective.get(
                 "assisted_performance", "report_separately"
@@ -217,7 +245,11 @@ def recompute_score(evaluation: dict[str, Any]) -> float:
     ) / total_weight
     minimum = float(evaluation.get("min_score", 0.0))
     maximum = float(evaluation.get("max_score", 5.0))
-    return round(minimum + (maximum - minimum) * normalized, 4)
+    computed = round(minimum + (maximum - minimum) * normalized, 4)
+    score_cap = evaluation.get("score_cap")
+    if score_cap is not None:
+        computed = min(computed, float(score_cap))
+    return round(computed, 4)
 
 
 def disclaimer(disclaimer_id: str, language: str) -> str:

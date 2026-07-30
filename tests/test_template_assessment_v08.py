@@ -66,7 +66,7 @@ def test_template_evaluator_recomputes_exact_weighted_score_with_evidence():
         language="en",
     )
 
-    assert evaluation["assessment_version"] == "template-assessment-v1"
+    assert evaluation["assessment_version"] == "template-assessment-v2-relevance-gate"
     assert evaluation["objective_ids"] == ["evidence_quality"]
     assert evaluation["computed_score"] == recompute_score(evaluation)
     assert evaluation["score"] == round(evaluation["computed_score"], 1)

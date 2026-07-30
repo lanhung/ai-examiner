@@ -37,9 +37,7 @@ class RecordedAssessmentProvider(ModelProvider):
         self.calls += 1
         self.last_instructions = instructions
         self.last_payload = payload
-        return ProviderResult(
-            data=self.responses.pop(0), provider=self.name, model=self.model
-        )
+        return ProviderResult(data=self.responses.pop(0), provider=self.name, model=self.model)
 
     def complete_json_with_images(
         self,
@@ -88,6 +86,9 @@ def _response(correctness: str = "correct") -> dict[str, Any]:
         "source_grounding": 1.0,
         "reasoning_quality": 1.0,
         "boundary_awareness": 1.0,
+        "question_relevance": 1.0,
+        "directly_addresses_question": True,
+        "question_relevance_reason": "The response directly answers the active question.",
         "confidence": 0.98,
         "followup_candidates": [],
     }
@@ -139,6 +140,43 @@ def test_real_provider_alias_can_receive_full_score():
     assert evaluation["dimensions"]["correctness"] == 5.0
 
 
+def test_cross_question_duplicate_is_capped_and_requires_followup():
+    provider = RecordedAssessmentProvider([_response("supported")])
+    analyzer = AnswerAnalyzer(AgentContext(provider=provider))
+    repeated = (
+        "The adaptive method improves recall from 0.61 to 0.79, but the "
+        "experiment uses synthetic learners and therefore has limited generalizability."
+    )
+    question = {
+        "id": "Q2",
+        "text": "How would you transfer the method to a real classroom?",
+        "expected_points": [
+            "Describe a classroom validation design and its operational constraints."
+        ],
+        "type": "transfer",
+    }
+
+    analysis = analyzer.analyze(
+        question=question,
+        answer=repeated,
+        history=[{"role": "user", "question_id": "Q1", "content": repeated}],
+    )
+    evaluation = Evaluator().evaluate(
+        question=question,
+        answer=repeated,
+        analysis=analysis,
+    )
+
+    assert analysis["cross_question_duplicate"] is True
+    assert analysis["directly_addresses_question"] is False
+    assert analysis["question_relevance"] == 0.35
+    assert analysis["coverage"] == 0.5
+    assert analysis["correctness"] == "partially_supported"
+    assert evaluation["computed_score"] <= 2.25
+    assert evaluation["quality_gates"]["score_capped"] is True
+    assert evaluation["quality_gates"]["cross_question_duplicate"] is True
+
+
 def test_invalid_label_gets_one_contract_correction_attempt():
     provider = RecordedAssessmentProvider([_response("mostly_fine"), _response("supported")])
     analyzer = AnswerAnalyzer(AgentContext(provider=provider))
@@ -188,9 +226,7 @@ def test_analyzer_accepts_a_defensible_alternative_and_audits_the_rubric():
         "id": "Q-alt",
         "text": "Where would you place the grounding control, and why?",
         "type": "decision",
-        "expected_points": [
-            "Place the grounding checker downstream of the Policy Controller."
-        ],
+        "expected_points": ["Place the grounding checker downstream of the Policy Controller."],
         "source_excerpt": "The system requires a grounding control before final evaluation.",
     }
 
@@ -249,19 +285,14 @@ def test_analyzer_keeps_unverified_claims_separate_from_errors():
             "source_excerpt": "The internal pilot reduced median latency.",
         },
         answer=(
-            "The internal pilot reduced median latency. An external benchmark "
-            "also improved by 18%."
+            "The internal pilot reduced median latency. An external benchmark also improved by 18%."
         ),
         history=[],
     )
 
     assert analysis["errors"] == []
-    assert analysis["unverified_claims"] == [
-        "The external benchmark improved by 18%."
-    ]
-    assert analysis["point_assessments"][0]["rubric_issue"] == (
-        "unsupported_by_context"
-    )
+    assert analysis["unverified_claims"] == ["The external benchmark improved by 18%."]
+    assert analysis["point_assessments"][0]["rubric_issue"] == ("unsupported_by_context")
 
 
 @pytest.mark.parametrize(
@@ -380,12 +411,10 @@ def test_rubric_mismatch_is_audited_without_becoming_a_factual_error():
     assert analysis["coverage"] == 1.0
     assert analysis["errors"] == []
     assert analysis["raw_errors"] == ["The answer uses a different implementation."]
-    assert analysis["rubric_audit_notes"] == [
-        "The answer uses a different implementation."
-    ]
+    assert analysis["rubric_audit_notes"] == ["The answer uses a different implementation."]
 
 
-def test_open_answer_adjudicator_recovers_a_valid_unrecognized_alternative():
+def test_open_answer_adjudicator_does_not_promote_unsatisfied_alternative():
     response = _response("partially_supported")
     response["point_assessments"][0].update(
         {
@@ -427,11 +456,58 @@ def test_open_answer_adjudicator_recovers_a_valid_unrecognized_alternative():
 
     point = analysis["point_assessments"][0]
     assert provider.calls == 2
+    assert analysis["correctness"] == "partially_supported"
+    assert analysis["coverage"] == 0.5
+    assert point["status"] == "partial"
+    assert point["alternative_accepted"] is False
+    assert point["open_answer_adjudication"]["defensible"] is True
+    assert point["open_answer_adjudication"]["functionally_satisfied"] is False
+
+
+def test_open_answer_adjudicator_recovers_a_satisfied_defensible_alternative():
+    response = _response("partially_supported")
+    response["point_assessments"][0].update(
+        {
+            "status": "partial",
+            "semantic_match": "partial",
+            "functional_criterion_satisfied": False,
+            "explicit_source_conflict": False,
+            "alternative_accepted": False,
+            "rubric_issue": "none",
+        }
+    )
+    adjudication = {
+        "decisions": [
+            {
+                "point_id": "P1",
+                "functionally_satisfied": True,
+                "defensible": True,
+                "explicit_source_conflict": False,
+                "reason": "The alternative fully meets the reliability objective.",
+            }
+        ]
+    }
+    provider = RecordedAssessmentProvider([response, adjudication])
+
+    analysis = AnswerAnalyzer(AgentContext(provider=provider)).analyze(
+        question={
+            "id": "Q-open-valid",
+            "text": "Where would you place the reliability control, and why?",
+            "type": "decision",
+            "expected_points": ["Place it after the policy layer."],
+            "source_excerpt": "A reliability control is required before final evaluation.",
+        },
+        answer=(
+            "Place it before policy so unsupported claims cannot steer the next "
+            "action, and route failures to clarification."
+        ),
+        history=[],
+    )
+
     assert analysis["correctness"] == "supported"
     assert analysis["coverage"] == 1.0
-    assert point["status"] == "covered"
-    assert point["alternative_accepted"] is True
-    assert point["open_answer_adjudication"]["defensible"] is True
+    assert analysis["point_assessments"][0]["status"] == "covered"
+    assert analysis["point_assessments"][0]["alternative_accepted"] is True
 
 
 def test_open_answer_adjudicator_does_not_promote_a_vague_answer():
