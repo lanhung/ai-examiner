@@ -171,3 +171,33 @@ docker compose up -d --build --remove-orphans
   end-to-end connectivity probe for every listed model.
 - A production release still needs OIDC, RLS, backup/restore and recovery drills
   in the target deployment profile.
+
+## QA4 deployed rerun
+
+Commit `0e102bb` was fast-forward deployed to the AutoDL staging worktree and
+port 6006 was restarted with the repository's guarded direct-process scripts.
+The public workbench then loaded `app.js?v=0.9.0-qa4` and
+`styles.css?v=0.9.0-qa4`.
+
+The deployed rerun confirmed:
+
+- a real Qwen Plus blueprint completed with six grounded questions;
+- the same planner call took about 141 seconds, materially slower than the
+  previous 48-second observation but still completed within its lease;
+- a template-bound session persisted `question_strategy=adaptive`;
+- after a successful answer, the next question reason codes were
+  `required_objective_coverage`, `importance`, and `uncertainty`, not
+  `fixed_order`;
+- Qwen Realtime created an adaptive voice session and the public WebSocket
+  received `session.created` without an upstream error;
+- long-term memory became available after a stable server-only identity secret
+  was generated on the AutoDL host;
+- identity creation, subject linking, settings, memory-center read, asynchronous
+  export and asynchronous deletion all completed successfully.
+
+The Codex in-app browser could read and inspect the deployed page, but its own
+analytics requests repeatedly timed out before click and fill operations were
+delivered. Server access logs confirmed that those interrupted attempts emitted
+no application POST request. This browser-control failure is therefore recorded
+separately from AI Examiner behavior. Physical microphone and speaker acceptance
+still requires an uninterrupted interactive browser run.
