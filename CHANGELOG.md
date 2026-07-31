@@ -56,6 +56,12 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ### Added
 
+- Add browser-level connection timeouts and recovery messages for microphone
+  acquisition and realtime SDP negotiation.
+- Apply selectable template question-strategy and voice-provider overrides to
+  the effective blueprint, text-session and voice-session policy.
+- Translate missing long-term-memory server configuration into a user-facing
+  availability message without exposing the internal environment-variable name.
 - Make voice-session completion idempotent under concurrent browser retries,
   release SQLite write locks between governed transcript-analysis calls, and
   close the session with an auditable finalization error when post-processing

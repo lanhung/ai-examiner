@@ -73,6 +73,10 @@ function setStatus(id, text, kind = "") {
 }
 function responseErrorMessage(body, status) {
   const detail = body && typeof body === "object" && "detail" in body ? body.detail : body;
+  const rawMessage = detail && typeof detail === "object" ? detail.message : detail;
+  if (String(rawMessage || "").includes("MEMORY_IDENTITY_SECRET")) {
+    return "长期记忆尚未由管理员启用；其他答辩功能不受影响。";
+  }
   if (detail && typeof detail === "object") {
     return `${detail.code ? `${detail.code}: ` : ""}${detail.message || JSON.stringify(detail)}`;
   }
@@ -112,11 +116,16 @@ function templateMode() {
   return state.sessionTemplateSource?.compatibility?.mode || "defense";
 }
 
-function selectedTemplateRequest() {
+function selectedTemplateRequest({includeVoice = false} = {}) {
   if (!state.selectedTemplateVersionId) return {};
+  const templateOverrides = {};
+  const configuredStrategy = state.sessionTemplateSource?.overrides?.question_strategy;
+  const selectedStrategy = $("questionStrategy")?.value;
+  if (configuredStrategy && selectedStrategy) templateOverrides.question_strategy = selectedStrategy;
+  if (includeVoice && $("voiceProvider")?.value) templateOverrides.voice_provider = $("voiceProvider").value;
   return {
     template_version_id: state.selectedTemplateVersionId,
-    template_overrides: {},
+    template_overrides: templateOverrides,
     mode: templateMode(),
   };
 }
@@ -589,6 +598,31 @@ function bindTemplateActions() {
 function selectedVoiceProvider() {
   const providers = state.voiceConfig && state.voiceConfig.providers ? state.voiceConfig.providers : [];
   return providers.find((item) => item.id === $("voiceProvider").value) || providers[0] || null;
+}
+
+async function getUserMediaWithTimeout(constraints, timeoutMs = 20000) {
+  let expired = false;
+  let timeoutId;
+  const mediaPromise = navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
+    if (expired) {
+      stream.getTracks().forEach((track) => track.stop());
+      throw new Error("麦克风授权或设备启动超时。请检查浏览器权限和系统输入设备后重试。");
+    }
+    return stream;
+  });
+  try {
+    return await Promise.race([
+      mediaPromise,
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          expired = true;
+          reject(new Error("麦克风授权或设备启动超时。请检查浏览器权限和系统输入设备后重试。"));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function syncVoiceProvider() {
@@ -1630,7 +1664,7 @@ async function connectVoice() {
       vad_eagerness: $("vadSelect").value,
       learner_subject_key: `browser-${state.projectId}`,
       analysis_profile: $("textProfile").value || null,
-      ...selectedTemplateRequest(),
+      ...selectedTemplateRequest({includeVoice: true}),
       ...(!state.selectedTemplateVersionId ? {
         mode: "defense",
         question_limit: 6,
@@ -1652,7 +1686,7 @@ async function connectVoice() {
   state.voiceProvider = provider.id;
   state.voiceClientConfig = voiceSession.client_config || null;
 
-  const stream = await navigator.mediaDevices.getUserMedia({
+  const stream = await getUserMediaWithTimeout({
     audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1},
   });
   stream.getAudioTracks().forEach((track) => { track.enabled = false; });
@@ -1715,18 +1749,29 @@ async function connectVoice() {
       });
     });
   }
-  const response = await fetch(`/api/voice/sessions/${voiceSession.id}/sdp`, {
-    method: "POST",
-    headers: {"Content-Type": "application/sdp"},
-    body: pc.localDescription.sdp,
-  });
+  const sdpController = new AbortController();
+  const sdpTimeout = setTimeout(() => sdpController.abort(), 20000);
+  let response;
+  try {
+    response = await fetch(`/api/voice/sessions/${voiceSession.id}/sdp`, {
+      method: "POST",
+      headers: {"Content-Type": "application/sdp"},
+      body: pc.localDescription.sdp,
+      signal: sdpController.signal,
+    });
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("实时语音协商超时，请检查模型服务和服务器网络后重试。");
+    throw error;
+  } finally {
+    clearTimeout(sdpTimeout);
+  }
+  const raw = await response.text();
   if (!response.ok) {
-    const raw = await response.text();
     let body = raw;
     try { body = JSON.parse(raw); } catch {}
     throw new Error(responseErrorMessage(body, response.status));
   }
-  await pc.setRemoteDescription({type: "answer", sdp: await response.text()});
+  await pc.setRemoteDescription({type: "answer", sdp: raw});
   $("muteVoice").disabled = false;
   $("togglePtt").disabled = !provider.supports_ptt;
   $("endVoice").disabled = false;
