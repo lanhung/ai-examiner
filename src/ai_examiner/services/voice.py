@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -35,6 +36,13 @@ QWEN_ALLOWED_VOICES = (
     "Jennifer",
     "Ryan",
 )
+
+_VOICE_EVENT_LOCKS = tuple(threading.Lock() for _ in range(64))
+
+
+def _voice_event_lock(voice_session_id: str) -> threading.Lock:
+    digest = hashlib.sha256(voice_session_id.encode("utf-8")).digest()
+    return _VOICE_EVENT_LOCKS[int.from_bytes(digest[:4], "big") % len(_VOICE_EVENT_LOCKS)]
 
 VOICE_PROVIDERS = {
     "openai": {
@@ -371,28 +379,32 @@ def record_voice_event(
     latency_ms: int | None,
     raw: dict[str, Any],
 ) -> VoiceEvent:
-    event = VoiceEvent(
-        voice_session_id=session.id,
-        event_type=event_type,
-        role=role,
-        text=text,
-        latency_ms=latency_ms,
-        raw=raw,
-    )
-    db.add(event)
-    metrics = dict(session.metrics or {})
-    if role == "user" and text:
-        metrics["user_turns"] = int(metrics.get("user_turns", 0)) + 1
-    if role == "assistant" and text:
-        metrics["assistant_turns"] = int(metrics.get("assistant_turns", 0)) + 1
-    if event_type == "interruption":
-        metrics["interruptions"] = int(metrics.get("interruptions", 0)) + 1
-    if event_type == "error":
-        metrics["errors"] = int(metrics.get("errors", 0)) + 1
-    if event_type == "first_response" and latency_ms is not None:
-        metrics["first_response_ms"] = latency_ms
-    metrics["last_event_at"] = datetime.now(UTC).isoformat()
-    session.metrics = metrics
-    db.commit()
-    db.refresh(event)
-    return event
+    with _voice_event_lock(session.id):
+        # PostgreSQL obtains a row lock; the striped process lock supplies the
+        # equivalent serialization required by single-process SQLite deployments.
+        db.refresh(session, with_for_update=True)
+        event = VoiceEvent(
+            voice_session_id=session.id,
+            event_type=event_type,
+            role=role,
+            text=text,
+            latency_ms=latency_ms,
+            raw=raw,
+        )
+        db.add(event)
+        metrics = dict(session.metrics or {})
+        if role == "user" and text:
+            metrics["user_turns"] = int(metrics.get("user_turns", 0)) + 1
+        if role == "assistant" and text:
+            metrics["assistant_turns"] = int(metrics.get("assistant_turns", 0)) + 1
+        if event_type == "interruption":
+            metrics["interruptions"] = int(metrics.get("interruptions", 0)) + 1
+        if event_type == "error":
+            metrics["errors"] = int(metrics.get("errors", 0)) + 1
+        if event_type == "first_response" and latency_ms is not None:
+            metrics["first_response_ms"] = latency_ms
+        metrics["last_event_at"] = datetime.now(UTC).isoformat()
+        session.metrics = metrics
+        db.commit()
+        db.refresh(event)
+        return event

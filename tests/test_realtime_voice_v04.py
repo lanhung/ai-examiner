@@ -319,6 +319,37 @@ def test_concurrent_voice_completion_is_claimed_once(client, monkeypatch):
     assert len(calls) == 1
 
 
+def test_concurrent_voice_events_preserve_turn_counts(client):
+    project, blueprint = create_project_and_blueprint(client)
+    created = client.post(
+        "/api/voice/sessions",
+        json={
+            "project_id": project["id"],
+            "blueprint_id": blueprint["id"],
+        },
+    ).json()
+
+    def add_event(index):
+        role = "user" if index % 2 == 0 else "assistant"
+        return client.post(
+            f"/api/voice/sessions/{created['id']}/events",
+            json={
+                "event_type": "transcript",
+                "role": role,
+                "text": f"{role} transcript {index}",
+            },
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        responses = list(executor.map(add_event, range(20)))
+
+    assert all(response.status_code == 201 for response in responses)
+    detail = client.get(f"/api/voice/sessions/{created['id']}").json()
+    assert detail["metrics"]["user_turns"] == 10
+    assert detail["metrics"]["assistant_turns"] == 10
+    assert len(detail["events"]) == 20
+
+
 def test_voice_completion_closes_session_when_cognitive_finalization_fails(
     client,
     monkeypatch,

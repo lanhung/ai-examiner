@@ -60,6 +60,9 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
   release SQLite write locks between governed transcript-analysis calls, and
   close the session with an auditable finalization error when post-processing
   cannot finish.
+- Serialize per-session realtime event accounting with process stripes and
+  PostgreSQL row locks so concurrent transcript callbacks cannot overwrite turn,
+  interruption or error counters.
 - Keep Uvicorn access and exception loggers enabled after startup Alembic
   migrations, restoring actionable request diagnostics on direct deployments.
 - Disable the voice end control as soon as shutdown starts and send a keepalive
