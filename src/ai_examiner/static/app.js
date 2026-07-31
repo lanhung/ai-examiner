@@ -665,7 +665,10 @@ async function loadEnvironment() {
     $("visualProfile").innerHTML = visionProviders.map((provider) =>
       `<option value="${escapeHtml(provider.id)}">${escapeHtml(provider.label)}</option>`
     ).join("");
-    const preferredProvider = readyProviders.find((provider) => provider.provider === "ollama")
+    const configuredProfile = `${health.provider}:${health.model}`;
+    const preferredProvider = readyProviders.find((provider) => provider.id === configuredProfile)
+      || readyProviders.find((provider) => provider.provider === health.provider)
+      || readyProviders.find((provider) => provider.provider === "ollama")
       || readyProviders.find((provider) => provider.provider !== "mock")
       || readyProviders[0];
     if (preferredProvider) {

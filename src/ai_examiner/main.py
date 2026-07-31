@@ -5130,7 +5130,19 @@ def voice_config():
         }
         for provider, config in VOICE_PROVIDERS.items()
     ]
-    default_provider = next((item for item in providers if item["ready"]), providers[0])
+    preferred_voice_provider = (
+        settings.model_provider
+        if settings.model_provider in VOICE_PROVIDERS
+        else None
+    )
+    default_provider = next(
+        (
+            item
+            for item in providers
+            if item["ready"] and item["id"] == preferred_voice_provider
+        ),
+        next((item for item in providers if item["ready"]), providers[0]),
+    )
     return {
         "ready": any(item["ready"] for item in providers),
         "provider": default_provider["id"],

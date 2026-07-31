@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from ai_examiner.db import SessionLocal
 from ai_examiner.enterprise_constants import LEGACY_ORGANIZATION_ID
+from ai_examiner.main import settings
 from ai_examiner.models import ModelUsageLedger, VoiceSession
 from ai_examiner.services.model_governance import (
     ensure_model_policy,
@@ -31,6 +32,16 @@ def create_project_and_blueprint(client):
         params={"document_id": document["id"]},
     ).json()
     return project, blueprint
+
+
+def test_voice_config_prefers_primary_realtime_provider(client, monkeypatch):
+    monkeypatch.setattr(settings, "model_provider", "qwen")
+
+    config = client.get("/api/voice/config")
+
+    assert config.status_code == 200
+    assert config.json()["provider"] == "qwen"
+    assert config.json()["default_voice"] == "Cherry"
 
 
 def test_voice_config_and_session_lifecycle(client, monkeypatch):
