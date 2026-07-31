@@ -254,3 +254,30 @@ concurrent sensitive-read regression test protects this behavior.
 - Real Qwen answer-analysis turns took approximately 17 to 23 seconds on this
   staging route. Realtime speech transport is healthy, but text-side scoring is
   not yet suitable for sub-second conversational feedback.
+
+### QA5 deployed verification
+
+Commit `e60757f` was pushed normally to `research/v0.9.0`, fast-forwarded on
+AutoDL and started on port 6006.
+
+Post-deployment results:
+
+- 60 authenticated enterprise membership reads completed with 20 workers;
+- all 60 responses were HTTP 200, with 0.207-second median, 0.279-second P95
+  and 0.288-second maximum latency;
+- the health endpoint remained responsive after the concurrency run;
+- the incompatible blueprint/template request returned HTTP 409 with
+  `BLUEPRINT_TEMPLATE_MISMATCH`;
+- immutable audit-event reads remained available after the concurrency run;
+- the current server log contained no `QueuePool`, `Traceback` or `ERROR`
+  entry;
+- the public page loaded `app.js?v=0.9.0-qa5`;
+- a persisted voice session returned HTTP 200 with an identical response
+  before and after a full application stop/start cycle;
+- a project was created through the visible browser UI and persisted as
+  `6eec1453-c6f8-460c-b9cf-2f8be713637d`;
+- the enterprise UI loaded its organization context, effective capabilities,
+  three membership rows and immutable audit summary.
+
+The final local release gate passed 331 tests, Ruff, JavaScript syntax
+validation and `git diff --check`.
