@@ -201,3 +201,56 @@ delivered. Server access logs confirmed that those interrupted attempts emitted
 no application POST request. This browser-control failure is therefore recorded
 separately from AI Examiner behavior. Physical microphone and speaker acceptance
 still requires an uninterrupted interactive browser run.
+
+## QA5 repeated full-stack and concurrency pass
+
+The deployed QA4 build was exercised repeatedly through the public AutoDL URL
+and directly through the server loopback interface.
+
+Completed checks:
+
+- 60 concurrent public health requests completed before the scenario pass;
+- all seven built-in templates passed validate, compile and preview three times;
+- all seven templates created real Qwen Plus sessions when paired with their
+  compatible mode and minimum question limit;
+- every template-bound session persisted an adaptive strategy, an explicit
+  resolution source and a verified template fingerprint;
+- Qwen3-VL Plus completed two page reviews in 55.2 and 42.5 seconds, producing
+  four and three evidence-grounded examiner questions respectively;
+- Qwen Realtime completed two public WebSocket handshakes in 10.4 and 8.9
+  seconds and emitted `session.created` both times;
+- the complete local regression suite passed 330 tests before the QA5 fixes and
+  the focused post-fix audit, template and voice suites passed.
+
+### Fixed: blueprint and template drift
+
+A session could previously select a different scenario template from the one
+used to generate its blueprint. Because templates constrain allowed question
+types, this could leave the adaptive selector with `no_eligible_question` and
+end the session after one answer. Text and voice session creation now return
+`BLUEPRINT_TEMPLATE_MISMATCH`, and the workbench disables both start controls
+until a new compatible blueprint is generated.
+
+### Fixed: audit connection-pool deadlock
+
+Twenty concurrent enterprise reads reproduced a main-pool deadlock. FastAPI
+returned the endpoint response from `call_next` while its request-scoped
+SQLAlchemy session still held a connection; the audit middleware then attempted
+to acquire another connection from the same 15-connection pool. Once all
+connections were occupied, requests waited on their own audit writes and health
+checks stopped responding.
+
+Immutable request-audit writes now use a dedicated SQLAlchemy pool. A 20-way
+concurrent sensitive-read regression test protects this behavior.
+
+### Capacity and model observations
+
+- The AutoDL public proxy reset TLS connections under a 15-way burst. This is
+  distinct from the backend pool deadlock and should be handled with bounded
+  client concurrency and retry/backoff.
+- The two Qwen3-VL runs differed in whether they interpreted possible text
+  artifacts as encoding damage. Visual findings should therefore remain
+  explicitly probabilistic or use multi-run/model consensus for release gates.
+- Real Qwen answer-analysis turns took approximately 17 to 23 seconds on this
+  staging route. Realtime speech transport is healthy, but text-side scoring is
+  not yet suitable for sub-second conversational feedback.

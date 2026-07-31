@@ -16,7 +16,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from ..config import Settings, get_settings
-from ..db import SessionLocal
+from ..db import AuditSessionLocal
 from ..models import AuditEvent, Organization
 from .authorization import RoutePolicy
 from .tenancy import set_tenant_context
@@ -390,7 +390,7 @@ def write_request_audit(
     claimed_organization_id = request.path_params.get(
         "organization_id"
     ) or request.headers.get("X-AI-Examiner-Organization")
-    with SessionLocal() as db:
+    with AuditSessionLocal() as db:
         organization_id = _safe_identifier(claimed_organization_id)
         if organization_id:
             set_tenant_context(

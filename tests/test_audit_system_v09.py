@@ -4,6 +4,8 @@ import json
 import os
 import subprocess
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -94,6 +96,28 @@ def _append_test_event(
         )
         db.commit()
         return event.id
+
+
+def test_concurrent_sensitive_reads_do_not_exhaust_business_pool(client):
+    organization, principal = _organization_with_actor("audit-concurrency")
+    headers = {
+        "X-AI-Examiner-Principal": principal.id,
+        "X-AI-Examiner-Organization": organization.id,
+    }
+    barrier = threading.Barrier(20)
+
+    def read_memberships() -> int:
+        barrier.wait(timeout=10)
+        response = client.get(
+            f"/api/v1/organizations/{organization.id}/memberships",
+            headers=headers,
+        )
+        return response.status_code
+
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        statuses = list(executor.map(lambda _: read_memberships(), range(20)))
+
+    assert statuses == [200] * 20
 
 
 def test_audit_configuration_fails_closed_in_production():

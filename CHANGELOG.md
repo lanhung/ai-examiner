@@ -56,6 +56,12 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ### Added
 
+- Isolate immutable HTTP audit writes in a dedicated SQLAlchemy connection pool,
+  preventing concurrent sensitive reads from deadlocking the business pool while
+  their response-scoped sessions are still open.
+- Reject text and voice sessions whose selected scenario template differs from
+  the template used to generate the blueprint, and disable the browser start
+  controls until a compatible blueprint is regenerated.
 - Add browser-level connection timeouts and recovery messages for microphone
   acquisition and realtime SDP negotiation.
 - Apply selectable template question-strategy and voice-provider overrides to

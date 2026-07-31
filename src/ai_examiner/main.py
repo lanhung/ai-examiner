@@ -408,6 +408,37 @@ def authorize_workbench_resource(
         raise HTTPException(404, "Resource not found")
 
 
+def validate_blueprint_template_compatibility(
+    blueprint: Blueprint,
+    resolved_template,
+) -> None:
+    if resolved_template is None:
+        return
+    template_plan = blueprint.data.get("template_plan")
+    if not isinstance(template_plan, dict):
+        return
+    planned_version_id = template_plan.get("template_version_id")
+    if (
+        planned_version_id
+        and planned_version_id != resolved_template.template_version_id
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "BLUEPRINT_TEMPLATE_MISMATCH",
+                "message": (
+                    "The blueprint was generated for a different scenario "
+                    "template. Regenerate the blueprint before starting this "
+                    "session."
+                ),
+                "blueprint_template_version_id": planned_version_id,
+                "requested_template_version_id": (
+                    resolved_template.template_version_id
+                ),
+            },
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configuration_issues = (
@@ -2030,6 +2061,7 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
         template_overrides=payload.template_overrides,
         request_overrides=request_overrides,
     )
+    validate_blueprint_template_compatibility(blueprint, resolved_template)
     profile = payload.profile or (
         f"{settings.model_provider}:{settings.default_model_for(settings.model_provider)}"
     )
@@ -5211,6 +5243,7 @@ def start_voice_session(
         template_overrides=payload.template_overrides,
         request_overrides=request_overrides,
     )
+    validate_blueprint_template_compatibility(blueprint, resolved_template)
     mode = payload.mode
     question_strategy = payload.question_strategy
     if resolved_template:

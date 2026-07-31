@@ -2,6 +2,7 @@ const state = {
   projectId: null,
   documentId: null,
   blueprintId: null,
+  blueprintTemplateVersionId: null,
   blueprintJobId: null,
   blueprintRequestKey: null,
   datasetId: null,
@@ -128,6 +129,33 @@ function selectedTemplateRequest({includeVoice = false} = {}) {
     template_overrides: templateOverrides,
     mode: templateMode(),
   };
+}
+
+function expectedSessionTemplateVersionId() {
+  if (state.selectedTemplateVersionId) return state.selectedTemplateVersionId;
+  return state.publishedTemplates.find(
+    (item) => item.slug === "academic.thesis_defense",
+  )?.version_id || null;
+}
+
+function syncBlueprintTemplateCompatibility() {
+  if (!state.blueprintId) return;
+  const expectedVersionId = expectedSessionTemplateVersionId();
+  const mismatch = Boolean(
+    state.blueprintTemplateVersionId
+    && expectedVersionId
+    && state.blueprintTemplateVersionId !== expectedVersionId
+  );
+  $("startSession").disabled = mismatch;
+  const voiceProvider = selectedVoiceProvider();
+  $("startVoice").disabled = mismatch || !(voiceProvider && voiceProvider.ready);
+  if (mismatch) {
+    setStatus(
+      "sessionTemplateHint",
+      "场景模板已改变。请先按当前模板重新生成蓝图，再开始文本或语音答辩。",
+      "error",
+    );
+  }
 }
 
 function templateTag(value, className = "") {
@@ -791,12 +819,14 @@ $("generateBlueprint").onclick = async () => {
     const blueprint = job.result?.blueprint;
     if (!blueprint) throw new Error("任务已完成，但没有返回蓝图结果");
     state.blueprintId = blueprint.id;
+    state.blueprintTemplateVersionId =
+      blueprint.template_plan?.template_version_id
+      || blueprint.data?.template_plan?.template_version_id
+      || null;
     if ([...$("textProfile").options].some((option) => option.value === profile)) {
       $("textProfile").value = profile;
     }
-    $("startSession").disabled = false;
-    const voiceProvider = selectedVoiceProvider();
-    $("startVoice").disabled = !(voiceProvider && voiceProvider.ready);
+    syncBlueprintTemplateCompatibility();
     setStatus("blueprintStatus", `蓝图 v${blueprint.version} 已生成：${blueprint.provider} · ${blueprint.model}，共 ${blueprint.data.questions.length} 个问题`, "success");
     const preview = $("blueprintPreview");
     preview.classList.remove("hidden");
@@ -1348,6 +1378,7 @@ $("sessionTemplateSelect").onchange = async () => {
     state.sessionTemplateSource = null;
     state.sessionTemplateLabel = "";
     setStatus("sessionTemplateHint", "使用兼容论文答辩模式；不会绑定显式模板。");
+    syncBlueprintTemplateCompatibility();
     return;
   }
   try {
@@ -1358,6 +1389,7 @@ $("sessionTemplateSelect").onchange = async () => {
     state.sessionTemplateLabel = localized(version.source.template?.title);
     $("questionStrategy").value = version.source.question_policy?.selection_strategy || "fixed";
     setStatus("sessionTemplateHint", `${state.sessionTemplateLabel} v${version.semantic_version} 将用于下一次蓝图和会话。`, "success");
+    syncBlueprintTemplateCompatibility();
     if (entry) await selectTemplateIdentity(entry.id, versionId);
   } catch (error) {
     setStatus("sessionTemplateHint", error.message, "error");

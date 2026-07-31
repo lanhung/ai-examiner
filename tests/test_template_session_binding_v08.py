@@ -167,6 +167,49 @@ def test_explicit_draft_and_invalid_overrides_are_rejected_before_session_creati
     )
 
 
+def test_session_rejects_template_that_differs_from_blueprint_plan(client):
+    project, blueprint = _project_and_blueprint(client)
+    course_template = next(
+        item
+        for item in client.get("/api/templates").json()
+        if item["slug"] == "education.course_oral"
+    )
+
+    rejected = client.post(
+        "/api/sessions",
+        json={
+            "project_id": project["id"],
+            "blueprint_id": blueprint["id"],
+            "profile": "mock:heuristic-v2",
+            "mode": "teaching",
+            "template_version_id": course_template["version_id"],
+        },
+    )
+
+    assert rejected.status_code == 409
+    detail = rejected.json()["detail"]
+    assert detail["code"] == "BLUEPRINT_TEMPLATE_MISMATCH"
+    assert detail["requested_template_version_id"] == course_template["version_id"]
+    assert detail["blueprint_template_version_id"] != course_template["version_id"]
+
+    rejected_voice = client.post(
+        "/api/voice/sessions",
+        json={
+            "project_id": project["id"],
+            "blueprint_id": blueprint["id"],
+            "provider": "openai",
+            "mode": "teaching",
+            "template_version_id": course_template["version_id"],
+        },
+    )
+
+    assert rejected_voice.status_code == 409
+    assert (
+        rejected_voice.json()["detail"]["code"]
+        == "BLUEPRINT_TEMPLATE_MISMATCH"
+    )
+
+
 def test_equivalent_text_and_openai_voice_policies_share_a_fingerprint(client):
     project, blueprint = _project_and_blueprint(client)
     text = client.post(
