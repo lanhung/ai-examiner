@@ -1785,8 +1785,9 @@ def generate_blueprint(
         raise
     except Exception as exc:
         logger.exception(
-            "Voice transcript finalization failed for session %s",
-            voice_session_id,
+            "Blueprint generation failed for project %s and document %s",
+            project_id,
+            selected_document_id,
         )
         db.rollback()
         raise HTTPException(502, f"Blueprint generation failed: {exc}") from exc
@@ -5509,6 +5510,10 @@ def complete_voice_session(
             )
             metrics["cognitive_finalization_status"] = "completed"
     except Exception as exc:
+        logger.exception(
+            "Voice transcript finalization failed for session %s",
+            voice_session_id,
+        )
         db.rollback()
         voice = db.get(VoiceSession, voice_session_id)
         exam = db.get(ExamSession, voice.exam_session_id) if voice else None

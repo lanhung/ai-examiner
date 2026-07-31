@@ -11,8 +11,8 @@ def test_homepage_delivers_v08_template_studio(client):
     assert 'id="templateCatalogList"' in html
     assert 'id="templateDetail"' in html
     assert 'id="sessionTemplateSelect"' in html
-    assert "/static/styles.css?v=0.9.0-research" in html
-    assert "/static/app.js?v=0.9.0-research" in html
+    assert "/static/styles.css?v=0.9.0-qa3" in html
+    assert "/static/app.js?v=0.9.0-qa3" in html
 
 
 def test_template_editor_uses_contract_values_and_safe_transfer_endpoints(client):

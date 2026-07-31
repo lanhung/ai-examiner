@@ -63,8 +63,12 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 - Serialize per-session realtime event accounting with process stripes and
   PostgreSQL row locks so concurrent transcript callbacks cannot overwrite turn,
   interruption or error counters.
+- Advance the main workbench static cache version after the voice concurrency
+  fixes so deployed browsers revalidate the updated shutdown and event logic.
 - Keep Uvicorn access and exception loggers enabled after startup Alembic
   migrations, restoring actionable request diagnostics on direct deployments.
+- Preserve the intended blueprint-generation `502` when provider preparation
+  fails instead of referencing a voice-only identifier from its error logger.
 - Disable the voice end control as soon as shutdown starts and send a keepalive
   completion request when the page is closed.
 - Add answer-to-question relevance scoring, deterministic cross-question answer

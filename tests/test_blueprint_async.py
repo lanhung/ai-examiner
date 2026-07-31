@@ -93,6 +93,31 @@ def test_blueprint_page_exposes_async_progress_and_cancel_controls(client):
     assert "/cancel" in script.text
 
 
+def test_synchronous_blueprint_provider_failure_remains_a_502(client, monkeypatch):
+    project, document = _project_and_document(client)
+
+    def fail_prepare(*_args, **_kwargs):
+        raise RuntimeError("provider probe failed")
+
+    monkeypatch.setattr(
+        "ai_examiner.main.BlueprintGenerationService.prepare",
+        fail_prepare,
+    )
+    response = client.post(
+        f"/api/projects/{project['id']}/blueprints",
+        json={
+            "document_id": document["id"],
+            "profile": "mock:heuristic-v2",
+            "mode": "defense",
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == (
+        "Blueprint generation failed: provider probe failed"
+    )
+
+
 def test_async_blueprint_can_be_cancelled_before_worker_claim(client, monkeypatch):
     project, document = _project_and_document(client)
     monkeypatch.setattr(
