@@ -1739,6 +1739,8 @@ async function connectVoice() {
 }
 
 async function endVoice(reason = "user_ended") {
+  $("endVoice").disabled = true;
+  setStatus("voiceStatus", "正在结束语音并整理转录记录…");
   if (state.voiceChannel) state.voiceChannel.close();
   if (state.voicePeer) state.voicePeer.close();
   const socket = state.voiceSocket;
@@ -1878,6 +1880,14 @@ $("pttButton").addEventListener("pointercancel", pttUp);
 $("endVoice").onclick = () => endVoice("user_ended");
 window.addEventListener("beforeunload", () => {
   if (state.voiceStream) state.voiceStream.getTracks().forEach((track) => track.stop());
+  if (state.voiceSessionId) {
+    fetch(`/api/voice/sessions/${state.voiceSessionId}/complete`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({reason: "page_unload"}),
+      keepalive: true,
+    }).catch(() => {});
+  }
 });
 
 if (state.identityId) {

@@ -373,6 +373,9 @@ class ExamOrchestrator:
         answer_index = 0
         asked = list(session.asked_question_ids or [])
         self.cognitive.ensure_blueprint_graph(blueprint)
+        # Governed model calls reserve usage in an independent transaction.
+        # Release any SQLite write lock before the first provider call.
+        self.db.commit()
         for position, turn in enumerate(transcript_turns):
             if turn.role == "assistant":
                 last_assistant_text = turn.content
@@ -439,6 +442,10 @@ class ExamOrchestrator:
                     "evidence_event_ids": [event.id for event in events],
                 }
             )
+            # Persist each finalized turn independently. Retries can then skip
+            # completed turns, and the next governed call does not contend with
+            # this session's pending SQLite writes.
+            self.db.commit()
         session.asked_question_ids = asked
         self.db.commit()
         return finalized

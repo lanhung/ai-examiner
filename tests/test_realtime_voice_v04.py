@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 
 import httpx
 from sqlalchemy import select
@@ -269,6 +271,85 @@ def test_adaptive_voice_finalizes_transcript_into_knowledge_events(client):
         f"/api/subjects/{result['learner_subject_id']}/learning-history"
     ).json()
     assert any(event["source_type"] == "voice" for event in history["events"])
+
+
+def test_concurrent_voice_completion_is_claimed_once(client, monkeypatch):
+    project, blueprint = create_project_and_blueprint(client)
+    created = client.post(
+        "/api/voice/sessions",
+        json={
+            "project_id": project["id"],
+            "blueprint_id": blueprint["id"],
+            "question_strategy": "adaptive",
+        },
+    ).json()
+    started = Event()
+    release = Event()
+    calls = []
+
+    def blocking_finalize(self, session, resolved_blueprint):
+        calls.append((session.id, resolved_blueprint.id))
+        started.set()
+        assert release.wait(5)
+        return []
+
+    monkeypatch.setattr(
+        "ai_examiner.main.ExamOrchestrator.finalize_voice_transcripts",
+        blocking_finalize,
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(
+            client.post,
+            f"/api/voice/sessions/{created['id']}/complete",
+            json={"reason": "first"},
+        )
+        assert started.wait(5)
+        duplicate = client.post(
+            f"/api/voice/sessions/{created['id']}/complete",
+            json={"reason": "duplicate"},
+        )
+        assert duplicate.status_code == 202
+        assert duplicate.json()["status"] == "finalizing"
+        release.set()
+        completed = first.result(timeout=10)
+
+    assert completed.status_code == 200
+    assert completed.json()["status"] == "completed"
+    assert len(calls) == 1
+
+
+def test_voice_completion_closes_session_when_cognitive_finalization_fails(
+    client,
+    monkeypatch,
+):
+    project, blueprint = create_project_and_blueprint(client)
+    created = client.post(
+        "/api/voice/sessions",
+        json={
+            "project_id": project["id"],
+            "blueprint_id": blueprint["id"],
+            "question_strategy": "adaptive",
+        },
+    ).json()
+
+    def failed_finalize(self, session, resolved_blueprint):
+        raise RuntimeError("provider unavailable")
+
+    monkeypatch.setattr(
+        "ai_examiner.main.ExamOrchestrator.finalize_voice_transcripts",
+        failed_finalize,
+    )
+    completed = client.post(
+        f"/api/voice/sessions/{created['id']}/complete",
+        json={"reason": "failure_probe"},
+    )
+
+    assert completed.status_code == 200
+    payload = completed.json()
+    assert payload["status"] == "completed"
+    assert payload["metrics"]["cognitive_finalization_status"] == "failed"
+    assert payload["metrics"]["cognitive_finalization_error"] == "RuntimeError"
 
 
 def test_qwen_realtime_session_includes_safe_client_config(client, monkeypatch):

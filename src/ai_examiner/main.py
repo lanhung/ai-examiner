@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import shutil
 import time
 from contextlib import asynccontextmanager
@@ -30,7 +31,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.orm import Session
 
 from . import __version__
@@ -301,6 +302,8 @@ from .template_engine.compiler import (
     TemplateOverrideError,
     TemplateValidationError,
 )
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 STATIC_DIR = Path(__file__).parent / "static"
@@ -1781,6 +1784,10 @@ def generate_blueprint(
         db.rollback()
         raise
     except Exception as exc:
+        logger.exception(
+            "Voice transcript finalization failed for session %s",
+            voice_session_id,
+        )
         db.rollback()
         raise HTTPException(502, f"Blueprint generation failed: {exc}") from exc
     return serialize_blueprint(blueprint, grounding=prepared.grounding)
@@ -5448,6 +5455,9 @@ def complete_voice_session(
     voice = db.get(VoiceSession, voice_session_id)
     if not voice:
         raise HTTPException(404, "Voice session not found")
+    if voice.status == "completed":
+        return serialize_voice_session(voice, db, include_events=True)
+
     now = datetime.now(UTC)
     metrics = dict(voice.metrics or {})
     metrics["completion_reason"] = payload.reason
@@ -5456,9 +5466,32 @@ def complete_voice_session(
         if started_at.tzinfo is None:
             started_at = started_at.replace(tzinfo=UTC)
         metrics["duration_seconds"] = max(0, int((now - started_at).total_seconds()))
+
+    claimed = db.execute(
+        update(VoiceSession)
+        .where(
+            VoiceSession.id == voice_session_id,
+            VoiceSession.status.notin_(("finalizing", "completed")),
+        )
+        .values(status="finalizing", metrics=metrics)
+    ).rowcount
+    db.commit()
+    db.expire_all()
+    voice = db.get(VoiceSession, voice_session_id)
+    if not claimed:
+        status_code = 202 if voice and voice.status == "finalizing" else 200
+        return JSONResponse(
+            status_code=status_code,
+            content=serialize_voice_session(voice, db, include_events=True),
+        )
+
     exam = db.get(ExamSession, voice.exam_session_id)
-    if exam:
-        if exam.question_strategy == "adaptive":
+    try:
+        if exam:
+            exam.status = "voice_finalizing"
+            exam.state = "VOICE_FINALIZING"
+            db.commit()
+        if exam and exam.question_strategy == "adaptive":
             blueprint = db.get(Blueprint, exam.blueprint_id)
             finalized = ExamOrchestrator(
                 db,
@@ -5474,9 +5507,20 @@ def complete_voice_session(
             metrics["cognitive_finalized_turns"] = max(
                 int(metrics.get("cognitive_finalized_turns", 0)), len(finalized)
             )
+            metrics["cognitive_finalization_status"] = "completed"
+    except Exception as exc:
+        db.rollback()
+        voice = db.get(VoiceSession, voice_session_id)
+        exam = db.get(ExamSession, voice.exam_session_id) if voice else None
+        metrics = dict((voice.metrics if voice else None) or metrics)
+        metrics["cognitive_finalization_status"] = "failed"
+        metrics["cognitive_finalization_error"] = type(exc).__name__
+
+    if exam:
         exam.status = "completed"
         exam.state = "VOICE_COMPLETED"
         exam.completed_at = now
+    voice = db.get(VoiceSession, voice_session_id)
     voice.status = "completed"
     voice.completed_at = now
     voice.metrics = metrics

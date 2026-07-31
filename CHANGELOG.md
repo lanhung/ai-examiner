@@ -56,6 +56,14 @@ AI Examiner 的重要变更记录在此文件。版本号遵循 Semantic Version
 
 ### Added
 
+- Make voice-session completion idempotent under concurrent browser retries,
+  release SQLite write locks between governed transcript-analysis calls, and
+  close the session with an auditable finalization error when post-processing
+  cannot finish.
+- Keep Uvicorn access and exception loggers enabled after startup Alembic
+  migrations, restoring actionable request diagnostics on direct deployments.
+- Disable the voice end control as soon as shutdown starts and send a keepalive
+  completion request when the page is closed.
 - Add answer-to-question relevance scoring, deterministic cross-question answer
   reuse detection and auditable aggregate score caps.
 - Require open-answer adjudication to be both defensible and functionally
