@@ -70,6 +70,27 @@ def verify() -> dict:
         raise RuntimeError("The v0.9 RLS verification requires PostgreSQL")
 
     inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    missing_tables = sorted(set(REQUIRED_TENANT_TABLES) - existing_tables)
+    if missing_tables:
+        with engine.connect() as connection:
+            migration_version = (
+                connection.scalar(
+                    text(
+                        "SELECT version_num FROM alembic_version "
+                        "ORDER BY version_num DESC LIMIT 1"
+                    )
+                )
+                if "alembic_version" in existing_tables
+                else None
+            )
+        engine.dispose()
+        raise RuntimeError(
+            "PostgreSQL schema drift detected: required tenant tables are "
+            f"missing ({', '.join(missing_tables)}); Alembic reports "
+            f"{migration_version or 'no version'}. Recreate the disposable test "
+            "database or restore the schema before running the RLS verifier."
+        )
     for table_name in REQUIRED_TENANT_TABLES:
         columns = {
             column["name"]: column

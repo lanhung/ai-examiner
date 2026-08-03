@@ -2,6 +2,12 @@
 
 ## v0.9.0 research - WP-14 release hardening
 
+- Add a repeatable native-host PostgreSQL/RLS acceptance command with a strict
+  `_test` database-name guard and optional disposable database recreation.
+- Verify the dedicated least-privilege application login across 100 concurrent
+  tenant reads and a real cross-tenant write attempt in both CI and host acceptance.
+- Detect Alembic/schema drift before policy inspection and report the missing tables
+  instead of surfacing an opaque SQLAlchemy `NoSuchTableError`.
 - Validate the complete migration chain, FORCE RLS policies, least-privilege
   runtime login and 20-worker tenant isolation on native PostgreSQL 17.10.
 - Pass the complete 331-test suite on PostgreSQL 14.23 and PostgreSQL 17.10,

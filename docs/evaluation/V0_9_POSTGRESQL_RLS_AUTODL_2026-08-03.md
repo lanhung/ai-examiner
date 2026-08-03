@@ -120,6 +120,29 @@ pg_ctlcluster 17 main start
 pg_isready -h 127.0.0.1 -p 5433
 ```
 
+The complete native-host acceptance can then be repeated with the root-only
+credential file created during provisioning:
+
+```bash
+cd /root/autodl-tmp/ai-examiner-mvp/ai-examiner-v0.9-staging
+
+PYTHON_BIN="$PWD/.venv-postgres-test/bin/python" \
+RESET_TEST_DATABASE=true \
+./deploy/enterprise/verify-postgres-rls-host.sh \
+  /root/autodl-tmp/ai-examiner-v09-postgres17.env
+```
+
+The command refuses to reset a database unless its name ends in `_test`. It
+recreates the disposable UTF-8 database, prepares the least-privilege application
+login, migrates to Alembic head, runs the policy verifier, then performs 100
+concurrent tenant reads and a cross-tenant write attempt through the real runtime
+login. Set `RUN_FULL_SUITE=true` to append the complete application test suite.
+
+The verifier also fails with an explicit schema-drift diagnosis when
+`alembic_version` reports a revision but required business tables are absent. This
+guards against treating migration metadata alone as proof that the database schema
+is ready.
+
 ## Remaining production boundary
 
 This result satisfies the native PostgreSQL migration and tenant-isolation proof.

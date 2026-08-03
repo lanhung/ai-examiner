@@ -233,9 +233,23 @@ def test_postgres_ci_runs_rls_verification_before_pytest():
     ]
     assert "uv run alembic upgrade head" in commands
     assert "uv run python deploy/verify-v09-rls.py" in commands
+    assert "uv run python deploy/verify-v09-runtime-login.py" in commands
     assert commands.index(
         "uv run python deploy/verify-v09-rls.py"
+    ) < commands.index("uv run python deploy/verify-v09-runtime-login.py")
+    assert commands.index(
+        "uv run python deploy/verify-v09-runtime-login.py"
     ) < commands.index("uv run pytest --cov=ai_examiner --cov-report=term-missing")
+
+
+def test_postgres_host_verifier_is_test_database_only():
+    script = (
+        ROOT / "deploy" / "enterprise" / "verify-postgres-rls-host.sh"
+    ).read_text(encoding="utf-8")
+    assert "_test$" in script
+    assert "RESET_TEST_DATABASE" in script
+    assert "dropdb --if-exists --force" in script
+    assert "verify-v09-runtime-login.py" in script
 
 
 def test_default_local_tenant_remains_legacy():

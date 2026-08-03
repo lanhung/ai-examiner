@@ -79,6 +79,8 @@ jobs:
       MODEL_PROVIDER: mock
       MEMORY_IDENTITY_SECRET: ci-postgres-memory-secret
       CELERY_ALWAYS_EAGER: "true"
+      POSTGRES_APP_USER: examiner_runtime_login
+      POSTGRES_APP_PASSWORD: runtime-ci-password-000000000001
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -87,7 +89,9 @@ jobs:
       - run: uv sync --extra dev
       - run: uv run alembic upgrade head
       - run: uv run alembic current
+      - run: uv run python deploy/enterprise/bootstrap_database.py prepare-roles
       - run: uv run python deploy/verify-v09-rls.py
+      - run: uv run python deploy/verify-v09-runtime-login.py
       - run: uv run pytest --cov=ai_examiner --cov-report=term-missing
   enterprise-compose:
     runs-on: ubuntu-latest
