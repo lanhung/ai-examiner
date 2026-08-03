@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-03T02:31:56Z",
+  "source_commit": "398a41f738adcffddbe1549d605265c2bb39f951",
+  "status": "passed",
+  "database_product": "PostgreSQL",
+  "database_version": "17.10",
+  "server_encoding": "UTF8",
+  "collation": "C.UTF-8",
+  "migration_start": "base",
+  "migration_head": "20260728_0016",
+  "migration_revision_count": 16,
+  "full_regression_passed": 331,
+  "full_regression_failed": 0,
+  "full_regression_seconds": 260,
+  "database_credentials_recorded": false,
+  "database_dump_recorded": false
+}

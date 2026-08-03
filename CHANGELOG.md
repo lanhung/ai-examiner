@@ -2,6 +2,13 @@
 
 ## v0.9.0 research - WP-14 release hardening
 
+- Validate the complete migration chain, FORCE RLS policies, least-privilege
+  runtime login and 20-worker tenant isolation on native PostgreSQL 17.10.
+- Pass the complete 331-test suite on PostgreSQL 14.23 and PostgreSQL 17.10,
+  and commit sanitized migration and tenant-isolation evidence.
+- Isolate the test model-admission backend from deployment `.env` values so
+  PostgreSQL and SQLite regression results are environment-independent.
+
 - Advanced the implemented research branch package and visible UI identity to
   `0.9.0.dev0`; release-candidate promotion and tags remain held by the external
   enterprise evidence gate.
