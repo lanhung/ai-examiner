@@ -41,11 +41,13 @@ upgrade. Do not run `docker compose down -v`.
 
 ## Known promotion holds
 
-- Vultr staging observation;
-- real OIDC browser acceptance;
-- desktop/mobile enterprise UI evidence;
-- real-provider governance evidence;
-- complete MinIO recovery and rollback artifact set.
+- the in-progress 24-hour HTTPS/OIDC staging observation;
+- desktop/mobile enterprise UI browser evidence.
+
+The real-provider governance probe, OIDC token matrix, PostgreSQL/RLS checks,
+S3-compatible storage contract, Redis idempotency, telemetry redaction and
+database/object recovery rehearsal have passed. Interactive OIDC login and stale
+tenant protection have also passed at the HTTP/session boundary; visual browser
+acceptance remains separate and must not be inferred from those API checks.
 
 These holds must be cleared before creating `v0.9.0-rc.1`.
-

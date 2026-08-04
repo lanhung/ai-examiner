@@ -1,8 +1,8 @@
-# AI Examiner v0.8.0 Development and v0.9.0 Research Status
+# AI Examiner v0.9.0 Research Status
 
 ## Current state
 
-- Version: `0.8.0.dev0`
+- Version: `0.9.0.dev0`
 - Current branch: `research/v0.9.0`
 - Base candidate: `v0.7.0-rc.2`
 - Release tag: not created
@@ -15,8 +15,29 @@ storage, durable jobs, immutable audit, model governance, retention and review,
 OpenTelemetry operations, recoverable Compose and a dedicated enterprise
 administration UI. WP-14 adds deterministic release gates, dependency and secret
 scans, a bounded real-provider governance probe, an external evidence contract and
-an operator manual. Vultr/OIDC/UI observation evidence remains, so the package
-version intentionally stays `0.8.0.dev0`.
+an operator manual. The deterministic gate is complete and eleven of thirteen
+external evidence artifacts are accepted. A real 24-hour HTTPS/OIDC observation
+is running on AutoDL, while desktop/mobile browser acceptance remains blocked by
+the Codex in-app browser runtime. The package therefore remains `0.9.0.dev0` and
+no release-candidate tag has been created.
+
+Current release verification (2026-08-04):
+
+```text
+Release gate                  deterministic_ready
+Gate checks                   21 passed / 0 failed / 2 blocked
+External evidence             11 passed / 2 pending
+PostgreSQL                    17.10, RLS contract passed
+S3-compatible storage        network contract passed
+Redis idempotency            40 contenders / exactly 1 winner
+Disaster recovery            database + 59 objects restored and rolled back
+OIDC login                    PKCE/session/organization context passed
+Stale tenant guard           HTTP 412, version unchanged
+Real AI provider             Qwen Plus
+24-hour observation          running; zero failed samples at start
+Enterprise browser UI        desktop/mobile evidence pending
+Release promotion            held
+```
 
 WP-14 local verification:
 
@@ -29,7 +50,7 @@ Alembic heads                 1 (20260728_0016)
 Route-policy completeness     passed
 Planner v6 frozen evidence    passed (7 templates / 210 cases)
 Real Qwen governance probe    passed and committed
-Release promotion             held (12 external artifacts)
+Release promotion             held (2 external artifacts pending)
 ```
 
 The committed-source Qwen Plus probe recorded 126 input Token, 6 output Token,
