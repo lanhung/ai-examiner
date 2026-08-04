@@ -394,12 +394,83 @@ def _evidence_validation_errors(
     payload: dict[str, Any],
 ) -> list[str]:
     errors: list[str] = []
+    if payload.get("schema_version") != "1.0":
+        errors.append("invalid_schema_version")
     if not payload.get("generated_at"):
         errors.append("missing_generated_at")
     source_commit = str(payload.get("source_commit") or "")
     if not re.fullmatch(r"[0-9a-f]{40,64}", source_commit):
         errors.append("invalid_source_commit")
-    if check_id == "quota_model_policy":
+    if check_id == "tenant_isolation":
+        if int(payload.get("missing_context_rows") or 0) != 0:
+            errors.append("missing_context_rows_visible")
+        if payload.get("cross_tenant_write_blocked") is not True:
+            errors.append("cross_tenant_write_not_blocked")
+        if payload.get("runtime_login_bypass_rls") is not False:
+            errors.append("runtime_role_bypasses_rls")
+    elif check_id == "auth_token_matrix":
+        if payload.get("valid_access_token_accepted") is not True:
+            errors.append("valid_access_token_not_accepted")
+        if int(payload.get("invalid_token_cases") or 0) < 10:
+            errors.append("insufficient_invalid_token_matrix")
+        if int(payload.get("invalid_tokens_denied") or 0) != int(
+            payload.get("invalid_token_cases") or 0
+        ):
+            errors.append("invalid_token_accepted")
+        for field in ("jwks_cache_verified", "jwks_rotation_verified", "pkce_verified"):
+            if payload.get(field) is not True:
+                errors.append(f"{field}_required")
+    elif check_id == "route_capability_coverage":
+        if int(payload.get("protected_route_method_pairs") or 0) < 1:
+            errors.append("no_protected_routes")
+        for field in (
+            "registry_exact_match",
+            "openapi_metadata_complete",
+            "cross_tenant_substitution_denied",
+        ):
+            if payload.get(field) is not True:
+                errors.append(f"{field}_required")
+    elif check_id == "postgres_migration":
+        if int(payload.get("protected_table_count") or 0) < 1:
+            errors.append("no_protected_tables")
+        if int(payload.get("tenant_policy_count") or 0) < 1:
+            errors.append("no_tenant_policies")
+        if payload.get("cross_tenant_write_blocked") is not True:
+            errors.append("cross_tenant_write_not_blocked")
+    elif check_id == "storage_contract":
+        backends = set(payload.get("verified_backends") or [])
+        if not {"local", "s3"}.issubset(backends):
+            errors.append("local_and_s3_required")
+        if payload.get("real_s3_endpoint_verified") is not True:
+            errors.append("real_s3_endpoint_required")
+        if int(payload.get("unauthorized_object_access") or 0) != 0:
+            errors.append("unauthorized_object_access")
+        if int(payload.get("ownership_mismatch") or 0) != 0:
+            errors.append("ownership_mismatch")
+        if payload.get("verified_deletion_completion") is not True:
+            errors.append("verified_deletion_required")
+    elif check_id == "queue_idempotency":
+        if payload.get("real_redis_verified") is not True:
+            errors.append("real_redis_required")
+        for field in (
+            "duplicate_billable_results",
+            "unknown_database_rows_executed",
+            "policy_bypassing_provider_calls",
+            "terminal_jobs_without_audit",
+        ):
+            if int(payload.get(field) or 0) != 0:
+                errors.append(field)
+    elif check_id == "audit_redaction":
+        if int(payload.get("canary_leak_count") or 0) != 0:
+            errors.append("audit_canary_leak")
+        for field in (
+            "append_only_verified",
+            "tenant_scope_verified",
+            "required_write_rollback_verified",
+        ):
+            if payload.get(field) is not True:
+                errors.append(f"{field}_required")
+    elif check_id == "quota_model_policy":
         if payload.get("actual_provider") not in {
             "openai",
             "anthropic",
@@ -420,6 +491,16 @@ def _evidence_validation_errors(
             )
         ):
             errors.append("sensitive_content_recorded")
+    elif check_id == "telemetry_redaction":
+        if int(payload.get("canary_leak_count") or 0) != 0:
+            errors.append("telemetry_canary_leak")
+        for field in (
+            "end_to_end_export_verified",
+            "exporter_outage_isolated",
+            "correlation_propagation_verified",
+        ):
+            if payload.get(field) is not True:
+                errors.append(f"{field}_required")
     elif check_id == "disaster_recovery":
         if float(payload.get("rpo_seconds") or 1e20) > 86_400:
             errors.append("rpo_target_missed")
@@ -447,6 +528,15 @@ def _evidence_validation_errors(
         ):
             if payload.get(field) is not True:
                 errors.append(f"{field}_required")
+    elif check_id == "ai_regression":
+        if int(payload.get("template_count") or 0) != 7:
+            errors.append("seven_templates_required")
+        if int(payload.get("case_count") or 0) < 210:
+            errors.append("insufficient_ai_cases")
+        if payload.get("real_provider_verified") is not True:
+            errors.append("real_provider_required")
+        if payload.get("authenticated_equivalence_verified") is not True:
+            errors.append("authenticated_equivalence_required")
     return errors
 
 

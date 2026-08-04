@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.0.dev0 - release evidence automation
+
+- Added machine-generated OIDC, route capability, storage, queue, audit, telemetry
+  and AI regression evidence with sanitized hashes and focused test counts.
+- Added real Redis concurrency, S3-compatible object lifecycle and OTLP wire probes.
+- Added an isolated host PostgreSQL/object restore rehearsal for environments without
+  a Docker daemon.
+- Added a strict 24-hour HTTPS/OIDC staging observer.
+- Hardened the release gate so `status: passed` placeholder JSON cannot satisfy the
+  v0.9 enterprise evidence contract.
+
 ## v0.9.0 research - WP-14 release hardening
 
 - Require `cryptography>=50.0.0` and refresh the lock file after the release

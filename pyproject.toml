@@ -66,6 +66,9 @@ ai-examiner-probe-template-relevance = "ai_examiner.template_relevance_probe_cli
 ai-examiner-bootstrap-admin = "ai_examiner.enterprise_cli:bootstrap_admin"
 ai-examiner-migrate-storage = "ai_examiner.storage_cli:run_storage_migration"
 ai-examiner-verify-v09-release = "ai_examiner.release_hardening:main"
+ai-examiner-generate-v09-evidence = "ai_examiner.release_evidence:main"
+ai-examiner-rehearse-host-recovery = "ai_examiner.recovery_evidence:main"
+ai-examiner-observe-v09-staging = "ai_examiner.staging_observer:main"
 ai-examiner-probe-model-governance = "ai_examiner.model_governance_probe:main"
 
 [tool.hatch.build.targets.wheel]

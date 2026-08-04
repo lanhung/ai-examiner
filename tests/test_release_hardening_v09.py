@@ -169,6 +169,7 @@ def test_real_provider_probe_records_governed_ledger_without_content(monkeypatch
 
 def test_specialized_release_evidence_requires_real_measurements():
     base = {
+        "schema_version": "1.0",
         "generated_at": "2026-07-29T00:00:00+00:00",
         "source_commit": "a" * 40,
         "status": "passed",
@@ -217,6 +218,39 @@ def test_specialized_release_evidence_requires_real_measurements():
         "object_restore_not_verified",
         "rollback_not_verified",
     ]
+
+
+def test_all_specialized_evidence_rejects_status_only_placeholders():
+    base = {
+        "schema_version": "1.0",
+        "generated_at": "2026-08-04T00:00:00+00:00",
+        "source_commit": "b" * 40,
+        "status": "passed",
+    }
+
+    expected_errors = {
+        "auth_token_matrix": "valid_access_token_not_accepted",
+        "route_capability_coverage": "no_protected_routes",
+        "storage_contract": "local_and_s3_required",
+        "queue_idempotency": "real_redis_required",
+        "audit_redaction": "append_only_verified_required",
+        "telemetry_redaction": "end_to_end_export_verified_required",
+        "ai_regression": "seven_templates_required",
+    }
+    for check_id, error in expected_errors.items():
+        assert error in _evidence_validation_errors(check_id, base)
+
+
+def test_release_evidence_requires_schema_version():
+    payload = {
+        "generated_at": "2026-08-04T00:00:00+00:00",
+        "source_commit": "c" * 40,
+        "status": "passed",
+    }
+
+    assert _evidence_validation_errors("audit_redaction", payload)[0] == (
+        "invalid_schema_version"
+    )
 
 
 def test_wheel_runtime_finds_repository_alembic_config(monkeypatch, tmp_path):
