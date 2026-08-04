@@ -2,6 +2,11 @@
 
 ## v0.9.0 research - WP-14 release hardening
 
+- Require `cryptography>=50.0.0` and refresh the lock file after the release
+  dependency audit detected CVE-2026-69247 in 49.0.0.
+- Revalidate the deployed research build with a 48-check isolated HTTP
+  acceptance run using real Qwen Plus, native PostgreSQL 17 RLS verification,
+  337 automated tests and a 160-request public endpoint probe.
 - Add a repeatable native-host PostgreSQL/RLS acceptance command with a strict
   `_test` database-name guard and optional disposable database recreation.
 - Verify the dedicated least-privilege application login across 100 concurrent
