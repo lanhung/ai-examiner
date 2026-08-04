@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-04T07:04:16.255970+00:00",
+  "source_commit": "a27b84474e788158cd2cf0d5af9e73500058d37d",
+  "status": "passed",
+  "focused_test_result": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration_seconds": 4.723,
+    "return_code": 0,
+    "output_sha256": "6e22e5ebe582e98ef052a3f313a519278b73d7240fa2a3c908c41a0cb6d9f569"
+  },
+  "end_to_end_export_verified": true,
+  "exporter_outage_isolated": true,
+  "correlation_propagation_verified": true,
+  "canary_leak_count": 0,
+  "otlp_probe": {
+    "verified": true,
+    "request_count": 1,
+    "canary_leak_count": 0,
+    "wire_sha256": "b70dce82f222675d70974c71aa6e2af21fdd15c90791e30b6f81d691ae7b4d48"
+  }
+}

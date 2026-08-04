@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-04T07:04:16.255253+00:00",
+  "source_commit": "a27b84474e788158cd2cf0d5af9e73500058d37d",
+  "status": "passed",
+  "focused_test_result": {
+    "tests": 9,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration_seconds": 5.516,
+    "return_code": 0,
+    "output_sha256": "a6ce710150dd116e5aa8d8d4d26c9d4f856dfa9f96d8d0838941441c0e6ded17"
+  },
+  "verified_backends": [
+    "local",
+    "s3"
+  ],
+  "real_s3_endpoint_verified": true,
+  "s3_probe": {
+    "verified": true,
+    "checksum_verified": true,
+    "presigned_download_created": true,
+    "verified_deletion": true,
+    "tenant_key_prefix_verified": true
+  },
+  "unauthorized_object_access": 0,
+  "ownership_mismatch": 0,
+  "verified_deletion_completion": true
+}

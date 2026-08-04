@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-04T07:05:48.442561+00:00",
+  "source_commit": "a27b84474e788158cd2cf0d5af9e73500058d37d",
+  "status": "passed",
+  "environment": "isolated_host_restore",
+  "rpo_seconds": 0.184,
+  "rto_seconds": 0.49,
+  "database_restore_verified": true,
+  "database_table_count": 53,
+  "database_row_count": 2,
+  "object_restore_verified": true,
+  "object_count": 59,
+  "rollback_success": true,
+  "source_environment_untouched": true,
+  "temporary_restore_removed": true,
+  "total_rehearsal_seconds": 0.895,
+  "contains_database_dump": false,
+  "contains_object_content": false,
+  "contains_credentials": false
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-04T07:04:16.255755+00:00",
+  "source_commit": "a27b84474e788158cd2cf0d5af9e73500058d37d",
+  "status": "passed",
+  "focused_test_result": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration_seconds": 5.533,
+    "return_code": 0,
+    "output_sha256": "cfe7b562cd62da0191c614970eb24e8892d9956711397fdfda63cc4ec4ef1c7c"
+  },
+  "canary_leak_count": 0,
+  "append_only_verified": true,
+  "tenant_scope_verified": true,
+  "required_write_rollback_verified": true,
+  "raw_audit_content_recorded": false
+}

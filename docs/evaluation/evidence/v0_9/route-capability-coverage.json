@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-04T07:04:16.254981+00:00",
+  "source_commit": "a27b84474e788158cd2cf0d5af9e73500058d37d",
+  "status": "passed",
+  "focused_test_result": {
+    "tests": 24,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration_seconds": 5.743,
+    "return_code": 0,
+    "output_sha256": "32eb3e8de0b6080ba9c4ee8182c6a7445f91758ccbe4f2e3df38ec4ebc7f89e7"
+  },
+  "protected_route_method_pairs": 48,
+  "registry_exact_match": true,
+  "openapi_metadata_complete": true,
+  "cross_tenant_substitution_denied": true
+}

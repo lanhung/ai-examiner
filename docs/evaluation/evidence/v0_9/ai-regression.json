@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-04T07:04:16.257234+00:00",
+  "source_commit": "a27b84474e788158cd2cf0d5af9e73500058d37d",
+  "status": "passed",
+  "focused_test_result": {
+    "tests": 20,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration_seconds": 3.89,
+    "return_code": 0,
+    "output_sha256": "d7968e58ab60bae73586fd71257b92509c5a863bd882bee62ea0e79791b80a2d"
+  },
+  "template_count": 7,
+  "case_count": 210,
+  "corpus_fingerprint": "9bf99fb4c71efaa9a47e66360e3ce36048ae082538aa75226f1ce6942116458d",
+  "real_provider_verified": true,
+  "real_provider": "qwen",
+  "real_model": "qwen-plus",
+  "authenticated_equivalence_verified": true,
+  "prompt_content_recorded": false,
+  "response_content_recorded": false
+}

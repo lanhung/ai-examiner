@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-04T07:04:16.254428+00:00",
+  "source_commit": "a27b84474e788158cd2cf0d5af9e73500058d37d",
+  "status": "passed",
+  "environment": "ephemeral_rsa_oidc_issuer",
+  "focused_test_result": {
+    "tests": 25,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration_seconds": 9.483,
+    "return_code": 0,
+    "output_sha256": "453f8bc15ddda96d0baf731b23afaa9e2cd226893b115af6830d9b7afbc7717d"
+  },
+  "valid_access_token_accepted": true,
+  "invalid_token_cases": 10,
+  "invalid_tokens_denied": 10,
+  "jwks_cache_verified": true,
+  "jwks_rotation_verified": true,
+  "pkce_verified": true,
+  "secret_values_recorded": false
+}
