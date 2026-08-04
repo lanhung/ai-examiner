@@ -10,6 +10,8 @@
 - Added a strict 24-hour HTTPS/OIDC staging observer.
 - Hardened the release gate so `status: passed` placeholder JSON cannot satisfy the
   v0.9 enterprise evidence contract.
+- Added a localhost-only PKCE/JWKS staging OIDC issuer for repeatable browser and
+  24-hour acceptance without depending on production identity data.
 
 ## v0.9.0 research - WP-14 release hardening
 
