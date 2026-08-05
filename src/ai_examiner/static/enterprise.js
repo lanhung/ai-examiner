@@ -73,6 +73,18 @@ function errorMessage(error) {
   return error?.message || "请求失败";
 }
 
+function showLoginRequired() {
+  state.authMethod = "oidc";
+  state.principal = null;
+  state.organizations = [];
+  state.organizationId = null;
+  $("#authBadge").textContent = "未登录";
+  $("#authBadge").className = "status-badge warning";
+  $("#loginRequired").classList.remove("hidden");
+  $("#workspace").classList.add("hidden");
+  $("#organizationSelect").disabled = true;
+}
+
 function developerHeaders() {
   if (state.authMethod !== "disabled") return {};
   const principalId = localStorage.getItem("ai-examiner.dev-principal");
@@ -933,10 +945,7 @@ async function initialize() {
     state.principal = me.principal;
     state.organizations = me.organizations || [];
     if (state.authMethod === "oidc" && !state.principal) {
-      $("#authBadge").textContent = "未登录";
-      $("#authBadge").className = "status-badge warning";
-      $("#loginRequired").classList.remove("hidden");
-      $("#organizationSelect").disabled = true;
+      showLoginRequired();
       return;
     }
     if (state.authMethod === "oidc") {
@@ -973,6 +982,10 @@ async function initialize() {
       populateOrganizationSelect();
     }
   } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      showLoginRequired();
+      return;
+    }
     toast(errorMessage(error), "error");
     $("#authBadge").textContent = "身份服务异常";
     $("#authBadge").className = "status-badge danger";
