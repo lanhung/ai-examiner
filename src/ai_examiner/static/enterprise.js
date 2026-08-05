@@ -83,6 +83,7 @@ function showLoginRequired() {
   $("#loginRequired").classList.remove("hidden");
   $("#workspace").classList.add("hidden");
   $("#organizationSelect").disabled = true;
+  $("#logoutButton").classList.add("hidden");
 }
 
 function isOidcAuthMethod(method) {
@@ -140,11 +141,13 @@ async function api(path, options = {}) {
       try { payload = JSON.parse(raw); } catch { payload = raw; }
     }
     if (!response.ok) {
-      throw new ApiError(
+      const error = new ApiError(
         typeof payload === "string" ? payload : `请求失败 (${response.status})`,
         response.status,
         payload,
       );
+      if (response.status === 401) showLoginRequired();
+      throw error;
     }
     if (organizationScoped) {
       if (
