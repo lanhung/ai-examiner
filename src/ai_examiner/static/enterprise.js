@@ -85,6 +85,10 @@ function showLoginRequired() {
   $("#organizationSelect").disabled = true;
 }
 
+function isOidcAuthMethod(method) {
+  return method === "oidc" || String(method || "").startsWith("oidc_");
+}
+
 function developerHeaders() {
   if (state.authMethod !== "disabled") return {};
   const principalId = localStorage.getItem("ai-examiner.dev-principal");
@@ -944,11 +948,11 @@ async function initialize() {
     state.authMethod = me.authentication?.method || "unknown";
     state.principal = me.principal;
     state.organizations = me.organizations || [];
-    if (state.authMethod === "oidc" && !state.principal) {
+    if (isOidcAuthMethod(state.authMethod) && !state.principal) {
       showLoginRequired();
       return;
     }
-    if (state.authMethod === "oidc") {
+    if (isOidcAuthMethod(state.authMethod)) {
       $("#authBadge").textContent = state.principal.display_name;
       $("#authBadge").className = "status-badge success";
       $("#logoutButton").classList.remove("hidden");

@@ -37,9 +37,9 @@ def test_enterprise_console_is_a_dedicated_operational_surface(client):
     assert "审计日志" in html
     assert "数据保留" in html
     assert "人工复核" in html
-    assert "/static/enterprise.js?v=0.9.0-wp13-loginfix" in html
+    assert "/static/enterprise.js?v=0.9.0-wp13-loginfix2" in html
 
-    script = client.get("/static/enterprise.js?v=0.9.0-wp13-loginfix")
+    script = client.get("/static/enterprise.js?v=0.9.0-wp13-loginfix2")
     assert script.status_code == 200
     assert "abortOrganizationRequests" in script.text
     assert "capturedOrganization !== state.organizationId" in script.text
@@ -49,6 +49,8 @@ def test_enterprise_console_is_a_dedicated_operational_surface(client):
     assert 'item.status !== "revoked"' in script.text
     assert 'isDelete ? "DELETE" : "APPROVE"' in script.text
     assert "function showLoginRequired()" in script.text
+    assert "function isOidcAuthMethod(method)" in script.text
+    assert "isOidcAuthMethod(state.authMethod)" in script.text
     assert "error instanceof ApiError && error.status === 401" in script.text
     stylesheet = client.get("/static/enterprise.css?v=0.9.0-wp13")
     assert stylesheet.status_code == 200
