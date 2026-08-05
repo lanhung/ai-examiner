@@ -30,6 +30,7 @@ def test_enterprise_console_is_a_dedicated_operational_surface(client):
     response = client.get("/enterprise")
 
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
     html = response.text
     assert "AI Examiner 企业控制台" in html
     assert "成员与权限" in html

@@ -826,12 +826,18 @@ def located_resource_response(
 
 @app.get("/", include_in_schema=False)
 def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/enterprise", include_in_schema=False)
 def enterprise_index():
-    return FileResponse(STATIC_DIR / "enterprise.html")
+    return FileResponse(
+        STATIC_DIR / "enterprise.html",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/health")
