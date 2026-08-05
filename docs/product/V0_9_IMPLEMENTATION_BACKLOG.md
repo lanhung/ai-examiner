@@ -325,9 +325,9 @@ Implementation evidence:
 
 ## WP-13: Enterprise UI
 
-Status: implemented on `research/v0.9.0`; deterministic UI/API and tenant-stale
-state tests pass. OIDC staging and desktop/mobile screenshot evidence remain
-part of WP-14.
+Status: implemented and accepted on `research/v0.9.0`; deterministic UI/API,
+tenant-stale state, real OIDC login, session recovery, and desktop/mobile browser
+checks pass. The sanitized browser artifact is part of WP-14 evidence.
 
 Deliver:
 
@@ -356,9 +356,9 @@ Implementation evidence:
 
 ## WP-14: Release hardening
 
-Status: implemented on `research/v0.9.0`; deterministic release tooling is complete.
-Promotion remains held until the Vultr/OIDC/UI observation and complete sanitized
-evidence set pass the machine-readable release gate.
+Status: implemented on `research/v0.9.0`; deterministic release tooling and the
+enterprise browser acceptance are complete. Promotion remains held only until the
+fresh 24-hour staging observation passes and its sanitized artifact is committed.
 
 Deliver:
 

@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-05T06:55:52Z",
+  "source_commit": "ba7e4a987d7ff333ed8314c2ecd154c1548bfd30",
+  "environment": "seetacloud_https_oidc_staging",
+  "status": "passed",
+  "desktop_passed": true,
+  "mobile_passed": true,
+  "oidc_login_passed": true,
+  "stale_tenant_guard_passed": true,
+  "browser_surface": "codex_in_app_browser",
+  "desktop_viewport": {
+    "width": 1280,
+    "height": 720,
+    "page_overflow_px": 0
+  },
+  "mobile_viewport": {
+    "width": 390,
+    "height": 844,
+    "page_overflow_px": 0,
+    "navigation_overflow_mode": "intentional_horizontal_scroll"
+  },
+  "authenticated_identity": {
+    "method": "oidc_session",
+    "role": "owner",
+    "organization_switcher_loaded": true
+  },
+  "validated_views": [
+    "overview",
+    "members_and_permissions",
+    "model_governance_and_quota",
+    "immutable_audit",
+    "retention_and_data_requests",
+    "human_review"
+  ],
+  "session_recovery_verified": true,
+  "entrypoint_cache_control": "no-store",
+  "stale_tenant_guard_probe": {
+    "stale_precondition_status": 412,
+    "resource_version_preserved": true,
+    "late_response_rejected": true
+  },
+  "desktop_screenshot_sha256": "2803fb0af741828a9d9d0342b913823ecd6f81ad141376df9a8ace56819557a6",
+  "mobile_screenshot_sha256": "7ec7f1294d4168f9756f8e10e7625b1baaa4bfb43927ade78f454350b075b4d5",
+  "secrets_recorded": false,
+  "cookies_recorded": false,
+  "tokens_recorded": false
+}
