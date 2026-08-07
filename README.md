@@ -1,18 +1,20 @@
-# AI Examiner v0.9.0 Research Development
+# AI Examiner v0.9.0 RC1
 
-Current working branch: `research/v0.9.0` (`0.9.0.dev0`). The v0.8 implementation
+Current working branch: `develop/v0.9.0` (`0.9.0rc1`). The accepted research
+source remains available at `research/v0.9.0`. The v0.8 implementation
 line remains available at `develop/v0.8.0`. The v0.7 release
 candidate remains available at `develop/v0.7.0` / `v0.7.0-rc.2`. The stable production
 line remains v0.4.1 and the preserved v0.5 release snapshot remains
 `release/v0.5.0` / `v0.5.0-rc.4` until final acceptance.
 
-The accepted template-platform study is preserved on `research/v0.8.0`. The current
-branch implements that design incrementally and is not a production release.
+The accepted template-platform study is preserved on `research/v0.8.0`. This release
+candidate is approved for controlled staging; it is not the final production release.
 
-## v0.9 enterprise research
+## v0.9 enterprise candidate
 
-The `research/v0.9.0` branch defines the enterprise-platform gate. It does not change
-the package version or authorize a production release.
+The `develop/v0.9.0` branch freezes the enterprise-platform candidate accepted by the
+machine-readable release gate. Final production promotion still requires RC staging
+acceptance.
 
 The proposed design adds:
 
@@ -49,7 +51,8 @@ Research implementation progress:
 - WP-14 implemented: machine-readable release gates, dependency and tracked-source
   secret scans, bounded real-provider policy verification, sanitized evidence
   contracts and an enterprise operator manual;
-- the v0.9 research branch remains non-deployable until the complete gate passes.
+- the complete v0.9 release gate passed with 23 checks, zero failures and zero blocks;
+- a 24-hour HTTPS/OIDC observation completed 1,441 samples with zero failures.
 
 Authoritative research documents:
 

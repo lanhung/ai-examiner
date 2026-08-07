@@ -1,7 +1,7 @@
 # AI Examiner v0.9.0-rc.1 Release Notes
 
-Status: draft. The release candidate and tag do not exist until the v0.9 release
-gate reports `release_ready`.
+Status: release candidate. The v0.9 release gate reported `release_ready` with
+23 passed checks, zero failures and zero blocks.
 
 ## Enterprise platform
 
@@ -39,15 +39,17 @@ docs/deployment/V0_9_OPERATOR_MANUAL.md
 The release uses additive migrations. Back up PostgreSQL and object storage before
 upgrade. Do not run `docker compose down -v`.
 
-## Known promotion holds
+## Acceptance evidence
 
-- the in-progress 24-hour HTTPS/OIDC staging observation;
-- desktop/mobile enterprise UI browser evidence.
+- 24-hour HTTPS/OIDC observation: 1,441 samples, zero failures, 100% availability;
+- maximum health/readiness sampling latency: 167 ms;
+- desktop and mobile enterprise UI acceptance with OIDC login;
+- PostgreSQL RLS, S3-compatible storage, Redis idempotency and disaster recovery;
+- real Qwen Plus model-governance and frozen seven-template AI regression evidence.
 
-The real-provider governance probe, OIDC token matrix, PostgreSQL/RLS checks,
-S3-compatible storage contract, Redis idempotency, telemetry redaction and
-database/object recovery rehearsal have passed. Interactive OIDC login and stale
-tenant protection have also passed at the HTTP/session boundary; visual browser
-acceptance remains separate and must not be inferred from those API checks.
+## Candidate boundary
 
-These holds must be cleared before creating `v0.9.0-rc.1`.
+RC1 is approved for controlled staging. It is not the final `0.9.0` production
+release. Production deployments must enable and validate the intended PostgreSQL
+RLS, object-storage and telemetry profiles instead of inferring those settings from
+the lightweight AutoDL compatibility target.

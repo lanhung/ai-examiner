@@ -18,7 +18,8 @@ This file is the authoritative version and branch status for Codex and other cod
 | v0.7 candidate | 0.7.0rc2 | `v0.7.0-rc.2` | Candidate release; Vultr Compose promotion gate remains | Staging only |
 | Upcoming research | 0.8.0 | `research/v0.8.0` | Industry template architecture, API, evaluation and implementation design | Not deployable |
 | Current implementation | 0.8.0.dev0 | `develop/v0.8.0` | Software and AI quality gates pass, including three reciprocal 30-case templates; Docker/Vultr promotion rehearsal remains held | Local evaluation only |
-| Current research | 0.9.0.dev0 | `research/v0.9.0` | WP-01 through WP-14 implemented; desktop/mobile OIDC browser acceptance passed; a fresh 24-hour observation remains | OIDC staging only |
+| Accepted research | 0.9.0.dev0 | `research/v0.9.0` | Complete release gate accepted | Preserved source |
+| v0.9 candidate | 0.9.0rc1 | `develop/v0.9.0`, `v0.9.0-rc.1` | 23 release checks passed; 24-hour HTTPS/OIDC observation passed | Controlled staging |
 | Release candidate | 0.5.0rc4 | `v0.5.0-rc.4` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 
@@ -46,11 +47,11 @@ This file is the authoritative version and branch status for Codex and other cod
   experiments only. It must not be deployed and must not change the package version.
 - v0.8 implementation begins on `develop/v0.8.0` only after ADR-005 and all research
   gates are accepted. Feature branches use `feature/v0.8-<short-name>`.
-- `research/v0.9.0` contains enterprise architecture plus reversible research
-  prototypes. WP-01 through WP-08 may add tests, migrations and authorization seams, but
-  the branch must not be deployed and must keep package version `0.8.0.dev0`.
-- Do not create `develop/v0.9.0` until ADR-006 and the full v0.9 research gate are
-  accepted. Feature branches will use `feature/v0.9-<short-name>`.
+- `research/v0.9.0` preserves the accepted enterprise research source and evidence.
+- `develop/v0.9.0` contains the immutable-source RC line after ADR-006 and the full
+  v0.9 release gate were accepted. Candidate fixes require a new RC number and tag.
+- v0.9 feature branches use `feature/v0.9-<short-name>` and branch from
+  `develop/v0.9.0`.
 - Feature branches use `feature/v0.5-<short-name>` and branch from `develop/v0.5.0`.
 - Bug fixes for the stable release use `fix/v0.4-<short-name>` and merge into `main`; required fixes are then forward-merged into development.
 - Do not develop unreleased features in the production worktree.
@@ -264,6 +265,6 @@ PostgreSQL parity
 -> UI, security evaluation and release hardening
 ```
 
-No v0.9 tag is created during research. WP-01 through WP-14 are now implemented, so
-the branch uses package version `0.9.0.dev0`. Promotion to `0.9.0rc1` remains
-forbidden until the external enterprise release gate is accepted.
+The accepted research source remains at `0.9.0.dev0`. All external enterprise
+release gates passed, authorizing `0.9.0rc1` and immutable tag `v0.9.0-rc.1` for
+controlled staging. Final `0.9.0` promotion requires separate RC acceptance.

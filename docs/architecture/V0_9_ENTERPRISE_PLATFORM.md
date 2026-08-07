@@ -1,8 +1,8 @@
 # v0.9 Enterprise Platform Architecture
 
-Status: WP-01 through WP-14 implemented; external release evidence pending
-Current package version: `0.9.0.dev0`
-First release-candidate version after gate acceptance: `0.9.0rc1`
+Status: WP-01 through WP-14 implemented; release gate accepted
+Current package version: `0.9.0rc1`
+Release-candidate tag: `v0.9.0-rc.1`
 
 ## 1. Objective
 

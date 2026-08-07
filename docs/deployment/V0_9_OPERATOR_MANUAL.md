@@ -1,8 +1,7 @@
 # AI Examiner v0.9 Enterprise Operator Manual
 
-Status: release-candidate preparation. The `research/v0.9.0` branch is not a
-production release and must not be tagged until the machine-readable release gate
-reports `release_ready`.
+Status: `0.9.0rc1` controlled-staging candidate. The machine-readable release gate
+reported `release_ready`; final `0.9.0` production promotion remains separate.
 
 ## 1. Deployment topology
 
@@ -275,4 +274,3 @@ Promotion is a separate change after every release gate passes:
 5. create immutable annotated tag `v0.9.0-rc.1`;
 6. deploy that exact tag to staging;
 7. do not move or rewrite the tag.
-

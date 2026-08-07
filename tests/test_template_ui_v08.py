@@ -6,13 +6,13 @@ def test_homepage_delivers_v08_template_studio(client):
 
     assert response.status_code == 200
     html = response.text
-    assert "AI Examiner v0.9 研究开发版" in html
+    assert "AI Examiner v0.9 候选版" in html
     assert 'id="templateStudio"' in html
     assert 'id="templateCatalogList"' in html
     assert 'id="templateDetail"' in html
     assert 'id="sessionTemplateSelect"' in html
-    assert "/static/styles.css?v=0.9.0-qa5" in html
-    assert "/static/app.js?v=0.9.0-qa5" in html
+    assert "/static/styles.css?v=0.9.0-rc1" in html
+    assert "/static/app.js?v=0.9.0-rc1" in html
 
 
 def test_template_editor_uses_contract_values_and_safe_transfer_endpoints(client):

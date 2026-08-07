@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.0rc1 - 2026-08-07
+
+- Promoted the accepted enterprise platform to its first immutable release
+  candidate after all 23 release checks passed.
+- Recorded a continuous 24-hour HTTPS/OIDC staging observation with 1,441 samples,
+  zero failed samples, 100% availability and 167 ms maximum health latency.
+- Completed desktop/mobile OIDC browser acceptance, PostgreSQL RLS, S3-compatible
+  storage, Redis idempotency, audit, quota, telemetry, disaster-recovery and
+  real-Qwen governance evidence.
+- Added reboot-safe AutoDL startup for the v0.9 application, Redis and the staging
+  OIDC issuer while preserving the accepted deployment ports.
+- Retained the final-production hold: RC1 is for controlled staging and must not be
+  treated as the final `0.9.0` release.
+
 ## 0.9.0.dev0 - release evidence automation
 
 - Added machine-generated OIDC, route capability, storage, queue, audit, telemetry
