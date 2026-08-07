@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-07T08:48:07.060998+00:00",
+  "source_commit": "7468c240276833b686d78b7ff85072c7a743c773",
+  "status": "passed",
+  "observation_hours": 24.0,
+  "sample_count": 1441,
+  "failed_samples": 0,
+  "availability_ratio": 1.0,
+  "maximum_health_latency_ms": 167,
+  "open_release_blockers": 0,
+  "tls_verified": true,
+  "oidc_verified": true,
+  "target_sha256": "61f5930a71e45af2118df9b80637f0ac4333af9ffe495f14f94250bdfefe1bca",
+  "contains_url": false,
+  "contains_credentials": false
+}
