@@ -185,6 +185,11 @@ An expired lease indicates that the prior worker stopped heartbeating. Recovery:
 Recovery is explicitly tenant-scoped so a restricted PostgreSQL runtime role never
 needs cross-organization visibility.
 
+The same endpoint also recovers queued jobs that were committed to PostgreSQL but
+did not receive a Celery task identifier before the API process stopped. These
+jobs are eligible only after `JOB_ORPHAN_GRACE_SECONDS`, remain tenant-scoped and
+share the same bounded recovery batch with expired worker leases.
+
 ## 9. Enterprise API
 
 ```text
@@ -207,6 +212,7 @@ JOB_HEARTBEAT_SECONDS=30
 JOB_MAX_ATTEMPTS=3
 JOB_RETRY_BASE_SECONDS=10
 JOB_RECOVERY_BATCH_SIZE=100
+JOB_ORPHAN_GRACE_SECONDS=120
 ```
 
 Production readiness fails when heartbeat duration is not shorter than lease

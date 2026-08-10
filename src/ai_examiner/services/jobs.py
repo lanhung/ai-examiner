@@ -22,6 +22,7 @@ from .job_control import (
     JOB_CAPABILITIES,
     TaskEnvelope,
     append_job_audit,
+    recover_orphaned_queued_jobs,
     recover_stale_jobs,
     request_job_cancellation,
     reset_job_for_retry,
@@ -291,11 +292,24 @@ def recover_and_dispatch_jobs(
     *,
     organization_id: str,
 ) -> list[BackgroundJob]:
+    settings = get_settings()
     recovered = recover_stale_jobs(
         db,
-        get_settings(),
+        settings,
         organization_id=organization_id,
     )
+    remaining = max(0, settings.job_recovery_batch_size - len(recovered))
+    if remaining:
+        orphan_settings = settings.model_copy(
+            update={"job_recovery_batch_size": remaining}
+        )
+        recovered.extend(
+            recover_orphaned_queued_jobs(
+                db,
+                orphan_settings,
+                organization_id=organization_id,
+            )
+        )
     return [
         dispatch_persisted_job(db, job)
         for job in recovered

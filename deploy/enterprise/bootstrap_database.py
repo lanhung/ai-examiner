@@ -100,7 +100,7 @@ def migrate() -> dict[str, str]:
     )
     command.upgrade(alembic, "head")
     username = prepare_roles()
-    _seed_global_data()
+    seed_global_data()
     return {
         "status": "ready",
         "runtime_login": username,
@@ -108,25 +108,34 @@ def migrate() -> dict[str, str]:
     }
 
 
-def _seed_global_data() -> None:
+def seed_global_data() -> dict[str, int | str]:
     from ai_examiner.db import SessionLocal
+    from ai_examiner.models import PromptVersion, ScenarioTemplate, ScenarioTemplateVersion
     from ai_examiner.services.enterprise_identity import ensure_legacy_organization
     from ai_examiner.services.prompts import seed_prompt_registry
     from ai_examiner.services.templates import seed_builtin_templates
 
-    prompt_directory = Path("/app/prompts")
+    prompt_directory = Path(os.environ.get("PROMPT_DIR", "/app/prompts"))
+    if not prompt_directory.is_dir():
+        prompt_directory = Path.cwd() / "prompts"
     with SessionLocal() as database:
         ensure_legacy_organization(database)
         database.commit()
         seed_prompt_registry(database, prompt_directory)
         seed_builtin_templates(database)
+        return {
+            "status": "seeded",
+            "prompt_count": database.query(PromptVersion).count(),
+            "template_count": database.query(ScenarioTemplate).count(),
+            "template_version_count": database.query(ScenarioTemplateVersion).count(),
+        }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "action",
-        choices=("prepare-roles", "migrate"),
+        choices=("prepare-roles", "migrate", "seed-global-data"),
         default="migrate",
         nargs="?",
     )
@@ -137,6 +146,8 @@ def main() -> None:
             "runtime_login": prepare_roles(),
             "runtime_role": RUNTIME_ROLE,
         }
+    elif args.action == "seed-global-data":
+        result = seed_global_data()
     else:
         result = migrate()
     print(json.dumps(result, sort_keys=True))

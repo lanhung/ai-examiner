@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
-  <title>AI Examiner v0.9.0 RC1</title>
-  <link rel="stylesheet" href="/static/styles.css?v=0.9.0-rc1" />
+  <title>AI Examiner v0.9.0 RC2</title>
+  <link rel="stylesheet" href="/static/styles.css?v=0.9.0-rc2" />
 </head>
 <body>
   <header>
@@ -15,6 +15,12 @@
       <p>用可审计的场景模板统一目标、提问策略、帮助边界、评分规则、安全约束与报告结构。</p>
     </div>
     <div class="header-actions">
+      <div id="workbenchIdentity" class="workbench-identity hidden">
+        <label for="workbenchOrganization">当前组织</label>
+        <select id="workbenchOrganization" aria-label="当前组织"></select>
+        <span id="workbenchPrincipal" class="badge secondary"></span>
+      </div>
+      <a id="workbenchLogin" class="button-link hidden" href="/api/v1/auth/login">登录工作台</a>
       <a class="button-link" href="/enterprise">企业控制台</a>
       <div id="providerBadge" class="badge">检查模型状态…</div>
     </div>
@@ -240,7 +246,7 @@
     </section>
   </main>
 
-  <footer>v0.9.0 RC1 · 企业治理、主动提问、多模态证据与实时语音</footer>
-  <script src="/static/app.js?v=0.9.0-rc1"></script>
+  <footer>v0.9.0 RC2 · 企业治理、主动提问、多模态证据与实时语音</footer>
+  <script src="/static/app.js?v=0.9.0-rc2"></script>
 </body>
 </html>

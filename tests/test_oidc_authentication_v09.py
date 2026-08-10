@@ -8,6 +8,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -26,6 +27,7 @@ from ai_examiner.models import (
     OrganizationMembership,
     Principal,
 )
+from ai_examiner.services import authentication as authentication_module
 from ai_examiner.services.authentication import authentication_http_error, current_authentication
 from ai_examiner.services.oidc import (
     AuthenticationContext,
@@ -495,6 +497,55 @@ def test_disabled_mode_me_and_readiness_are_explicit(client):
         "ready": True,
         "mode": "disabled",
     }
+
+
+def test_current_authentication_binds_validated_principal_for_rls_discovery(
+    monkeypatch,
+):
+    context = AuthenticationContext(
+        method="oidc_bearer",
+        principal_id="principal-rls-discovery",
+        issuer=ISSUER,
+        subject="oidc-user-1",
+        scopes=frozenset({"exam:read"}),
+    )
+
+    class Authenticator:
+        @staticmethod
+        def authenticate_bearer(_db, token):
+            assert token == "valid-token"
+            return context
+
+    bound_contexts = []
+    monkeypatch.setattr(
+        authentication_module,
+        "get_settings",
+        lambda: oidc_settings(),
+    )
+    monkeypatch.setattr(
+        authentication_module,
+        "get_oidc_authenticator",
+        lambda: Authenticator(),
+    )
+    monkeypatch.setattr(
+        authentication_module,
+        "set_tenant_context",
+        lambda db, *, organization_id, principal_id: bound_contexts.append(
+            (db, organization_id, principal_id)
+        ),
+    )
+    request = SimpleNamespace(
+        headers={"Authorization": "Bearer valid-token"},
+        cookies={},
+        state=SimpleNamespace(),
+    )
+    db = object()
+
+    authenticated = authentication_module.current_authentication(request, db)
+
+    assert authenticated is context
+    assert bound_contexts == [(db, None, context.principal_id)]
+    assert request.state.audit_actor_id == context.principal_id
 
 
 def test_readiness_fails_when_oidc_dependency_is_unavailable(client, monkeypatch):

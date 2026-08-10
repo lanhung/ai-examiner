@@ -107,6 +107,10 @@ def verify() -> dict:
     project_a = str(uuid4())
     project_b = str(uuid4())
     cross_tenant_project = str(uuid4())
+    principal_a = str(uuid4())
+    principal_b = str(uuid4())
+    membership_a = str(uuid4())
+    membership_b = str(uuid4())
     audit_event_id = str(uuid4())
     review_case_id = str(uuid4())
     review_event_id = str(uuid4())
@@ -128,6 +132,26 @@ def verify() -> dict:
         if policies != len(RLS_TABLES):
             raise RuntimeError(
                 f"Expected {len(RLS_TABLES)} tenant policies, found {policies}"
+            )
+        discovery_policy_count = int(
+            connection.scalar(
+                text(
+                    "SELECT COUNT(*) FROM pg_policies "
+                    "WHERE schemaname = current_schema() "
+                    "AND policyname = ANY(:policies)"
+                ),
+                {
+                    "policies": [
+                        "membership_self_discovery",
+                        "organization_self_discovery",
+                    ]
+                },
+            )
+            or 0
+        )
+        if discovery_policy_count != 2:
+            raise RuntimeError(
+                "Expected principal organization discovery policies"
             )
         audit_policy_count = int(
             connection.scalar(
@@ -251,6 +275,40 @@ def verify() -> dict:
         )
         connection.execute(
             text(
+                "INSERT INTO principals "
+                "(id, issuer, subject, display_name, email, status, "
+                "created_at, updated_at, disabled_at) VALUES "
+                "(:principal_a, 'https://issuer.example.test', 'rls-a', "
+                "'RLS A', NULL, 'active', now(), now(), NULL), "
+                "(:principal_b, 'https://issuer.example.test', 'rls-b', "
+                "'RLS B', NULL, 'active', now(), now(), NULL)"
+            ),
+            {
+                "principal_a": principal_a,
+                "principal_b": principal_b,
+            },
+        )
+        connection.execute(
+            text(
+                "INSERT INTO organization_memberships "
+                "(id, organization_id, principal_id, role, status, version, "
+                "created_at, updated_at) VALUES "
+                "(:membership_a, :organization_a, :principal_a, 'owner', "
+                "'active', 1, now(), now()), "
+                "(:membership_b, :organization_b, :principal_b, 'owner', "
+                "'active', 1, now(), now())"
+            ),
+            {
+                "membership_a": membership_a,
+                "membership_b": membership_b,
+                "organization_a": organization_a,
+                "organization_b": organization_b,
+                "principal_a": principal_a,
+                "principal_b": principal_b,
+            },
+        )
+        connection.execute(
+            text(
                 "INSERT INTO projects "
                 "(id, organization_id, name, domain, language, created_at) "
                 "VALUES "
@@ -354,6 +412,41 @@ def verify() -> dict:
 
         connection.execute(
             text(
+                "SELECT set_config('app.principal_id', :principal_id, true)"
+            ),
+            {"principal_id": principal_a},
+        )
+        visible_memberships = connection.execute(
+            text("SELECT id FROM organization_memberships ORDER BY id")
+        ).scalars().all()
+        if visible_memberships != [membership_a]:
+            raise RuntimeError(
+                "Principal membership discovery leaked or omitted rows: "
+                f"{visible_memberships}"
+            )
+        visible_organizations = connection.execute(
+            text("SELECT id FROM organizations ORDER BY id")
+        ).scalars().all()
+        if visible_organizations != [organization_a]:
+            raise RuntimeError(
+                "Principal organization discovery leaked or omitted rows: "
+                f"{visible_organizations}"
+            )
+        discovery_write = connection.execute(
+            text(
+                "UPDATE organization_memberships SET role = 'admin' "
+                "WHERE id = :membership_id"
+            ),
+            {"membership_id": membership_a},
+        )
+        discovery_write_blocked = discovery_write.rowcount == 0
+        if not discovery_write_blocked:
+            raise RuntimeError(
+                "Principal discovery policy unexpectedly allowed a write"
+            )
+
+        connection.execute(
+            text(
                 "SELECT set_config('app.organization_id', :organization_id, true)"
             ),
             {"organization_id": organization_a},
@@ -440,8 +533,12 @@ def verify() -> dict:
         result = {
             "status": "passed",
             "policy_count": policies,
+            "discovery_policy_count": discovery_policy_count,
             "protected_table_count": len(REQUIRED_TENANT_TABLES),
             "missing_context_count": missing_context_count,
+            "principal_memberships_visible": len(visible_memberships),
+            "principal_organizations_visible": len(visible_organizations),
+            "principal_discovery_write_blocked": discovery_write_blocked,
             "organization_a_visible": len(visible_a),
             "organization_b_visible": len(visible_b),
             "cross_tenant_write_blocked": cross_tenant_write_blocked,

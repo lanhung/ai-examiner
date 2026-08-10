@@ -1342,7 +1342,10 @@ def revoke_organization_membership(
     return _serialize_membership_with_principal(db, membership)
 
 
-@app.get("/api/templates")
+@app.get(
+    "/api/templates",
+    dependencies=[Depends(require_workbench_capability("template.read"))],
+)
 def templates(
     db: Annotated[Session, Depends(get_db)],
     category: str | None = None,
@@ -1355,12 +1358,19 @@ def templates(
     )
 
 
-@app.get("/api/templates/health")
+@app.get(
+    "/api/templates/health",
+    dependencies=[Depends(require_workbench_capability("template.read"))],
+)
 def template_health(db: Annotated[Session, Depends(get_db)]):
     return persisted_template_health(db)
 
 
-@app.post("/api/templates", status_code=201)
+@app.post(
+    "/api/templates",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("template.author"))],
+)
 def create_scenario_template(
     payload: ScenarioTemplateCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -1379,7 +1389,11 @@ def create_scenario_template(
     }
 
 
-@app.post("/api/templates/import", status_code=201)
+@app.post(
+    "/api/templates/import",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("template.author"))],
+)
 def import_scenario_template(
     payload: ScenarioTemplateImport,
     db: Annotated[Session, Depends(get_db)],
@@ -1404,7 +1418,10 @@ def import_scenario_template(
     }
 
 
-@app.get("/api/templates/{template_id}")
+@app.get(
+    "/api/templates/{template_id}",
+    dependencies=[Depends(require_workbench_capability("template.read"))],
+)
 def get_scenario_template(
     template_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -1415,7 +1432,10 @@ def get_scenario_template(
     return serialize_template(db, template)
 
 
-@app.get("/api/template-versions/{version_id}")
+@app.get(
+    "/api/template-versions/{version_id}",
+    dependencies=[Depends(require_workbench_capability("template.read"))],
+)
 def get_scenario_template_version(
     version_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -1426,7 +1446,11 @@ def get_scenario_template_version(
     return serialize_template_version(db, version)
 
 
-@app.post("/api/template-versions/{version_id}/clone", status_code=201)
+@app.post(
+    "/api/template-versions/{version_id}/clone",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("template.author"))],
+)
 def clone_scenario_template_version(
     version_id: str,
     payload: ScenarioTemplateCloneCreate,
@@ -1444,7 +1468,10 @@ def clone_scenario_template_version(
     return serialize_template_version(db, cloned)
 
 
-@app.put("/api/template-versions/{version_id}")
+@app.put(
+    "/api/template-versions/{version_id}",
+    dependencies=[Depends(require_workbench_capability("template.author"))],
+)
 def replace_scenario_template_version(
     version_id: str,
     payload: ScenarioTemplateSourceUpdate,
@@ -1459,7 +1486,10 @@ def replace_scenario_template_version(
     return serialize_template_version(db, updated)
 
 
-@app.post("/api/template-versions/{version_id}/validate")
+@app.post(
+    "/api/template-versions/{version_id}/validate",
+    dependencies=[Depends(require_workbench_capability("template.author"))],
+)
 def validate_scenario_template_version(
     version_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -1473,7 +1503,10 @@ def validate_scenario_template_version(
     return serialize_validation_run(run)
 
 
-@app.post("/api/template-versions/{version_id}/compile")
+@app.post(
+    "/api/template-versions/{version_id}/compile",
+    dependencies=[Depends(require_workbench_capability("template.author"))],
+)
 def compile_scenario_template_version(
     version_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -1492,7 +1525,10 @@ def compile_scenario_template_version(
     )
 
 
-@app.post("/api/template-versions/{version_id}/preview")
+@app.post(
+    "/api/template-versions/{version_id}/preview",
+    dependencies=[Depends(require_workbench_capability("template.read"))],
+)
 def preview_scenario_template_version(
     version_id: str,
     payload: ScenarioTemplatePreview,
@@ -1533,7 +1569,10 @@ def preview_scenario_template_version(
     }
 
 
-@app.post("/api/template-versions/{version_id}/status")
+@app.post(
+    "/api/template-versions/{version_id}/status",
+    dependencies=[Depends(require_workbench_capability("template.publish"))],
+)
 def transition_scenario_template_version(
     version_id: str,
     payload: ScenarioTemplateStatusUpdate,
@@ -1555,7 +1594,10 @@ def transition_scenario_template_version(
     return serialize_template_version(db, transitioned)
 
 
-@app.get("/api/template-versions/{version_id}/export")
+@app.get(
+    "/api/template-versions/{version_id}/export",
+    dependencies=[Depends(require_workbench_capability("template.read"))],
+)
 def export_scenario_template_version(
     version_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -1587,7 +1629,10 @@ def export_scenario_template_version(
     )
 
 
-@app.get("/api/template-versions/{left_id}/diff/{right_id}")
+@app.get(
+    "/api/template-versions/{left_id}/diff/{right_id}",
+    dependencies=[Depends(require_workbench_capability("template.read"))],
+)
 def diff_scenario_template_versions(
     left_id: str,
     right_id: str,
@@ -1604,7 +1649,10 @@ def diff_scenario_template_versions(
     return semantic_template_diff(left, right)
 
 
-@app.get("/api/projects/{project_id}/template-binding")
+@app.get(
+    "/api/projects/{project_id}/template-binding",
+    dependencies=[Depends(require_workbench_capability("template.read"))],
+)
 def get_project_template_binding(
     project_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -1616,7 +1664,10 @@ def get_project_template_binding(
     return {"binding": serialize_project_template_binding(binding)}
 
 
-@app.put("/api/projects/{project_id}/template-binding")
+@app.put(
+    "/api/projects/{project_id}/template-binding",
+    dependencies=[Depends(require_workbench_capability("template.bind"))],
+)
 def set_project_template_binding(
     project_id: str,
     payload: ProjectTemplateBindingUpdate,
@@ -1636,7 +1687,10 @@ def set_project_template_binding(
     return {"binding": serialize_project_template_binding(binding)}
 
 
-@app.delete("/api/projects/{project_id}/template-binding")
+@app.delete(
+    "/api/projects/{project_id}/template-binding",
+    dependencies=[Depends(require_workbench_capability("template.bind"))],
+)
 def clear_project_template_binding(
     project_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -1880,7 +1934,11 @@ def generate_blueprint_async(
     return serialize_job(job)
 
 
-@app.post("/api/projects/{project_id}/golden-datasets", status_code=201)
+@app.post(
+    "/api/projects/{project_id}/golden-datasets",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("dataset.manage"))],
+)
 def generate_golden_dataset(
     project_id: str,
     payload: GoldenDatasetCreate,
@@ -1912,7 +1970,10 @@ def generate_golden_dataset(
     return serialize_dataset(dataset)
 
 
-@app.get("/api/projects/{project_id}/golden-datasets")
+@app.get(
+    "/api/projects/{project_id}/golden-datasets",
+    dependencies=[Depends(require_workbench_capability("dataset.manage"))],
+)
 def list_golden_datasets(project_id: str, db: Annotated[Session, Depends(get_db)]):
     datasets = db.scalars(
         select(GoldenDataset)
@@ -1922,7 +1983,10 @@ def list_golden_datasets(project_id: str, db: Annotated[Session, Depends(get_db)
     return [serialize_dataset(dataset, include_data=False) for dataset in datasets]
 
 
-@app.get("/api/golden-datasets/{dataset_id}")
+@app.get(
+    "/api/golden-datasets/{dataset_id}",
+    dependencies=[Depends(require_workbench_capability("dataset.manage"))],
+)
 def get_golden_dataset(dataset_id: str, db: Annotated[Session, Depends(get_db)]):
     dataset = db.get(GoldenDataset, dataset_id)
     if not dataset:
@@ -1930,7 +1994,10 @@ def get_golden_dataset(dataset_id: str, db: Annotated[Session, Depends(get_db)])
     return serialize_dataset(dataset)
 
 
-@app.get("/api/golden-datasets/{dataset_id}/export")
+@app.get(
+    "/api/golden-datasets/{dataset_id}/export",
+    dependencies=[Depends(require_workbench_capability("dataset.manage"))],
+)
 def export_golden_dataset(dataset_id: str, db: Annotated[Session, Depends(get_db)]):
     dataset = db.get(GoldenDataset, dataset_id)
     if not dataset:
@@ -1955,7 +2022,11 @@ def export_golden_dataset(dataset_id: str, db: Annotated[Session, Depends(get_db
     )
 
 
-@app.post("/api/golden-datasets/{dataset_id}/benchmarks", status_code=201)
+@app.post(
+    "/api/golden-datasets/{dataset_id}/benchmarks",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("benchmark.run"))],
+)
 def run_benchmark(
     dataset_id: str,
     payload: BenchmarkCreate,
@@ -1987,7 +2058,10 @@ def run_benchmark(
     return serialize_benchmark(run)
 
 
-@app.get("/api/golden-datasets/{dataset_id}/benchmarks")
+@app.get(
+    "/api/golden-datasets/{dataset_id}/benchmarks",
+    dependencies=[Depends(require_workbench_capability("benchmark.run"))],
+)
 def list_benchmarks(dataset_id: str, db: Annotated[Session, Depends(get_db)]):
     runs = db.scalars(
         select(BenchmarkRun)
@@ -1997,7 +2071,10 @@ def list_benchmarks(dataset_id: str, db: Annotated[Session, Depends(get_db)]):
     return [serialize_benchmark(run) for run in runs]
 
 
-@app.get("/api/benchmarks/{benchmark_id}")
+@app.get(
+    "/api/benchmarks/{benchmark_id}",
+    dependencies=[Depends(require_workbench_capability("benchmark.run"))],
+)
 def get_benchmark(benchmark_id: str, db: Annotated[Session, Depends(get_db)]):
     run = db.get(BenchmarkRun, benchmark_id)
     if not run:
@@ -2005,7 +2082,11 @@ def get_benchmark(benchmark_id: str, db: Annotated[Session, Depends(get_db)]):
     return serialize_benchmark(run)
 
 
-@app.post("/api/golden-datasets/{dataset_id}/ratings", status_code=201)
+@app.post(
+    "/api/golden-datasets/{dataset_id}/ratings",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("expert_rating.create"))],
+)
 def add_expert_rating(
     dataset_id: str,
     payload: ExpertRatingCreate,
@@ -2035,7 +2116,10 @@ def add_expert_rating(
     return {"id": rating.id, "case_id": rating.case_id, "ratings": rating.ratings}
 
 
-@app.get("/api/golden-datasets/{dataset_id}/agreement")
+@app.get(
+    "/api/golden-datasets/{dataset_id}/agreement",
+    dependencies=[Depends(require_workbench_capability("dataset.manage"))],
+)
 def get_agreement(dataset_id: str, db: Annotated[Session, Depends(get_db)]):
     dataset = db.get(GoldenDataset, dataset_id)
     if not dataset:
@@ -2043,7 +2127,11 @@ def get_agreement(dataset_id: str, db: Annotated[Session, Depends(get_db)]):
     return agreement_summary(db, dataset)
 
 
-@app.post("/api/sessions", status_code=201)
+@app.post(
+    "/api/sessions",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("session.create"))],
+)
 def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db)]):
     project = db.get(Project, payload.project_id)
     blueprint = db.get(Blueprint, payload.blueprint_id)
@@ -2176,7 +2264,10 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
     }
 
 
-@app.post("/api/blueprints/{blueprint_id}/policy-benchmark")
+@app.post(
+    "/api/blueprints/{blueprint_id}/policy-benchmark",
+    dependencies=[Depends(require_workbench_capability("benchmark.run"))],
+)
 def run_policy_benchmark(
     blueprint_id: str,
     payload: PolicyBenchmarkCreate,
@@ -2199,7 +2290,10 @@ def run_policy_benchmark(
         raise HTTPException(400, str(exc)) from exc
 
 
-@app.post("/api/sessions/{session_id}/start")
+@app.post(
+    "/api/sessions/{session_id}/start",
+    dependencies=[Depends(require_workbench_capability("session.conduct"))],
+)
 def start_session(session_id: str, db: Annotated[Session, Depends(get_db)]):
     session = db.get(ExamSession, session_id)
     if not session:
@@ -2221,7 +2315,10 @@ def start_session(session_id: str, db: Annotated[Session, Depends(get_db)]):
     return {"session_id": session.id, "status": session.status, "turn": serialize_turn(turn)}
 
 
-@app.post("/api/sessions/{session_id}/answers")
+@app.post(
+    "/api/sessions/{session_id}/answers",
+    dependencies=[Depends(require_workbench_capability("session.conduct"))],
+)
 def submit_answer(
     session_id: str,
     payload: AnswerSubmit,
@@ -2263,7 +2360,10 @@ def submit_answer(
     }
 
 
-@app.get("/api/sessions/{session_id}")
+@app.get(
+    "/api/sessions/{session_id}",
+    dependencies=[Depends(require_workbench_capability("session.read"))],
+)
 def get_session(session_id: str, db: Annotated[Session, Depends(get_db)]):
     session = db.get(ExamSession, session_id)
     if not session:
@@ -2284,7 +2384,10 @@ def get_session(session_id: str, db: Annotated[Session, Depends(get_db)]):
     }
 
 
-@app.get("/api/sessions/{session_id}/template")
+@app.get(
+    "/api/sessions/{session_id}/template",
+    dependencies=[Depends(require_workbench_capability("session.read"))],
+)
 def get_session_template(
     session_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -2295,7 +2398,10 @@ def get_session_template(
     return SessionTemplateService(db).inspect_session(session)
 
 
-@app.get("/api/sessions/{session_id}/report")
+@app.get(
+    "/api/sessions/{session_id}/report",
+    dependencies=[Depends(require_workbench_capability("report.read"))],
+)
 def get_report(session_id: str, db: Annotated[Session, Depends(get_db)]):
     session = db.get(ExamSession, session_id)
     if not session:
@@ -2327,7 +2433,10 @@ def get_report(session_id: str, db: Annotated[Session, Depends(get_db)]):
     return report
 
 
-@app.get("/api/sessions/{session_id}/knowledge-state")
+@app.get(
+    "/api/sessions/{session_id}/knowledge-state",
+    dependencies=[Depends(require_workbench_capability("session.read"))],
+)
 def get_session_knowledge_state(
     session_id: str, db: Annotated[Session, Depends(get_db)]
 ):
@@ -2363,7 +2472,10 @@ def get_session_knowledge_state(
     }
 
 
-@app.post("/api/sessions/{session_id}/knowledge-state/rebuild")
+@app.post(
+    "/api/sessions/{session_id}/knowledge-state/rebuild",
+    dependencies=[Depends(require_workbench_capability("session.conduct"))],
+)
 def rebuild_session_knowledge_state(
     session_id: str, db: Annotated[Session, Depends(get_db)]
 ):
@@ -2375,7 +2487,10 @@ def rebuild_session_knowledge_state(
     return {"session_id": session.id, "states": states, "rebuilt": True}
 
 
-@app.get("/api/sessions/{session_id}/adaptive-decisions")
+@app.get(
+    "/api/sessions/{session_id}/adaptive-decisions",
+    dependencies=[Depends(require_workbench_capability("session.read"))],
+)
 def get_adaptive_decisions(session_id: str, db: Annotated[Session, Depends(get_db)]):
     session = db.get(ExamSession, session_id)
     if not session:
@@ -2503,7 +2618,11 @@ def serialize_identity(identity: LearnerIdentity, db: Session) -> dict:
     }
 
 
-@app.post("/api/learner-identities", status_code=201)
+@app.post(
+    "/api/learner-identities",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("learner.manage"))],
+)
 def create_learner_identity(
     payload: LearnerIdentityCreate, db: Annotated[Session, Depends(get_db)]
 ):
@@ -2522,12 +2641,18 @@ def create_learner_identity(
     return {**serialize_identity(identity, db), "created": created}
 
 
-@app.get("/api/learner-identities/{identity_id}")
+@app.get(
+    "/api/learner-identities/{identity_id}",
+    dependencies=[Depends(require_workbench_capability("learner.read"))],
+)
 def get_learner_identity(identity_id: str, db: Annotated[Session, Depends(get_db)]):
     return serialize_identity(learner_identity_or_404(db, identity_id), db)
 
 
-@app.patch("/api/learner-identities/{identity_id}/memory-settings")
+@app.patch(
+    "/api/learner-identities/{identity_id}/memory-settings",
+    dependencies=[Depends(require_workbench_capability("learner.manage"))],
+)
 def update_memory_settings(
     identity_id: str,
     payload: MemorySettingsUpdate,
@@ -2544,7 +2669,11 @@ def update_memory_settings(
     return serialize_identity(identity, db)
 
 
-@app.post("/api/learner-identities/{identity_id}/links", status_code=201)
+@app.post(
+    "/api/learner-identities/{identity_id}/links",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("learner.manage"))],
+)
 def create_identity_link(
     identity_id: str,
     payload: LearnerIdentityLinkCreate,
@@ -2572,7 +2701,10 @@ def create_identity_link(
     }
 
 
-@app.delete("/api/learner-identities/{identity_id}/links/{link_id}")
+@app.delete(
+    "/api/learner-identities/{identity_id}/links/{link_id}",
+    dependencies=[Depends(require_workbench_capability("learner.manage"))],
+)
 def revoke_identity_link(
     identity_id: str, link_id: str, db: Annotated[Session, Depends(get_db)]
 ):
@@ -2697,7 +2829,10 @@ def review_concept_mapping(
     }
 
 
-@app.post("/api/learner-identities/{identity_id}/memory/import")
+@app.post(
+    "/api/learner-identities/{identity_id}/memory/import",
+    dependencies=[Depends(require_workbench_capability("learner_memory.admin"))],
+)
 def import_learner_memory(
     identity_id: str,
     payload: MemoryImportCreate,
@@ -2717,7 +2852,10 @@ def import_learner_memory(
     }
 
 
-@app.post("/api/learner-identities/{identity_id}/memory/rebuild")
+@app.post(
+    "/api/learner-identities/{identity_id}/memory/rebuild",
+    dependencies=[Depends(require_workbench_capability("learner_memory.admin"))],
+)
 def rebuild_learner_memory(
     identity_id: str,
     payload: LongitudinalRebuildCreate,
@@ -2746,7 +2884,10 @@ def rebuild_learner_memory(
     }
 
 
-@app.get("/api/learner-identities/{identity_id}/concept-states")
+@app.get(
+    "/api/learner-identities/{identity_id}/concept-states",
+    dependencies=[Depends(require_workbench_capability("learner.read"))],
+)
 def get_learner_concept_states(
     identity_id: str, db: Annotated[Session, Depends(get_db)]
 ):
@@ -2760,7 +2901,10 @@ def get_learner_concept_states(
     }
 
 
-@app.get("/api/learner-identities/{identity_id}/growth")
+@app.get(
+    "/api/learner-identities/{identity_id}/growth",
+    dependencies=[Depends(require_workbench_capability("learner.read"))],
+)
 def get_learner_growth(
     identity_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -2784,7 +2928,11 @@ def get_learner_growth(
     }
 
 
-@app.post("/api/learner-identities/{identity_id}/retest-plans", status_code=201)
+@app.post(
+    "/api/learner-identities/{identity_id}/retest-plans",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("retest.manage"))],
+)
 def create_retest_plan(
     identity_id: str,
     payload: RetestPlanCreate,
@@ -2805,7 +2953,10 @@ def create_retest_plan(
     return plan
 
 
-@app.get("/api/learner-identities/{identity_id}/retest-plans")
+@app.get(
+    "/api/learner-identities/{identity_id}/retest-plans",
+    dependencies=[Depends(require_workbench_capability("learner.read"))],
+)
 def list_retest_plans(
     identity_id: str, db: Annotated[Session, Depends(get_db)]
 ):
@@ -2817,7 +2968,10 @@ def list_retest_plans(
     }
 
 
-@app.patch("/api/learner-identities/{identity_id}/retest-items/{item_id}")
+@app.patch(
+    "/api/learner-identities/{identity_id}/retest-items/{item_id}",
+    dependencies=[Depends(require_workbench_capability("retest.manage"))],
+)
 def act_on_retest_item(
     identity_id: str,
     item_id: str,
@@ -2840,7 +2994,10 @@ def act_on_retest_item(
     return service.serialize_item(item)
 
 
-@app.post("/api/learner-identities/{identity_id}/retest-items/{item_id}/start")
+@app.post(
+    "/api/learner-identities/{identity_id}/retest-items/{item_id}/start",
+    dependencies=[Depends(require_workbench_capability("retest.manage"))],
+)
 def start_retest_session(
     identity_id: str,
     item_id: str,
@@ -2887,7 +3044,11 @@ def start_retest_session(
     }
 
 
-@app.post("/api/learner-identities/{identity_id}/preferences", status_code=201)
+@app.post(
+    "/api/learner-identities/{identity_id}/preferences",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("learner.manage"))],
+)
 def create_learner_preference(
     identity_id: str,
     payload: PreferenceCreate,
@@ -2910,7 +3071,10 @@ def create_learner_preference(
     return service.serialize(preference)
 
 
-@app.get("/api/learner-identities/{identity_id}/preferences")
+@app.get(
+    "/api/learner-identities/{identity_id}/preferences",
+    dependencies=[Depends(require_workbench_capability("learner.read"))],
+)
 def list_learner_preferences(
     identity_id: str, db: Annotated[Session, Depends(get_db)]
 ):
@@ -2920,7 +3084,10 @@ def list_learner_preferences(
     return {"learner_identity_id": identity.id, "preferences": preferences}
 
 
-@app.patch("/api/learner-identities/{identity_id}/preferences/{preference_id}")
+@app.patch(
+    "/api/learner-identities/{identity_id}/preferences/{preference_id}",
+    dependencies=[Depends(require_workbench_capability("learner.manage"))],
+)
 def act_on_learner_preference(
     identity_id: str,
     preference_id: str,
@@ -2974,7 +3141,11 @@ def correct_learner_memory(
     }
 
 
-@app.post("/api/learner-identities/{identity_id}/memory/export", status_code=202)
+@app.post(
+    "/api/learner-identities/{identity_id}/memory/export",
+    status_code=202,
+    dependencies=[Depends(require_workbench_capability("learner_memory.admin"))],
+)
 def export_learner_memory(
     identity_id: str,
     payload: MemoryExportCreate,
@@ -3053,7 +3224,11 @@ def _memory_deletion_target(payload: MemoryDeletionCreate) -> str | None:
     return None
 
 
-@app.delete("/api/learner-identities/{identity_id}/memory", status_code=202)
+@app.delete(
+    "/api/learner-identities/{identity_id}/memory",
+    status_code=202,
+    dependencies=[Depends(require_workbench_capability("learner_memory.admin"))],
+)
 def delete_learner_memory_scope(
     identity_id: str,
     payload: MemoryDeletionCreate,
@@ -3135,7 +3310,10 @@ def retry_memory_deletion(
     return {"audit_id": audit.id, "job": serialize_job(job)}
 
 
-@app.get("/api/learner-identities/{identity_id}/memory-center")
+@app.get(
+    "/api/learner-identities/{identity_id}/memory-center",
+    dependencies=[Depends(require_workbench_capability("learner.read"))],
+)
 def get_memory_center(
     identity_id: str, db: Annotated[Session, Depends(get_db)]
 ):
@@ -3161,7 +3339,10 @@ def evaluate_longitudinal_engine():
     return LongitudinalEvaluationService().run()
 
 
-@app.get("/api/learner-identities/{identity_id}/memory")
+@app.get(
+    "/api/learner-identities/{identity_id}/memory",
+    dependencies=[Depends(require_workbench_capability("learner.read"))],
+)
 def get_learner_memory(
     identity_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -3215,7 +3396,10 @@ def get_learner_memory(
     }
 
 
-@app.get("/api/metrics")
+@app.get(
+    "/api/metrics",
+    dependencies=[Depends(require_workbench_capability("system_metrics.read"))],
+)
 def metrics(db: Annotated[Session, Depends(get_db)]):
     events = db.scalars(select(UsageEvent).order_by(UsageEvent.created_at.desc()).limit(1000)).all()
     latencies = sorted(event.latency_ms for event in events if event.latency_ms > 0)
@@ -3250,7 +3434,10 @@ def metrics(db: Annotated[Session, Depends(get_db)]):
     }
 
 
-@app.delete("/api/projects/{project_id}")
+@app.delete(
+    "/api/projects/{project_id}",
+    dependencies=[Depends(require_workbench_capability("project.delete"))],
+)
 def delete_project(project_id: str, db: Annotated[Session, Depends(get_db)]):
     project = db.get(Project, project_id)
     if not project:
@@ -3354,7 +3541,10 @@ def run() -> None:
     uvicorn.run("ai_examiner.main:app", host="0.0.0.0", port=8000, reload=False)
 
 
-@app.get("/api/projects/{project_id}/documents")
+@app.get(
+    "/api/projects/{project_id}/documents",
+    dependencies=[Depends(require_workbench_capability("document.read"))],
+)
 def list_documents(project_id: str, db: Annotated[Session, Depends(get_db)]):
     documents = db.scalars(
         select(Document).where(Document.project_id == project_id).order_by(Document.created_at.desc())
@@ -3373,7 +3563,10 @@ def list_documents(project_id: str, db: Annotated[Session, Depends(get_db)]):
     ]
 
 
-@app.get("/api/documents/{document_id}/evidence")
+@app.get(
+    "/api/documents/{document_id}/evidence",
+    dependencies=[Depends(require_workbench_capability("document.read"))],
+)
 def get_document_evidence(
     document_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -3397,7 +3590,11 @@ def get_document_evidence(
     }
 
 
-@app.get("/api/evidence/{asset_id}/file", include_in_schema=False)
+@app.get(
+    "/api/evidence/{asset_id}/file",
+    include_in_schema=False,
+    dependencies=[Depends(require_workbench_capability("document.read"))],
+)
 def get_evidence_file(asset_id: str, db: Annotated[Session, Depends(get_db)]):
     asset = db.get(EvidenceAsset, asset_id)
     if not asset or not (asset.storage_object_id or asset.storage_path):
@@ -3456,7 +3653,11 @@ def get_evidence_file_v1(
     )
 
 
-@app.get("/api/evidence/{asset_id}/highlight", include_in_schema=False)
+@app.get(
+    "/api/evidence/{asset_id}/highlight",
+    include_in_schema=False,
+    dependencies=[Depends(require_workbench_capability("document.read"))],
+)
 def get_evidence_highlight(asset_id: str, db: Annotated[Session, Depends(get_db)]):
     asset = db.get(EvidenceAsset, asset_id)
     if not asset:
@@ -3522,7 +3723,11 @@ def evidence_highlight_response(
     )
 
 
-@app.post("/api/documents/{document_id}/visual-analyses", status_code=202)
+@app.post(
+    "/api/documents/{document_id}/visual-analyses",
+    status_code=202,
+    dependencies=[Depends(require_workbench_capability("document.read"))],
+)
 def analyze_document_visuals(
     document_id: str,
     payload: VisualAnalyzeCreate,
@@ -3571,7 +3776,10 @@ def analyze_document_visuals(
     }
 
 
-@app.get("/api/documents/{document_id}/visual-analyses")
+@app.get(
+    "/api/documents/{document_id}/visual-analyses",
+    dependencies=[Depends(require_workbench_capability("document.read"))],
+)
 def list_visual_analyses(document_id: str, db: Annotated[Session, Depends(get_db)]):
     analyses = db.scalars(
         select(VisualAnalysis)
@@ -3593,7 +3801,11 @@ def list_visual_analyses(document_id: str, db: Annotated[Session, Depends(get_db
     ]
 
 
-@app.post("/api/projects/{project_id}/joint-analyses", status_code=201)
+@app.post(
+    "/api/projects/{project_id}/joint-analyses",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("blueprint.create"))],
+)
 def create_joint_analysis(
     project_id: str,
     payload: JointAnalysisCreate,
@@ -3626,7 +3838,10 @@ def create_joint_analysis(
     }
 
 
-@app.get("/api/projects/{project_id}/joint-analyses")
+@app.get(
+    "/api/projects/{project_id}/joint-analyses",
+    dependencies=[Depends(require_workbench_capability("blueprint.read"))],
+)
 def list_joint_analyses(project_id: str, db: Annotated[Session, Depends(get_db)]):
     rows = db.scalars(
         select(JointAnalysis)
@@ -3647,7 +3862,10 @@ def list_joint_analyses(project_id: str, db: Annotated[Session, Depends(get_db)]
     ]
 
 
-@app.patch("/api/golden-datasets/{dataset_id}/status")
+@app.patch(
+    "/api/golden-datasets/{dataset_id}/status",
+    dependencies=[Depends(require_workbench_capability("dataset.manage"))],
+)
 def update_dataset_status(
     dataset_id: str,
     payload: DatasetStatusUpdate,
@@ -3663,7 +3881,10 @@ def update_dataset_status(
     return serialize_dataset(dataset, include_data=False)
 
 
-@app.get("/api/golden-datasets/{left_id}/diff/{right_id}")
+@app.get(
+    "/api/golden-datasets/{left_id}/diff/{right_id}",
+    dependencies=[Depends(require_workbench_capability("dataset.manage"))],
+)
 def compare_datasets(
     left_id: str,
     right_id: str,
@@ -3678,7 +3899,10 @@ def compare_datasets(
     return dataset_diff(left, right)
 
 
-@app.get("/api/prompts")
+@app.get(
+    "/api/prompts",
+    dependencies=[Depends(require_workbench_capability("prompt.read"))],
+)
 def list_prompts(db: Annotated[Session, Depends(get_db)]):
     prompts = db.scalars(
         select(PromptVersion).order_by(PromptVersion.name, PromptVersion.version.desc())
@@ -3702,7 +3926,11 @@ def list_prompts(db: Annotated[Session, Depends(get_db)]):
     }
 
 
-@app.post("/api/prompts", status_code=201)
+@app.post(
+    "/api/prompts",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("prompt.author"))],
+)
 def add_prompt_version(
     payload: PromptVersionCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -3719,7 +3947,10 @@ def add_prompt_version(
     return {"id": prompt.id, "name": prompt.name, "version": prompt.version, "status": prompt.status}
 
 
-@app.post("/api/prompts/{prompt_id}/activate")
+@app.post(
+    "/api/prompts/{prompt_id}/activate",
+    dependencies=[Depends(require_workbench_capability("prompt.activate"))],
+)
 def activate_prompt_version(prompt_id: str, db: Annotated[Session, Depends(get_db)]):
     prompt = db.get(PromptVersion, prompt_id)
     if not prompt:
@@ -3728,7 +3959,11 @@ def activate_prompt_version(prompt_id: str, db: Annotated[Session, Depends(get_d
     return {"id": prompt.id, "name": prompt.name, "version": prompt.version, "status": prompt.status}
 
 
-@app.post("/api/projects/{project_id}/golden-datasets/async", status_code=202)
+@app.post(
+    "/api/projects/{project_id}/golden-datasets/async",
+    status_code=202,
+    dependencies=[Depends(require_workbench_capability("dataset.manage"))],
+)
 def generate_golden_dataset_async(
     project_id: str,
     payload: GoldenDatasetCreate,
@@ -3762,7 +3997,11 @@ def generate_golden_dataset_async(
     return serialize_job(job)
 
 
-@app.post("/api/golden-datasets/{dataset_id}/benchmarks/async", status_code=202)
+@app.post(
+    "/api/golden-datasets/{dataset_id}/benchmarks/async",
+    status_code=202,
+    dependencies=[Depends(require_workbench_capability("benchmark.run"))],
+)
 def run_benchmark_async(
     dataset_id: str,
     payload: BenchmarkCreate,
@@ -3792,7 +4031,10 @@ def run_benchmark_async(
     return serialize_job(job)
 
 
-@app.get("/api/jobs/{job_id}")
+@app.get(
+    "/api/jobs/{job_id}",
+    dependencies=[Depends(require_workbench_capability("job.read"))],
+)
 def get_job(job_id: str, db: Annotated[Session, Depends(get_db)]):
     job = db.get(BackgroundJob, job_id)
     if not job:
@@ -3800,7 +4042,11 @@ def get_job(job_id: str, db: Annotated[Session, Depends(get_db)]):
     return serialize_job(job)
 
 
-@app.post("/api/jobs/{job_id}/cancel", include_in_schema=False)
+@app.post(
+    "/api/jobs/{job_id}/cancel",
+    include_in_schema=False,
+    dependencies=[Depends(require_workbench_capability("job.manage"))],
+)
 def cancel_local_job(
     job_id: str,
     payload: JobCancelCreate,
@@ -3821,7 +4067,10 @@ def cancel_local_job(
     )
 
 
-@app.get("/api/projects/{project_id}/jobs")
+@app.get(
+    "/api/projects/{project_id}/jobs",
+    dependencies=[Depends(require_workbench_capability("job.read"))],
+)
 def list_jobs(project_id: str, db: Annotated[Session, Depends(get_db)]):
     jobs = db.scalars(
         select(BackgroundJob)
@@ -4990,7 +5239,10 @@ def appeal_human_review_case(
     return serialize_review_case(review_case)
 
 
-@app.get("/api/provider-health")
+@app.get(
+    "/api/provider-health",
+    dependencies=[Depends(require_workbench_capability("provider_health.read"))],
+)
 def provider_health(db: Annotated[Session, Depends(get_db)]):
     latest = db.scalars(select(UsageEvent).order_by(UsageEvent.created_at.desc()).limit(100)).all()
     result = []
@@ -5008,7 +5260,10 @@ def provider_health(db: Annotated[Session, Depends(get_db)]):
     return result
 
 
-@app.get("/api/costs")
+@app.get(
+    "/api/costs",
+    dependencies=[Depends(require_workbench_capability("usage.read"))],
+)
 def cost_dashboard(
     db: Annotated[Session, Depends(get_db)],
     project_id: str | None = None,
@@ -5202,7 +5457,11 @@ def voice_config():
     }
 
 
-@app.post("/api/voice/sessions", status_code=201)
+@app.post(
+    "/api/voice/sessions",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("session.conduct"))],
+)
 def start_voice_session(
     payload: VoiceSessionCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -5294,7 +5553,10 @@ def start_voice_session(
     return result
 
 
-@app.post("/api/voice/sessions/{voice_session_id}/sdp")
+@app.post(
+    "/api/voice/sessions/{voice_session_id}/sdp",
+    dependencies=[Depends(require_workbench_capability("session.conduct"))],
+)
 async def create_voice_sdp(
     voice_session_id: str,
     request: Request,
@@ -5444,7 +5706,11 @@ async def qwen_voice_websocket(websocket: WebSocket, voice_session_id: str):
             pass
 
 
-@app.post("/api/voice/sessions/{voice_session_id}/events", status_code=201)
+@app.post(
+    "/api/voice/sessions/{voice_session_id}/events",
+    status_code=201,
+    dependencies=[Depends(require_workbench_capability("session.conduct"))],
+)
 def add_voice_event(
     voice_session_id: str,
     payload: VoiceEventCreate,
@@ -5475,7 +5741,10 @@ def add_voice_event(
     return {"id": event.id, "metrics": voice.metrics}
 
 
-@app.get("/api/voice/sessions/{voice_session_id}")
+@app.get(
+    "/api/voice/sessions/{voice_session_id}",
+    dependencies=[Depends(require_workbench_capability("session.read"))],
+)
 def get_voice_session(
     voice_session_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -5486,7 +5755,10 @@ def get_voice_session(
     return serialize_voice_session(voice, db, include_events=True)
 
 
-@app.post("/api/voice/sessions/{voice_session_id}/complete")
+@app.post(
+    "/api/voice/sessions/{voice_session_id}/complete",
+    dependencies=[Depends(require_workbench_capability("session.conduct"))],
+)
 def complete_voice_session(
     voice_session_id: str,
     payload: VoiceSessionComplete,

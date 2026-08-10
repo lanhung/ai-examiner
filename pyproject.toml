@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-examiner-mvp"
-version = "0.9.0rc1"
+version = "0.9.0rc2"
 description = "A deployable multimodal, evidence-grounded AI examiner with low-latency realtime voice."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,7 +15,7 @@ dependencies = [
   "pydantic>=2.11,<3.0",
   "pydantic-settings>=2.10,<3.0",
   "python-multipart>=0.0.20,<1.0",
-  "pypdf>=6.0,<7.0",
+  "pypdf>=6.15.0,<7.0",
   "pymupdf>=1.26,<2.0",
   "pillow>=11.0,<13.0",
   "python-pptx>=1.0,<2.0",

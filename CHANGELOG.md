@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.9.0rc2 - 2026-08-10
+
+- Raised the pypdf floor to 6.15.0 to remediate CVE-2026-71852 and
+  CVE-2026-71870 for untrusted PDF text extraction.
+- Recover tenant-scoped queued jobs that were persisted but never received a
+  Celery task identifier, with a bounded batch and configurable grace period.
+- Default Golden Dataset generation to the configured healthy real provider;
+  Mock is now only the fallback when no preferred provider is available.
+- Normalize evidence whitespace before grounding checks so line wrapping does
+  not reject an otherwise verbatim source excerpt.
+- Seed immutable built-in templates and Prompt Registry data during native
+  AutoDL enterprise startup, matching the enterprise Compose bootstrap contract.
+- Added principal-scoped organization discovery policies so PostgreSQL FORCE RLS
+  can bootstrap the authenticated user's organization switcher without exposing
+  another principal's membership.
+- Integrated the main examiner workbench with OIDC sessions, organization selection,
+  tenant request headers and capability checks across legacy workbench routes.
+- Increased the Qwen provider deadline to 240 seconds for recoverable Planner jobs
+  while retaining immediate asynchronous enqueue and progress polling.
+- Added a reusable real OIDC/S3/Qwen public-workbench verifier.
+- Added reboot-safe AutoDL native orchestration for PostgreSQL, Redis, MinIO,
+  OpenTelemetry, the staging OIDC issuer, Celery and the public API.
+- Invalidated RC1 browser assets through RC2 versioned static URLs.
+
 ## 0.9.0rc1 - 2026-08-07
 
 - Promoted the accepted enterprise platform to its first immutable release

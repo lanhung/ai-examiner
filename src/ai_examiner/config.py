@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     dashscope_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     qwen_text_model: str = "qwen-plus"
     qwen_visual_model: str = "qwen3-vl-plus"
-    qwen_request_timeout_seconds: float = Field(default=120.0, ge=5.0, le=900.0)
+    qwen_request_timeout_seconds: float = Field(default=240.0, ge=5.0, le=900.0)
     qwen_enable_thinking: bool = False
     qwen_realtime_model: str = "qwen3-omni-flash-realtime"
     qwen_realtime_voice: str = "Cherry"
@@ -130,6 +130,7 @@ class Settings(BaseSettings):
     job_max_attempts: int = Field(default=3, ge=1, le=10)
     job_retry_base_seconds: int = Field(default=10, ge=1, le=600)
     job_recovery_batch_size: int = Field(default=100, ge=1, le=1000)
+    job_orphan_grace_seconds: int = Field(default=120, ge=10, le=3600)
 
     audit_required: bool = True
     audit_ip_hash_key: SecretStr | None = None

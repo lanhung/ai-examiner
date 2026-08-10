@@ -8,7 +8,7 @@ from ai_examiner.staging_observer import sample
 def test_staging_sample_requires_ready_oidc_mode():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/health":
-            return httpx.Response(200, json={"version": "0.9.0rc1"})
+            return httpx.Response(200, json={"version": "0.9.0rc2"})
         return httpx.Response(
             200,
             json={
@@ -23,4 +23,4 @@ def test_staging_sample_requires_ready_oidc_mode():
     assert result["healthy"] is True
     assert result["ready"] is True
     assert result["oidc_ready"] is True
-    assert result["version"] == "0.9.0rc1"
+    assert result["version"] == "0.9.0rc2"

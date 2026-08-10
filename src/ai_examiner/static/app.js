@@ -1,4 +1,8 @@
 const state = {
+  authMethod: "unknown",
+  principal: null,
+  organizations: [],
+  organizationId: localStorage.getItem("ai-examiner.organization"),
   projectId: null,
   documentId: null,
   blueprintId: null,
@@ -84,7 +88,17 @@ function responseErrorMessage(body, status) {
   return detail || `HTTP ${status}`;
 }
 async function api(path, options = {}) {
-  const response = await fetch(path, {cache: "no-store", ...options});
+  const {organizationScoped = true, headers: optionHeaders = {}, ...fetchOptions} = options;
+  const headers = {...optionHeaders};
+  if (organizationScoped && state.organizationId) {
+    headers["X-AI-Examiner-Organization"] = state.organizationId;
+  }
+  const response = await fetch(path, {
+    cache: "no-store",
+    credentials: "same-origin",
+    ...fetchOptions,
+    headers,
+  });
   const raw = await response.text();
   let body = {};
   if (raw) {
@@ -94,6 +108,66 @@ async function api(path, options = {}) {
     throw new Error(responseErrorMessage(body, response.status));
   }
   return body;
+}
+
+function isOidcAuthMethod(method) {
+  return method === "oidc" || String(method || "").startsWith("oidc_");
+}
+
+function showWorkbenchLogin() {
+  $("workbenchLogin").classList.remove("hidden");
+  $("workbenchIdentity").classList.add("hidden");
+  $("providerBadge").textContent = "请先登录";
+  $("createProject").disabled = true;
+}
+
+function activateWorkbenchOrganization(organizationId) {
+  state.organizationId = organizationId || null;
+  if (state.organizationId) {
+    localStorage.setItem("ai-examiner.organization", state.organizationId);
+  } else {
+    localStorage.removeItem("ai-examiner.organization");
+  }
+}
+
+async function bootstrapWorkbenchIdentity() {
+  try {
+    const me = await api("/api/v1/me", {organizationScoped: false});
+    state.authMethod = me.authentication?.method || "unknown";
+    state.principal = me.principal || null;
+    state.organizations = (me.organizations || []).filter((item) => item.status === "active");
+    if (isOidcAuthMethod(state.authMethod) && !state.principal) {
+      showWorkbenchLogin();
+      return false;
+    }
+    if (!isOidcAuthMethod(state.authMethod)) return true;
+    if (!state.organizations.length) {
+      showWorkbenchLogin();
+      $("providerBadge").textContent = "当前账号没有可用组织";
+      return false;
+    }
+    const selected = state.organizations.some((item) => item.id === state.organizationId)
+      ? state.organizationId
+      : state.organizations[0].id;
+    const select = $("workbenchOrganization");
+    select.innerHTML = state.organizations.map((item) =>
+      `<option value="${escapeHtml(item.id)}">${escapeHtml(item.display_name || item.slug || item.id)} · ${escapeHtml(item.role || "member")}</option>`
+    ).join("");
+    select.value = selected;
+    select.onchange = () => {
+      activateWorkbenchOrganization(select.value);
+      window.location.reload();
+    };
+    activateWorkbenchOrganization(selected);
+    $("workbenchPrincipal").textContent = state.principal.display_name || "已登录";
+    $("workbenchIdentity").classList.remove("hidden");
+    $("workbenchLogin").classList.add("hidden");
+    return true;
+  } catch (error) {
+    showWorkbenchLogin();
+    $("providerBadge").textContent = error.message || "身份服务不可用";
+    return false;
+  }
 }
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, (char) => ({
@@ -698,14 +772,25 @@ function addMessage(turn) {
 
 async function loadEnvironment() {
   try {
-    const [health, providers, voiceConfig] = await Promise.all([api("/health"), api("/api/providers"), api("/api/voice/config")]);
+    const [health, providers, voiceConfig] = await Promise.all([
+      api("/health", {organizationScoped: false}),
+      api("/api/providers"),
+      api("/api/voice/config"),
+    ]);
     state.voiceConfig = voiceConfig;
     state.providers = providers;
     $("providerBadge").textContent = `${health.provider} · ${health.model} · v${health.version}`;
     if (!health.provider_ready) $("providerBadge").textContent += " · 未配置";
+    const readyProviders = providers.filter((provider) => provider.ready);
+    const configuredProfile = `${health.provider}:${health.model}`;
+    const preferredProvider = readyProviders.find((provider) => provider.id === configuredProfile)
+      || readyProviders.find((provider) => provider.provider === health.provider)
+      || readyProviders.find((provider) => provider.provider === "ollama")
+      || readyProviders.find((provider) => provider.provider !== "mock")
+      || readyProviders[0];
     const modelList = $("modelProfiles");
-    modelList.innerHTML = providers.map((provider, index) => {
-      const checked = provider.provider === "mock" ? "checked" : "";
+    modelList.innerHTML = providers.map((provider) => {
+      const checked = provider.id === preferredProvider?.id ? "checked" : "";
       const disabled = provider.ready ? "" : "disabled";
       const price = provider.provider === "mock"
         ? "零成本"
@@ -717,7 +802,6 @@ async function loadEnvironment() {
     }).join("");
     document.querySelectorAll("input[name='modelProfile']").forEach((node) => node.addEventListener("change", syncConsensus));
     syncConsensus();
-    const readyProviders = providers.filter((provider) => provider.ready);
     const readyProviderOptions = readyProviders.map((provider) =>
       `<option value="${escapeHtml(provider.id)}">${escapeHtml(provider.label)}</option>`
     ).join("");
@@ -727,12 +811,6 @@ async function loadEnvironment() {
     $("visualProfile").innerHTML = visionProviders.map((provider) =>
       `<option value="${escapeHtml(provider.id)}">${escapeHtml(provider.label)}</option>`
     ).join("");
-    const configuredProfile = `${health.provider}:${health.model}`;
-    const preferredProvider = readyProviders.find((provider) => provider.id === configuredProfile)
-      || readyProviders.find((provider) => provider.provider === health.provider)
-      || readyProviders.find((provider) => provider.provider === "ollama")
-      || readyProviders.find((provider) => provider.provider !== "mock")
-      || readyProviders[0];
     if (preferredProvider) {
       $("blueprintProfile").value = preferredProvider.id;
       $("textProfile").value = preferredProvider.id;
@@ -1422,8 +1500,11 @@ $("importTemplate").onclick = async () => {
 };
 
 ensureVoiceProviderControl();
-loadEnvironment();
-loadTemplates();
+bootstrapWorkbenchIdentity().then((ready) => {
+  if (!ready) return;
+  loadEnvironment();
+  loadTemplates();
+});
 
 function setVoiceVisual(mode, text) {
   state.voiceMode = mode || "";
@@ -1787,7 +1868,11 @@ async function connectVoice() {
   try {
     response = await fetch(`/api/voice/sessions/${voiceSession.id}/sdp`, {
       method: "POST",
-      headers: {"Content-Type": "application/sdp"},
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/sdp",
+        ...(state.organizationId ? {"X-AI-Examiner-Organization": state.organizationId} : {}),
+      },
       body: pc.localDescription.sdp,
       signal: sdpController.signal,
     });
@@ -1960,7 +2045,11 @@ window.addEventListener("beforeunload", () => {
   if (state.voiceSessionId) {
     fetch(`/api/voice/sessions/${state.voiceSessionId}/complete`, {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...(state.organizationId ? {"X-AI-Examiner-Organization": state.organizationId} : {}),
+      },
       body: JSON.stringify({reason: "page_unload"}),
       keepalive: true,
     }).catch(() => {});

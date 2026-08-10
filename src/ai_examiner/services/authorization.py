@@ -523,6 +523,7 @@ def require_workbench_capability(capability: str):
             )
             raise authorization_http_error(exc) from exc
 
+    dependency.workbench_capability = capability
     return dependency
 
 

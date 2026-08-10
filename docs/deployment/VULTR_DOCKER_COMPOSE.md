@@ -155,7 +155,7 @@ DASHSCOPE_API_KEY=your-server-side-key
 DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 QWEN_TEXT_MODEL=qwen-plus
 QWEN_VISUAL_MODEL=qwen3-vl-plus
-QWEN_REQUEST_TIMEOUT_SECONDS=120
+QWEN_REQUEST_TIMEOUT_SECONDS=240
 VISUAL_DEFAULT_PROFILE=qwen:qwen3-vl-plus
 ```
 

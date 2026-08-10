@@ -1,6 +1,6 @@
-# AI Examiner v0.9.0 RC1
+# AI Examiner v0.9.0 RC2
 
-Current working branch: `develop/v0.9.0` (`0.9.0rc1`). The accepted research
+Current working branch: `develop/v0.9.0` (`0.9.0rc2`). The accepted research
 source remains available at `research/v0.9.0`. The v0.8 implementation
 line remains available at `develop/v0.8.0`. The v0.7 release
 candidate remains available at `develop/v0.7.0` / `v0.7.0-rc.2`. The stable production

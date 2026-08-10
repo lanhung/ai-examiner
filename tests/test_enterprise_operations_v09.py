@@ -175,6 +175,16 @@ def test_enterprise_example_contains_placeholders_without_provider_keys() -> Non
     )
 
 
+def test_database_bootstrap_exposes_idempotent_global_seed_action() -> None:
+    source = (
+        ROOT / "deploy" / "enterprise" / "bootstrap_database.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'choices=("prepare-roles", "migrate", "seed-global-data")' in source
+    assert 'args.action == "seed-global-data"' in source
+    assert "result = seed_global_data()" in source
+
+
 def test_normal_update_never_removes_authoritative_volumes() -> None:
     for relative in (
         "deploy/enterprise/update-enterprise.sh",

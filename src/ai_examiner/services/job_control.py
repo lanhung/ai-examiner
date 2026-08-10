@@ -815,3 +815,30 @@ def recover_stale_jobs(
         for job in stale
         if job.status == "retry_scheduled"
     ]
+
+
+def recover_orphaned_queued_jobs(
+    db: Session,
+    settings: Settings,
+    *,
+    organization_id: str,
+) -> list[BackgroundJob]:
+    """Find persisted jobs that never received a broker delivery identifier."""
+    now = utcnow()
+    cutoff = now - timedelta(seconds=settings.job_orphan_grace_seconds)
+    orphaned = db.scalars(
+        select(BackgroundJob)
+        .where(
+            BackgroundJob.organization_id == organization_id,
+            BackgroundJob.status == "queued",
+            BackgroundJob.celery_task_id.is_(None),
+            BackgroundJob.created_at <= cutoff,
+        )
+        .order_by(BackgroundJob.created_at)
+        .limit(settings.job_recovery_batch_size)
+    ).all()
+    for job in orphaned:
+        job.message = "Recovered after broker dispatch was not recorded"
+        job.updated_at = now
+    db.commit()
+    return list(orphaned)

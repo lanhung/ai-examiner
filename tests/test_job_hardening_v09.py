@@ -30,6 +30,7 @@ from ai_examiner.services.job_control import (
     claim_job,
     classify_job_exception,
     fail_job,
+    recover_orphaned_queued_jobs,
     recover_stale_jobs,
     request_job_cancellation,
 )
@@ -357,6 +358,56 @@ def test_cancellation_and_stale_worker_recovery(monkeypatch):
         )
         assert db.get(BackgroundJob, job.id).status == "cancelled"
         assert claim.execute is True
+
+
+def test_orphaned_queued_job_recovery_is_bounded_and_dispatch_safe(monkeypatch):
+    job, organization, principal, _membership = _queued_job(
+        monkeypatch,
+        slug="orphaned-dispatch",
+    )
+    settings = Settings(
+        job_orphan_grace_seconds=60,
+        job_recovery_batch_size=1,
+    )
+    with SessionLocal() as db:
+        set_tenant_context(
+            db,
+            organization_id=organization.id,
+            principal_id=principal.id,
+        )
+        persisted = db.get(BackgroundJob, job.id)
+        persisted.celery_task_id = None
+        persisted.created_at = datetime.now(UTC) - timedelta(minutes=2)
+
+        recent = BackgroundJob(
+            organization_id=organization.id,
+            project_id=job.project_id,
+            actor_principal_id=principal.id,
+            kind=job.kind,
+            status="queued",
+            created_at=datetime.now(UTC),
+        )
+        delivered = BackgroundJob(
+            organization_id=organization.id,
+            project_id=job.project_id,
+            actor_principal_id=principal.id,
+            kind=job.kind,
+            status="queued",
+            celery_task_id="already-delivered",
+            created_at=datetime.now(UTC) - timedelta(minutes=2),
+        )
+        db.add_all([recent, delivered])
+        db.commit()
+
+        recovered = recover_orphaned_queued_jobs(
+            db,
+            settings,
+            organization_id=organization.id,
+        )
+        assert [item.id for item in recovered] == [job.id]
+        assert "broker dispatch" in recovered[0].message
+        assert recent.id not in {item.id for item in recovered}
+        assert delivered.id not in {item.id for item in recovered}
 
 
 def test_job_api_is_tenant_scoped_and_manages_lifecycle(client, monkeypatch):

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..db import get_db
 from .oidc import AuthenticationContext, OIDCAuthenticator, OIDCError
+from .tenancy import set_tenant_context
 
 
 @lru_cache
@@ -72,6 +73,14 @@ def current_authentication(
         )
         request.state.audit_actor_id = authentication.principal_id
         request.state.audit_authentication_method = authentication.method
+        # Organization discovery happens before the client can select a tenant.
+        # Bind the validated principal so PostgreSQL RLS can expose only that
+        # principal's active memberships during /api/v1/me.
+        set_tenant_context(
+            db,
+            organization_id=None,
+            principal_id=authentication.principal_id,
+        )
         return authentication
     except OIDCError as exc:
         request.state.audit_reason_code = exc.public_code

@@ -1,13 +1,13 @@
-# AI Examiner v0.9.0 RC1 Status
+# AI Examiner v0.9.0 RC2 Status
 
 ## Current state
 
-- Version: `0.9.0rc1`
+- Version: `0.9.0rc2`
 - Current branch: `develop/v0.9.0`
 - Base candidate: `v0.7.0-rc.2`
-- Release tag: `v0.9.0-rc.1`
+- Release tag: pending `v0.9.0-rc.2` after RC2 gates
 - Deployment status: controlled staging candidate; not final production
-- Alembic head: `20260728_0016`
+- Alembic head: `20260810_0017`
 
 v0.9 WP-01 through WP-14 are implemented. The enterprise line now includes
 organization tenancy, OIDC, capability RBAC, PostgreSQL RLS, S3-compatible
@@ -19,7 +19,46 @@ an operator manual. All required deterministic and external evidence is accepted
 Desktop/mobile OIDC browser acceptance passed, and the AutoDL target completed a
 24-hour HTTPS/OIDC observation with 1,441 successful samples and zero failures.
 
-Current release verification (2026-08-07):
+RC2 verification (2026-08-10):
+
+```text
+Full pytest                   351 passed
+Focused PDF regression       16 passed
+Ruff                          passed
+JavaScript syntax             passed
+Dependency audit              no known vulnerabilities
+Tracked-source secret scan    clean (394 files)
+Alembic heads                 1 (20260810_0017)
+Route-policy completeness     48 routes / 0 missing
+Planner v6 frozen evidence    passed (7 templates / 210 cases)
+Public authentication         OIDC session passed
+Public storage                S3 upload and tenant listing passed
+Public async Planner          qwen:qwen-plus / 2 grounded questions
+Public enqueue latency        33.3 ms
+Public terminal latency       15.6 seconds
+PostgreSQL RLS                48 policies / 41 protected tables / passed
+Runtime readiness             database, OIDC, RLS, S3, Redis and OTLP ready
+Browser workbench             OIDC, organization, Qwen defaults, 7 templates passed
+Built-in template health      ok (7 templates / 9 versions / 7 prompts)
+Release promotion             RC2 tag pending committed-source gate
+```
+
+The dependency gate initially found CVE-2026-71852 and CVE-2026-71870 in
+`pypdf 6.14.2`. RC2 raises the floor and lock to `pypdf 6.15.0`; the focused PDF
+regression and repeated dependency audit then passed. The Windows interpreter
+still prints the previously documented AnyIO/TestClient shutdown diagnostic after
+successful completion. Linux CI and AutoDL are the authoritative cleanup/runtime
+gates.
+
+The browser gate found that native AutoDL startup had not seeded global templates
+under external schema management. The new idempotent `seed-global-data` bootstrap
+action now runs before Worker/API startup and restored template health from
+`degraded` to `ok`. Browser login, organization discovery, Qwen defaults and all
+seven template cards were then verified. A browser-control timeout occurred while
+clicking project creation and did not create a record; the same project creation,
+S3 upload and Qwen Planner path passed through the public HTTP acceptance client.
+
+Accepted RC1 release verification (2026-08-07):
 
 ```text
 Release gate                  release_ready

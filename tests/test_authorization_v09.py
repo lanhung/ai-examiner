@@ -16,7 +16,9 @@ from ai_examiner.enterprise_constants import (
     ROLE_CAPABILITIES,
 )
 from ai_examiner.main import app
-from ai_examiner.models import Organization, OrganizationMembership, Principal
+from ai_examiner.models import Organization, OrganizationMembership, Principal, Project
+from ai_examiner.services import authorization as authorization_module
+from ai_examiner.services.authentication import current_authentication
 from ai_examiner.services.authorization import (
     ROUTE_POLICIES,
     AuthorizationContext,
@@ -105,6 +107,68 @@ def test_role_registry_is_complete_and_uses_only_registered_capabilities():
     assert "member.grant_owner" not in ROLE_CAPABILITIES["admin"]
     assert "template.publish" not in ROLE_CAPABILITIES["reviewer"]
     assert "learner_memory.manage_self" in ROLE_CAPABILITIES["learner"]
+
+
+def test_legacy_workbench_route_requires_oidc_and_organization_context(
+    client,
+    monkeypatch,
+):
+    with SessionLocal() as db:
+        _organization, principal, _membership = bootstrap_owner(
+            db,
+            issuer="https://issuer.example.test",
+            subject="workbench-owner",
+        )
+        project = Project(
+            organization_id=LEGACY_ORGANIZATION_ID,
+            name="Tenant workbench",
+            domain="research_defense",
+            language="zh-CN",
+        )
+        db.add(project)
+        db.commit()
+        principal_id = principal.id
+        project_id = project.id
+
+    settings = Settings(
+        app_env="test",
+        auth_mode="oidc",
+        oidc_issuer_url="http://localhost:9100",
+        oidc_audience="api",
+        oidc_client_id="client",
+        oidc_redirect_uri="http://localhost/callback",
+        auth_session_secret="test-session-secret",
+        oidc_allow_insecure_http=True,
+    )
+    monkeypatch.setattr(authorization_module, "get_settings", lambda: settings)
+
+    app.dependency_overrides[current_authentication] = lambda: authentication(
+        None,
+        method="oidc_bearer",
+    )
+    try:
+        unauthenticated = client.get(
+            f"/api/projects/{project_id}/documents",
+            headers={"X-AI-Examiner-Organization": LEGACY_ORGANIZATION_ID},
+        )
+        app.dependency_overrides[current_authentication] = lambda: replace(
+            authentication(principal_id, method="oidc_bearer"),
+            issuer="https://issuer.example.test",
+        )
+        missing_organization = client.get(
+            f"/api/projects/{project_id}/documents"
+        )
+        authorized = client.get(
+            f"/api/projects/{project_id}/documents",
+            headers={"X-AI-Examiner-Organization": LEGACY_ORGANIZATION_ID},
+        )
+    finally:
+        app.dependency_overrides.pop(current_authentication, None)
+
+    assert unauthenticated.status_code == 401
+    assert missing_organization.status_code == 400
+    assert authorized.status_code == 200
+    assert authorized.json() == []
 
 
 def test_every_v1_route_has_bound_policy_metadata(client):
