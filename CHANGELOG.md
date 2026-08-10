@@ -2,6 +2,10 @@
 
 ## 0.9.0rc2 - 2026-08-10
 
+- Published immutable tag `v0.9.0-rc.2` after the committed-source release gate
+  passed 23 checks with no failures or blockers.
+- Preserve executable Git modes for native AutoDL and PostgreSQL rehearsal scripts,
+  with a regression test covering every tracked deployment shell script.
 - Raised the pypdf floor to 6.15.0 to remediate CVE-2026-71852 and
   CVE-2026-71870 for untrusted PDF text extraction.
 - Recover tenant-scoped queued jobs that were persisted but never received a

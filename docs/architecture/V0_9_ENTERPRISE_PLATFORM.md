@@ -2,7 +2,7 @@
 
 Status: WP-01 through WP-14 implemented; release gate accepted
 Current package version: `0.9.0rc2`
-Release-candidate tag: pending `v0.9.0-rc.2` validation
+Release-candidate tag: published `v0.9.0-rc.2` at commit `0092052`
 
 ## 1. Objective
 

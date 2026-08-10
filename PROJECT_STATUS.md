@@ -5,7 +5,7 @@
 - Version: `0.9.0rc2`
 - Current branch: `develop/v0.9.0`
 - Base candidate: `v0.7.0-rc.2`
-- Release tag: pending `v0.9.0-rc.2` after RC2 gates
+- Release tag: published `v0.9.0-rc.2` at `0092052`
 - Deployment status: controlled staging candidate; not final production
 - Alembic head: `20260810_0017`
 
@@ -40,8 +40,14 @@ PostgreSQL RLS                48 policies / 41 protected tables / passed
 Runtime readiness             database, OIDC, RLS, S3, Redis and OTLP ready
 Browser workbench             OIDC, organization, Qwen defaults, 7 templates passed
 Built-in template health      ok (7 templates / 9 versions / 7 prompts)
-Release promotion             RC2 tag pending committed-source gate
+Release promotion             v0.9.0-rc.2 published; final 0.9.0 held for RC acceptance
 ```
+
+Post-tag operational verification aligned the AutoDL runtime with the published
+`develop/v0.9.0` Git branch while preserving `.env`, the virtual environment and
+`data/`. It also identified missing Unix executable bits on two deployment scripts;
+the follow-up branch commit fixes their Git modes and adds a regression gate without
+rewriting the immutable RC2 tag.
 
 The dependency gate initially found CVE-2026-71852 and CVE-2026-71870 in
 `pypdf 6.14.2`. RC2 raises the floor and lock to `pypdf 6.15.0`; the focused PDF
