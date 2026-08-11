@@ -1,20 +1,17 @@
-# AI Examiner v0.9.0 RC2
+# AI Examiner v0.9.0
 
-Current working branch: `develop/v0.9.0` (`0.9.0rc2`). The accepted research
-source remains available at `research/v0.9.0`. The v0.8 implementation
-line remains available at `develop/v0.8.0`. The v0.7 release
-candidate remains available at `develop/v0.7.0` / `v0.7.0-rc.2`. The stable production
-line remains v0.4.1 and the preserved v0.5 release snapshot remains
-`release/v0.5.0` / `v0.5.0-rc.4` until final acceptance.
+Current stable release: `main` / `v0.9.0`. The accepted research source remains
+available at `research/v0.9.0`, and the immutable release candidates remain at
+`v0.9.0-rc.1` and `v0.9.0-rc.2` for audit and rollback analysis.
 
-The accepted template-platform study is preserved on `research/v0.8.0`. This release
-candidate is approved for controlled staging; it is not the final production release.
+The final release passed the complete deterministic gate, PostgreSQL RLS and S3
+verification, real Qwen Plus workflows, browser acceptance, disaster recovery and
+a separate 24-hour HTTPS/OIDC observation with zero failed samples.
 
-## v0.9 enterprise candidate
+## v0.9 enterprise release
 
-The `develop/v0.9.0` branch freezes the enterprise-platform candidate accepted by the
-machine-readable release gate. Final production promotion still requires RC staging
-acceptance.
+The `v0.9.0` tag freezes the enterprise platform accepted by the machine-readable
+release gate and independent RC staging acceptance.
 
 The proposed design adds:
 

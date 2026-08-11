@@ -8,7 +8,7 @@ This file is the authoritative version and branch status for Codex and other cod
 
 | Line | Version | Branch or tag | Status | Deployment |
 |---|---|---|---|---|
-| Stable | 0.4.1 | `main`, `v0.4.1` | Released | Production evaluation |
+| Stable | 0.9.0 | `main`, `v0.9.0` | Released after independent RC acceptance | Production |
 | Development | 0.5.0rc4 | `develop/v0.5.0` | Feature frozen | Separate worktree only |
 | Release snapshot | 0.5.0rc4 | `release/v0.5.0`, `v0.5.0-rc.4` | Awaiting final acceptance | Staging evaluation |
 | Research | 0.6.0 | `research/v0.6.0` | Architecture and evaluation design | Not deployable |
@@ -19,7 +19,7 @@ This file is the authoritative version and branch status for Codex and other cod
 | Upcoming research | 0.8.0 | `research/v0.8.0` | Industry template architecture, API, evaluation and implementation design | Not deployable |
 | Current implementation | 0.8.0.dev0 | `develop/v0.8.0` | Software and AI quality gates pass, including three reciprocal 30-case templates; Docker/Vultr promotion rehearsal remains held | Local evaluation only |
 | Accepted research | 0.9.0.dev0 | `research/v0.9.0` | Complete release gate accepted | Preserved source |
-| v0.9 candidate | 0.9.0rc2 | `develop/v0.9.0`, `v0.9.0-rc.2` | Published candidate; final promotion requires independent RC acceptance | Controlled staging |
+| v0.9 candidate | 0.9.0rc2 | `develop/v0.9.0`, `v0.9.0-rc.2` | Accepted and superseded by final v0.9.0 | Preserved evidence |
 | Release candidate | 0.5.0rc4 | `v0.5.0-rc.4` | Ready for staging | Staging only |
 | Final | 0.5.0 | `main`, `v0.5.0` | Not created | Production after acceptance |
 

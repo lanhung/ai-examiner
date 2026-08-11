@@ -24,7 +24,7 @@ evidence.
 ```bash
 git clone https://github.com/lanhung/ai-examiner.git
 cd ai-examiner
-git checkout research/v0.9.0
+git checkout v0.9.0
 
 cp .env.enterprise.example .env.enterprise
 chmod 600 .env.enterprise
@@ -86,7 +86,7 @@ APP_ENV_FILE=.env.enterprise \
 USE_MINIO=true \
 USE_OBSERVABILITY=true \
 USE_HTTPS=true \
-DEPLOY_BRANCH=research/v0.9.0 \
+DEPLOY_BRANCH=main \
 ./deploy/enterprise/update-enterprise.sh
 ```
 
@@ -263,14 +263,14 @@ database pool saturation and backup age require operator review.
 5. Restore into an isolated Compose project before replacing live volumes.
 6. Do not copy uploaded content or tokens into issue trackers.
 
-## 10. RC promotion
+## 10. Release promotion
 
-Promotion is a separate change after every release gate passes:
+The final v0.9 release followed this immutable promotion sequence:
 
-1. create `develop/v0.9.0` from the accepted source commit;
-2. set all version surfaces to `0.9.0rc1`;
-3. commit release notes and the sanitized evidence manifest;
-4. run the full release gate again;
-5. create immutable annotated tag `v0.9.0-rc.1`;
-6. deploy that exact tag to staging;
-7. do not move or rewrite the tag.
+1. create and validate sequential immutable RC tags;
+2. deploy the exact RC source to controlled staging;
+3. complete a separate 24-hour HTTPS/OIDC observation with zero failures;
+4. update only final version surfaces and accepted evidence;
+5. rerun the complete release gate from the final commit;
+6. fast-forward `main` and create immutable annotated tag `v0.9.0`;
+7. never move or rewrite RC or final tags.

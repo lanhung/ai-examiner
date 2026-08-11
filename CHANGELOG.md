@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0 - 2026-08-11
+
+- Promoted the accepted enterprise platform to the first final v0.9 release.
+- Completed an independent RC2 observation against commit `bd6dc19`: 24 hours,
+  1,440 HTTPS/OIDC samples, zero failures and 100% availability.
+- Preserved immutable RC1 and RC2 tags and changed only release metadata, accepted
+  evidence and static cache identifiers after RC2 acceptance.
+- Made `main` the documented production deployment branch while retaining exact-tag
+  deployment and rollback instructions.
+
 ## 0.9.0rc2 - 2026-08-10
 
 - Published immutable tag `v0.9.0-rc.2` after the committed-source release gate

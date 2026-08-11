@@ -1,12 +1,12 @@
-# AI Examiner v0.9.0 RC2 Status
+# AI Examiner v0.9.0 Status
 
 ## Current state
 
-- Version: `0.9.0rc2`
-- Current branch: `develop/v0.9.0`
+- Version: `0.9.0`
+- Current branch: `main` after final promotion
 - Base candidate: `v0.7.0-rc.2`
-- Release tag: published `v0.9.0-rc.2` at `0092052`
-- Deployment status: controlled staging candidate; not final production
+- Release tag: `v0.9.0` authorized after independent RC2 acceptance
+- Deployment status: released; production deployment authorized
 - Alembic head: `20260810_0017`
 
 v0.9 WP-01 through WP-14 are implemented. The enterprise line now includes
@@ -19,10 +19,14 @@ an operator manual. All required deterministic and external evidence is accepted
 Desktop/mobile OIDC browser acceptance passed, and the AutoDL target completed a
 24-hour HTTPS/OIDC observation with 1,441 successful samples and zero failures.
 
+Final RC2 acceptance (2026-08-11) independently observed commit `bd6dc19` for
+24 hours: 1,440 samples, zero failures, 100% availability, verified TLS and OIDC,
+and zero open release blockers. This authorizes final `v0.9.0` promotion.
+
 RC2 verification (2026-08-10):
 
 ```text
-Full pytest                   351 passed
+Full pytest                   352 passed
 Focused PDF regression       16 passed
 Ruff                          passed
 JavaScript syntax             passed
@@ -40,7 +44,7 @@ PostgreSQL RLS                48 policies / 41 protected tables / passed
 Runtime readiness             database, OIDC, RLS, S3, Redis and OTLP ready
 Browser workbench             OIDC, organization, Qwen defaults, 7 templates passed
 Built-in template health      ok (7 templates / 9 versions / 7 prompts)
-Release promotion             v0.9.0-rc.2 published; final 0.9.0 held for RC acceptance
+Release promotion             final v0.9.0 authorized
 ```
 
 Post-tag operational verification aligned the AutoDL runtime with the published
