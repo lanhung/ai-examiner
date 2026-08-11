@@ -4,14 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
-  <title>AI Examiner v0.9.0</title>
-  <link rel="stylesheet" href="/static/styles.css?v=0.9.0" />
+  <title>AI Examiner v0.9.1</title>
+  <link rel="stylesheet" href="/static/styles.css?v=0.9.1" />
 </head>
 <body>
   <header>
     <div>
       <span class="eyebrow">Inquiry-first AI · Scenario platform</span>
-      <h1>AI Examiner v0.9 企业版</h1>
+      <h1>AI Examiner v0.9.1 企业版</h1>
       <p>用可审计的场景模板统一目标、提问策略、帮助边界、评分规则、安全约束与报告结构。</p>
     </div>
     <div class="header-actions">
@@ -26,7 +26,161 @@
     </div>
   </header>
 
+  <nav class="workspace-nav" aria-label="工作台导航">
+    <div class="workspace-nav-inner">
+      <a class="workspace-nav-brand" href="#workflow" aria-label="返回工作流起点">
+        <span class="workspace-nav-mark">AE</span>
+        <span>答辩工作台</span>
+      </a>
+      <div class="workspace-nav-links">
+        <a href="#workflow">准备</a>
+        <a href="#evidenceLab">证据</a>
+        <a href="#conversationPanel">文本答辩</a>
+        <a href="#voicePanel">语音答辩</a>
+        <a href="#memoryPanel">学习记忆</a>
+        <a href="#templateStudio">模板</a>
+      </div>
+    </div>
+  </nav>
+
   <main>
+    <section id="workflow" class="panel setup">
+      <div class="step"><span>1</span><div><h2>创建项目</h2><p>当前版本聚焦论文答辩与科研汇报训练。</p></div></div>
+      <label>项目名称<input id="projectName" value="我的论文答辩训练" /></label>
+      <button id="createProject">创建项目</button>
+      <div id="projectStatus" class="status"></div>
+
+      <div class="step"><span>2</span><div><h2>上传材料</h2><p>支持 PDF、PPTX、DOCX、TXT、Markdown；自动生成页面/幻灯片证据索引。</p></div></div>
+      <input id="documentFile" type="file" accept=".pdf,.pptx,.docx,.txt,.md,.markdown" disabled />
+      <button id="uploadDocument" disabled>上传并解析</button>
+      <div id="documentStatus" class="status"></div>
+      <div id="documentList" class="mini-list"></div>
+
+      <div class="step"><span>3</span><div><h2>生成答辩蓝图</h2><p>供实时答辩使用的贡献、假设、风险、主问题与追问。</p></div></div>
+      <label>蓝图模型<select id="blueprintProfile"></select></label>
+      <label>场景模板<select id="sessionTemplateSelect"><option value="">兼容模式（论文答辩）</option></select></label>
+      <div id="sessionTemplateHint" class="status">模板会同时约束蓝图、文本答辩和语音答辩。</div>
+      <button id="generateBlueprint" disabled>生成蓝图</button>
+      <button id="cancelBlueprint" class="secondary-button hidden">取消生成</button>
+      <div id="blueprintStatus" class="status"></div>
+      <div id="blueprintProgress" class="hidden" aria-live="polite">
+        <div class="job-progress"><span style="width: 0%"></span></div>
+        <small></small>
+      </div>
+      <div id="blueprintPreview" class="blueprint hidden"></div>
+
+      <div class="step"><span>4</span><div><h2>AI Golden Dataset</h2><p>模型独立标注、交叉批评、共识合成，并生成四档合成回答。</p></div></div>
+      <div id="modelProfiles" class="model-list"><div class="muted">正在读取模型列表…</div></div>
+      <div class="compact-grid">
+        <label>共识模型<select id="consensusProfile"></select></label>
+        <label>题目数量<input id="questionCount" type="number" min="4" max="20" value="8" /></label>
+      </div>
+      <button id="generateGolden" disabled>生成 Golden Dataset</button>
+      <div id="goldenStatus" class="status"></div>
+      <div id="goldenPreview" class="blueprint hidden"></div>
+
+      <div class="step"><span>5</span><div><h2>开始答辩</h2><p>默认 6 个主问题，每题最多追问 2 次。</p></div></div>
+      <div class="compact-grid">
+        <label>文本答辩模型<select id="textProfile"></select></label>
+        <label>提问策略<select id="questionStrategy"><option value="adaptive" selected>自适应认知</option><option value="fixed">固定顺序基线</option></select></label>
+      </div>
+      <div class="dual-actions"><button id="startSession" disabled>开始文本答辩</button><button id="startVoice" class="voice-primary" disabled>开始实时语音答辩</button></div>
+      <div id="voicePrereq" class="status">语音需要已配置的 Realtime 提供商，并建议通过 HTTPS 或 localhost 使用。</div>
+    </section>
+
+    <section id="evidenceLab" class="panel evidence-lab">
+      <div class="conversation-head">
+        <div><span class="eyebrow">Multimodal evidence</span><h2>页面证据与视觉审查</h2></div>
+        <span id="evidenceState" class="badge secondary">尚无材料</span>
+      </div>
+      <p>显示 PDF 页面、PPT 幻灯片、图表、表格、公式上下文和 DOCX 图片。视觉 Agent 会区分“该证据支持什么”与“不能支持什么”。</p>
+      <label>视觉分析模型<select id="visualProfile"></select></label>
+      <div class="lab-actions">
+        <button id="loadEvidence" disabled>加载证据</button>
+        <button id="analyzeVisual" disabled>运行视觉分析</button>
+        <button id="runJoint" disabled>联合审查已上传材料</button>
+        <button id="showCosts">查看费用</button>
+      </div>
+      <div id="evidenceStatus" class="status"></div>
+      <div id="evidenceGallery" class="evidence-gallery"><div class="empty compact">上传材料后显示页面证据。</div></div>
+      <div id="visualResults" class="blueprint hidden"></div>
+      <div id="costResults" class="blueprint hidden"></div>
+    </section>
+
+    <section id="conversationPanel" class="panel conversation">
+      <div class="conversation-head">
+        <div><span class="eyebrow">Live session</span><h2>对话</h2></div>
+        <span id="sessionState" class="badge secondary">尚未开始</span>
+      </div>
+      <div id="messages" class="messages">
+        <div class="empty">完成左侧步骤后，AI 考官会在这里开始提问。</div>
+      </div>
+      <form id="answerForm">
+        <textarea id="answerInput" rows="5" placeholder="请口语化回答。建议包含结论、原因、证据和边界。" disabled></textarea>
+        <div class="answer-actions">
+          <span id="answerHint">一次只回答当前问题。</span>
+          <button id="sendAnswer" type="submit" disabled>提交回答</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="voicePanel" class="panel voice-panel">
+      <div class="conversation-head">
+        <div><span class="eyebrow">Realtime voice · WebRTC</span><h2>自然语音答辩</h2></div>
+        <span id="voiceState" class="badge secondary">尚未连接</span>
+      </div>
+      <p>默认使用自动 VAD 判断轮次。您可以随时插话，模型会立即停止未播放的内容并自然响应。</p>
+      <div class="voice-settings compact-grid">
+        <label>语音模型<select id="voiceProvider"></select></label>
+        <label>声音<select id="voiceSelect"><option value="marin">Marin</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="sage">Sage</option><option value="verse">Verse</option></select></label>
+        <label>轮次敏感度<select id="vadSelect"><option value="low">耐心等待</option><option value="medium" selected>自然</option><option value="high">快速响应</option><option value="auto">自动</option></select></label>
+      </div>
+      <div class="voice-orb-wrap"><div id="voiceOrb" class="voice-orb"><span></span></div><div id="voiceLiveText" class="voice-live-text">连接后在这里显示实时状态与字幕。</div></div>
+      <div class="voice-controls">
+        <button id="muteVoice" disabled>静音麦克风</button>
+        <button id="togglePtt" disabled>切换按住说话</button>
+        <button id="pttButton" class="ptt hidden" disabled>按住说话</button>
+        <button id="endVoice" class="danger-button" disabled>结束语音</button>
+      </div>
+      <div id="voiceStatus" class="status"></div>
+      <div id="voiceTranscript" class="voice-transcript"><div class="empty compact">实时转录会显示在这里，并同步到后端会话记录。</div></div>
+    </section>
+
+    <section id="memoryPanel" class="panel memory-panel">
+      <div class="conversation-head">
+        <div><span class="eyebrow">Long-term learner intelligence</span><h2>记忆中心</h2></div>
+        <span id="memoryState" class="badge secondary">尚未启用</span>
+      </div>
+      <p>长期记忆默认关闭。启用后只保存结构化学习证据、确认偏好与复测结果，不将偏好用于评分。</p>
+      <div class="memory-controls">
+        <label>学习者显示名称<input id="memoryDisplayName" value="我的学习档案" maxlength="200" /></label>
+        <button id="enableMemory">启用长期记忆</button>
+        <button id="importMemory" disabled>导入本次答辩证据</button>
+        <button id="refreshMemory" disabled>刷新</button>
+        <button id="exportMemory" disabled>导出 JSON</button>
+        <button id="deleteMemory" class="danger-button" disabled>删除全部长期记忆</button>
+      </div>
+      <div id="memoryStatus" class="status"></div>
+      <div class="memory-columns">
+        <div>
+          <h3>知识状态</h3>
+          <div class="memory-legend"><span><i class="observed-dot"></i>已观察</span><span><i class="predicted-dot"></i>时间推算</span></div>
+          <div id="conceptStates" class="memory-list"><div class="empty compact">启用并导入答辩证据后显示。</div></div>
+        </div>
+        <div>
+          <h3>交流偏好</h3>
+          <div class="preference-form">
+            <select id="preferenceKey"><option value="explanation_style">解释方式</option><option value="response_pace">回应节奏</option><option value="interruption_style">打断风格</option><option value="hint_style">提示方式</option><option value="interface_language">界面语言</option></select>
+            <select id="preferenceValue"></select>
+            <button id="savePreference" disabled>确认偏好</button>
+          </div>
+          <div id="preferenceList" class="memory-list"><div class="empty compact">尚无已确认偏好。</div></div>
+        </div>
+      </div>
+      <div class="memory-section-head"><h3>复测建议</h3><button id="planRetest" disabled>生成建议</button></div>
+      <div id="retestList" class="memory-list"><div class="empty compact">系统只提供建议，复测由您接受并启动。</div></div>
+    </section>
+
     <section id="templateStudio" class="panel template-studio">
       <div class="conversation-head">
         <div>
@@ -86,70 +240,7 @@
       </div>
     </section>
 
-    <section class="panel setup">
-      <div class="step"><span>1</span><div><h2>创建项目</h2><p>当前版本聚焦论文答辩与科研汇报训练。</p></div></div>
-      <label>项目名称<input id="projectName" value="我的论文答辩训练" /></label>
-      <button id="createProject">创建项目</button>
-      <div id="projectStatus" class="status"></div>
-
-      <div class="step"><span>2</span><div><h2>上传材料</h2><p>支持 PDF、PPTX、DOCX、TXT、Markdown；自动生成页面/幻灯片证据索引。</p></div></div>
-      <input id="documentFile" type="file" accept=".pdf,.pptx,.docx,.txt,.md,.markdown" disabled />
-      <button id="uploadDocument" disabled>上传并解析</button>
-      <div id="documentStatus" class="status"></div>
-      <div id="documentList" class="mini-list"></div>
-
-      <div class="step"><span>3</span><div><h2>生成答辩蓝图</h2><p>供实时答辩使用的贡献、假设、风险、主问题与追问。</p></div></div>
-      <label>蓝图模型<select id="blueprintProfile"></select></label>
-      <label>场景模板<select id="sessionTemplateSelect"><option value="">兼容模式（论文答辩）</option></select></label>
-      <div id="sessionTemplateHint" class="status">模板会同时约束蓝图、文本答辩和语音答辩。</div>
-      <button id="generateBlueprint" disabled>生成蓝图</button>
-      <button id="cancelBlueprint" class="secondary-button hidden">取消生成</button>
-      <div id="blueprintStatus" class="status"></div>
-      <div id="blueprintProgress" class="hidden" aria-live="polite">
-        <div class="job-progress"><span style="width: 0%"></span></div>
-        <small></small>
-      </div>
-      <div id="blueprintPreview" class="blueprint hidden"></div>
-
-      <div class="step"><span>4</span><div><h2>AI Golden Dataset</h2><p>模型独立标注、交叉批评、共识合成，并生成四档合成回答。</p></div></div>
-      <div id="modelProfiles" class="model-list"><div class="muted">正在读取模型列表…</div></div>
-      <div class="compact-grid">
-        <label>共识模型<select id="consensusProfile"></select></label>
-        <label>题目数量<input id="questionCount" type="number" min="4" max="20" value="8" /></label>
-      </div>
-      <button id="generateGolden" disabled>生成 Golden Dataset</button>
-      <div id="goldenStatus" class="status"></div>
-      <div id="goldenPreview" class="blueprint hidden"></div>
-
-      <div class="step"><span>5</span><div><h2>开始答辩</h2><p>默认 6 个主问题，每题最多追问 2 次。</p></div></div>
-      <div class="compact-grid">
-        <label>文本答辩模型<select id="textProfile"></select></label>
-        <label>提问策略<select id="questionStrategy"><option value="adaptive" selected>自适应认知</option><option value="fixed">固定顺序基线</option></select></label>
-      </div>
-      <div class="dual-actions"><button id="startSession" disabled>开始文本答辩</button><button id="startVoice" class="voice-primary" disabled>开始实时语音答辩</button></div>
-      <div id="voicePrereq" class="status">语音需要已配置的 Realtime 提供商，并建议通过 HTTPS 或 localhost 使用。</div>
-    </section>
-
-    <section class="panel evidence-lab">
-      <div class="conversation-head">
-        <div><span class="eyebrow">Multimodal evidence</span><h2>页面证据与视觉审查</h2></div>
-        <span id="evidenceState" class="badge secondary">尚无材料</span>
-      </div>
-      <p>显示 PDF 页面、PPT 幻灯片、图表、表格、公式上下文和 DOCX 图片。视觉 Agent 会区分“该证据支持什么”与“不能支持什么”。</p>
-      <label>视觉分析模型<select id="visualProfile"></select></label>
-      <div class="lab-actions">
-        <button id="loadEvidence" disabled>加载证据</button>
-        <button id="analyzeVisual" disabled>运行视觉分析</button>
-        <button id="runJoint" disabled>联合审查已上传材料</button>
-        <button id="showCosts">查看费用</button>
-      </div>
-      <div id="evidenceStatus" class="status"></div>
-      <div id="evidenceGallery" class="evidence-gallery"><div class="empty compact">上传材料后显示页面证据。</div></div>
-      <div id="visualResults" class="blueprint hidden"></div>
-      <div id="costResults" class="blueprint hidden"></div>
-    </section>
-
-    <section class="panel lab">
+    <section id="evaluationLab" class="panel lab">
       <div class="conversation-head">
         <div><span class="eyebrow">Evaluation laboratory</span><h2>模型竞技场</h2></div>
         <span id="datasetState" class="badge secondary">尚无数据集</span>
@@ -165,88 +256,13 @@
       <div id="benchmarkResults" class="table-wrap hidden"></div>
     </section>
 
-
-    <section class="panel voice-panel">
-      <div class="conversation-head">
-        <div><span class="eyebrow">Realtime voice · WebRTC</span><h2>自然语音答辩</h2></div>
-        <span id="voiceState" class="badge secondary">尚未连接</span>
-      </div>
-      <p>默认使用自动 VAD 判断轮次。您可以随时插话，模型会立即停止未播放的内容并自然响应。</p>
-      <div class="voice-settings compact-grid">
-        <label>语音模型<select id="voiceProvider"></select></label>
-        <label>声音<select id="voiceSelect"><option value="marin">Marin</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="sage">Sage</option><option value="verse">Verse</option></select></label>
-        <label>轮次敏感度<select id="vadSelect"><option value="low">耐心等待</option><option value="medium" selected>自然</option><option value="high">快速响应</option><option value="auto">自动</option></select></label>
-      </div>
-      <div class="voice-orb-wrap"><div id="voiceOrb" class="voice-orb"><span></span></div><div id="voiceLiveText" class="voice-live-text">连接后在这里显示实时状态与字幕。</div></div>
-      <div class="voice-controls">
-        <button id="muteVoice" disabled>静音麦克风</button>
-        <button id="togglePtt" disabled>切换按住说话</button>
-        <button id="pttButton" class="ptt hidden" disabled>按住说话</button>
-        <button id="endVoice" class="danger-button" disabled>结束语音</button>
-      </div>
-      <div id="voiceStatus" class="status"></div>
-      <div id="voiceTranscript" class="voice-transcript"><div class="empty compact">实时转录会显示在这里，并同步到后端会话记录。</div></div>
-    </section>
-
-    <section class="panel conversation">
-      <div class="conversation-head">
-        <div><span class="eyebrow">Live session</span><h2>对话</h2></div>
-        <span id="sessionState" class="badge secondary">尚未开始</span>
-      </div>
-      <div id="messages" class="messages">
-        <div class="empty">完成左侧步骤后，AI 考官会在这里开始提问。</div>
-      </div>
-      <form id="answerForm">
-        <textarea id="answerInput" rows="5" placeholder="请口语化回答。建议包含结论、原因、证据和边界。" disabled></textarea>
-        <div class="answer-actions">
-          <span id="answerHint">一次只回答当前问题。</span>
-          <button id="sendAnswer" type="submit" disabled>提交回答</button>
-        </div>
-      </form>
-    </section>
-
-    <section id="memoryPanel" class="panel memory-panel">
-      <div class="conversation-head">
-        <div><span class="eyebrow">Long-term learner intelligence</span><h2>记忆中心</h2></div>
-        <span id="memoryState" class="badge secondary">尚未启用</span>
-      </div>
-      <p>长期记忆默认关闭。启用后只保存结构化学习证据、确认偏好与复测结果，不将偏好用于评分。</p>
-      <div class="memory-controls">
-        <label>学习者显示名称<input id="memoryDisplayName" value="我的学习档案" maxlength="200" /></label>
-        <button id="enableMemory">启用长期记忆</button>
-        <button id="importMemory" disabled>导入本次答辩证据</button>
-        <button id="refreshMemory" disabled>刷新</button>
-        <button id="exportMemory" disabled>导出 JSON</button>
-        <button id="deleteMemory" class="danger-button" disabled>删除全部长期记忆</button>
-      </div>
-      <div id="memoryStatus" class="status"></div>
-      <div class="memory-columns">
-        <div>
-          <h3>知识状态</h3>
-          <div class="memory-legend"><span><i class="observed-dot"></i>已观察</span><span><i class="predicted-dot"></i>时间推算</span></div>
-          <div id="conceptStates" class="memory-list"><div class="empty compact">启用并导入答辩证据后显示。</div></div>
-        </div>
-        <div>
-          <h3>交流偏好</h3>
-          <div class="preference-form">
-            <select id="preferenceKey"><option value="explanation_style">解释方式</option><option value="response_pace">回应节奏</option><option value="interruption_style">打断风格</option><option value="hint_style">提示方式</option><option value="interface_language">界面语言</option></select>
-            <select id="preferenceValue"></select>
-            <button id="savePreference" disabled>确认偏好</button>
-          </div>
-          <div id="preferenceList" class="memory-list"><div class="empty compact">尚无已确认偏好。</div></div>
-        </div>
-      </div>
-      <div class="memory-section-head"><h3>复测建议</h3><button id="planRetest" disabled>生成建议</button></div>
-      <div id="retestList" class="memory-list"><div class="empty compact">系统只提供建议，复测由您接受并启动。</div></div>
-    </section>
-
     <section id="reportPanel" class="panel report hidden">
       <div class="conversation-head"><div><span class="eyebrow">Evidence report</span><h2>答辩报告</h2></div></div>
       <div id="reportContent"></div>
     </section>
   </main>
 
-  <footer>v0.9.0 · 企业治理、主动提问、多模态证据与实时语音</footer>
-  <script src="/static/app.js?v=0.9.0"></script>
+  <footer>v0.9.1 · 企业治理、主动提问、多模态证据与实时语音</footer>
+  <script src="/static/app.js?v=0.9.1"></script>
 </body>
 </html>

@@ -1,3 +1,40 @@
+# AI Examiner v0.9.1 Status
+
+## UI refinement release
+
+- Version: `0.9.1`
+- Release date: 2026-08-11
+- Scope: main workbench and enterprise console presentation/usability
+- API and database migrations: none
+- Compatibility: reuses the v0.9.0 environment, database and object storage
+
+The main workbench now presents project setup, evidence review and live
+examination before administration tools. A compact sticky navigator exposes the
+six primary operational surfaces. The enterprise console has denser navigation,
+forms, metrics and tables, plus a repaired two-row mobile header and horizontal
+capability navigation.
+
+v0.9.1 verification:
+
+```text
+Full pytest                   352 passed
+Focused UI regression        12 passed
+Ruff                          passed
+JavaScript syntax             passed
+Desktop browser               1280px, no horizontal overflow
+Mobile browser                390px, no horizontal overflow
+Browser console               no warnings or errors
+Database migration            not required
+```
+
+The Windows test host can print an AnyIO teardown access-violation trace after
+the completed suite; pytest still exits successfully after all 352 tests. This
+is recorded as a host-runtime cleanup issue, not a failing product test.
+
+`v0.9.0` remains the immutable accepted enterprise baseline and rollback tag.
+
+---
+
 # AI Examiner v0.9.0 Status
 
 ## Current state

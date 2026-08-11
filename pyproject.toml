@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-examiner-mvp"
-version = "0.9.0"
+version = "0.9.1"
 description = "A deployable multimodal, evidence-grounded AI examiner with low-latency realtime voice."
 readme = "README.md"
 requires-python = ">=3.11"

@@ -8,7 +8,8 @@ This file is the authoritative version and branch status for Codex and other cod
 
 | Line | Version | Branch or tag | Status | Deployment |
 |---|---|---|---|---|
-| Stable | 0.9.0 | `main`, `v0.9.0` | Released after independent RC acceptance | Production |
+| Stable | 0.9.1 | `main`, `v0.9.1` | UI refinement over the accepted v0.9 enterprise release | Production |
+| Prior stable | 0.9.0 | `v0.9.0` | Immutable accepted enterprise baseline | Rollback |
 | Development | 0.5.0rc4 | `develop/v0.5.0` | Feature frozen | Separate worktree only |
 | Release snapshot | 0.5.0rc4 | `release/v0.5.0`, `v0.5.0-rc.4` | Awaiting final acceptance | Staging evaluation |
 | Research | 0.6.0 | `research/v0.6.0` | Architecture and evaluation design | Not deployable |

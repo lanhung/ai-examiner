@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.1 - 2026-08-11
+
+- Reorganized the public workbench so project preparation, evidence review and
+  live examination appear before template administration and evaluation tooling.
+- Added a sticky workflow navigator with direct access to preparation, evidence,
+  text, voice, memory and template surfaces.
+- Rebuilt the shared visual system around denser operational spacing, clearer
+  focus states, restrained surfaces and responsive layouts with no API changes.
+- Refined the enterprise console navigation, metrics, tables, forms and mobile
+  behavior while preserving every existing capability and DOM contract.
+
 ## 0.9.0 - 2026-08-11
 
 - Promoted the accepted enterprise platform to the first final v0.9 release.
