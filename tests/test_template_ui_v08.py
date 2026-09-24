@@ -6,15 +6,22 @@ def test_homepage_delivers_v08_template_studio(client):
 
     assert response.status_code == 200
     html = response.text
-    assert "AI Examiner v0.9.1 企业版" in html
-    assert 'class="workspace-nav"' in html
-    assert html.index('id="workflow"') < html.index('id="templateStudio"')
+    assert "AI Examiner v0.9 企业版" in html
+    assert 'class="workspace-nav"' not in html
+    assert 'class="primary-workflow-column"' not in html
+    assert html.index('id="templateStudio"') < html.index('class="panel setup"')
     assert 'id="templateStudio"' in html
     assert 'id="templateCatalogList"' in html
     assert 'id="templateDetail"' in html
     assert 'id="sessionTemplateSelect"' in html
-    assert "/static/styles.css?v=0.9.1" in html
-    assert "/static/app.js?v=0.9.1" in html
+    assert "/static/styles.css?rev=classic-refined-r2-20260904" in html
+    assert "/static/app.js?rev=classic-refined-r2-20260904" in html
+
+    stylesheet = client.get("/static/styles.css?rev=classic-refined-r2-20260904")
+    assert stylesheet.status_code == 200
+    assert "grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);" in stylesheet.text
+    assert ".panel { background: var(--panel);" in stylesheet.text
+    assert ".conversation { min-height: 500px;" in stylesheet.text
 
 
 def test_template_editor_uses_contract_values_and_safe_transfer_endpoints(client):

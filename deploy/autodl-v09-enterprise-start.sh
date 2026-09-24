@@ -6,6 +6,7 @@ ROOT="${AI_EXAMINER_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 TOOLS_ROOT="${AI_EXAMINER_TOOLS_ROOT:-/root/autodl-tmp/ai-examiner-tools}"
 PUBLIC_ENV="${AI_EXAMINER_PUBLIC_ENV:-$TOOLS_ROOT/rc1-public.env}"
 MINIO_ENV="${AI_EXAMINER_MINIO_ENV:-$TOOLS_ROOT/rc1-enterprise.env}"
+WECHAT_ENV="${AI_EXAMINER_WECHAT_ENV:-$TOOLS_ROOT/wechat.env}"
 APP_PORT="${APP_PORT:-6006}"
 OIDC_PORT="${TEST_OIDC_PORT:-6008}"
 
@@ -23,8 +24,16 @@ set -a
 source "$PUBLIC_ENV"
 # shellcheck disable=SC1090
 source "$MINIO_ENV"
+if [[ -f "$WECHAT_ENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$WECHAT_ENV"
+fi
 set +a
 export APP_PORT OIDC_PORT
+# This deployment opts into bounded application sessions after verified OIDC login.
+export OIDC_SESSION_LIFETIME_POLICY="${OIDC_SESSION_LIFETIME_POLICY:-application}"
+export OIDC_SESSION_IDLE_MINUTES="${OIDC_SESSION_IDLE_MINUTES:-120}"
+export OIDC_SESSION_MAX_MINUTES="${OIDC_SESSION_MAX_MINUTES:-480}"
 export TEST_OIDC_ISSUER="${TEST_OIDC_ISSUER:-${OIDC_ISSUER_URL:?OIDC_ISSUER_URL is required}}"
 export TEST_OIDC_CLIENT_ID="${TEST_OIDC_CLIENT_ID:-${OIDC_CLIENT_ID:?OIDC_CLIENT_ID is required}}"
 export TEST_OIDC_AUDIENCE="${TEST_OIDC_AUDIENCE:-${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}}"

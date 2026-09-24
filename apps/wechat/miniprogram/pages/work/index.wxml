@@ -1,0 +1,36 @@
+<view class="page">
+  <view class="title">答辩工作台</view>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <view wx:if="{{!organizations.length}}" class="section muted">暂无可用空间，请重新登录或联系管理员。</view>
+  <block wx:else>
+    <button wx:if="{{sessionId}}" class="primary" bindtap="resume" disabled="{{busy}}">继续上次答辩</button>
+    <picker disabled="{{busy}}" range="{{organizations}}" range-key="display_name" value="{{orgIndex}}" bindchange="organization"><view class="field">空间：{{organizations[orgIndex].display_name}} ▾</view></picker>
+    <view class="section">
+      <view class="heading">01 · 论文材料</view>
+      <picker disabled="{{busy}}" range="{{projects}}" range-key="name" value="{{projectIndex}}" bindchange="project"><view class="field">{{projects.length ? projects[projectIndex].name : '暂无项目'}} ▾</view></picker>
+      <input class="field" placeholder="新项目名称" maxlength="200" value="{{name}}" bindinput="name" disabled="{{busy}}"/>
+      <button bindtap="create" disabled="{{busy || !name}}">创建项目</button>
+      <button bindtap="upload" disabled="{{busy || !projects.length || job || uploadUncertain}}">选择论文文件</button>
+      <progress wx:if="{{uploadProgress >= 0}}" percent="{{uploadProgress}}" show-info activeColor="#16836a"/>
+      <view wx:if="{{uploadMessage}}" class="muted">{{uploadMessage}}</view>
+      <button bindtap="refreshDocuments" disabled="{{busy || !projects.length}}">刷新已上传材料</button>
+      <picker wx:if="{{documents.length}}" disabled="{{busy || job}}" range="{{documents}}" range-key="filename" value="{{documentIndex}}" bindchange="document"><view class="field">选择已上传材料（{{documents.length}} 份） ▾</view></picker>
+      <button wx:if="{{documents.length && !job}}" bindtap="selectDocument" disabled="{{busy}}">使用所选材料</button>
+      <button wx:if="{{uploadUncertain}}" bindtap="retryUpload" disabled="{{busy || job}}">确认未保存，重新选择文件</button>
+      <view wx:if="{{document}}" class="muted">{{document.filename}} · {{document.page_count}} 页</view>
+    </view>
+    <view class="section">
+      <view class="heading">02 · 答辩蓝图</view>
+      <picker disabled="{{busy || job}}" range="{{providers}}" range-key="label" value="{{providerIndex}}" bindchange="provider"><view class="field">{{providers.length ? providers[providerIndex].label : '暂无已配置的真实模型'}} ▾</view></picker>
+      <button class="primary" bindtap="generate" loading="{{busy}}" disabled="{{busy || !document || !providers.length || job || uploadUncertain}}">生成答辩蓝图</button>
+      <view wx:if="{{job}}" class="muted">任务状态：{{job.status}} · {{job.message}}</view>
+      <button wx:if="{{job && !blueprint}}" bindtap="refreshJob">刷新任务状态</button>
+      <block wx:if="{{blueprint}}">
+        <view class="body">{{blueprint.data.summary}}</view>
+        <view wx:for="{{blueprint.data.questions}}" wx:key="id" class="item body">{{index + 1}}. {{item.text}}</view>
+        <button class="primary" bindtap="start" disabled="{{busy}}">开始文字答辩</button>
+      </block>
+    </view>
+  </block>
+  <button bindtap="logout" disabled="{{busy}}">退出登录</button>
+</view>

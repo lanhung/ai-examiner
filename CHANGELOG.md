@@ -1,5 +1,74 @@
 # Changelog
 
+## WeChat preview snapshot - 2026-09-24
+
+- Save the native mini-program, server-verified login, isolated personal spaces,
+  upload recovery, deployment guidance and acceptance records on
+  `feature/wechat-miniapp`; backend stays 0.9.0, client stays 0.1.0-preview.
+- Include the shared session-lifetime and job-conflict handling used by the
+  integration, with focused security and API regression tests.
+- Verify 100 backend tests, 18 client tests and scoped Ruff checks before upload.
+- Record the real qwen-plus UI acceptance and known scoring/report/recovery gaps;
+  this snapshot is not a claim of production readiness or completed remediation.
+- Exclude credentials, runtime data, local review artifacts and private tool settings.
+
+## Unreleased interface revision - 2026-09-04
+
+- Refined the restored classic workbench without changing its module order or
+  interaction model: reduced header and panel whitespace, fixed desktop title
+  wrapping, shortened idle surfaces and simplified the signed-out model state.
+- Removed the inherited desktop flex basis from narrow-screen header actions so
+  tablet and mobile layouts no longer reserve a large empty block above content.
+- Restored the original v0.9.0 workbench and enterprise-console layout after
+  user evaluation of the v0.9.1 through v0.9.5 interface experiments.
+- Removed the later compact navigation, reordered workbench, widened setup rail,
+  advanced-tool disclosure and segmented text/voice presentation.
+- Preserved all current enterprise APIs, authentication, storage, audit, model
+  governance, cognitive memory and assessment functionality.
+- Added a classic-layout regression contract and a non-semantic static asset
+  revision so browsers cannot retain the superseded interface.
+
+## 0.9.5 - 2026-09-04
+
+- Simplified the primary preparation flow to four required steps and moved
+  Golden Dataset generation into a collapsed advanced-evaluation disclosure.
+- Added an accessible segmented control for switching between text and voice
+  examination without rendering both large session panels at once.
+- Reworked narrow-screen header actions, provider state, voice settings, memory
+  controls and preferences to use compact, balanced grids.
+- Added semantic provider-state colors and replaced raw authentication errors
+  with a concise login requirement in the workbench header.
+- Preserved all existing workbench IDs, API contracts and examination behavior.
+
+## 0.9.4 - 2026-09-04
+
+- Widened the desktop preparation rail from a constrained 310-390px range to a
+  stable 420-460px working width.
+- Added explicit minimum widths for paired setup controls and balanced the text
+  and voice session actions within the preparation rail.
+- Moved the single-column transition to 1080px so compact desktops and tablets
+  no longer squeeze the setup workflow beside the active work surface.
+- Preserved all workbench DOM IDs, APIs, enterprise behavior and mobile touch
+  targets while adding layout regression coverage.
+
+## 0.9.3 - 2026-09-04
+
+- Added a versioned UI design system for the workbench and enterprise console.
+- Reduced passive header, navigation, panel, status, empty-state and module
+  spacing while retaining usable form controls and mobile touch targets.
+- Compacted evidence, conversation, voice, memory, template and evaluation
+  surfaces without changing their DOM IDs or runtime contracts.
+- Reduced enterprise sidebar, metric, table, record and content-area density
+  while preserving OIDC, organization and capability behavior.
+
+## 0.9.2 - 2026-08-17
+
+- Reduced workbench grid gaps, panel padding and fixed empty-state heights.
+- Compacted the header, sticky workflow navigation, voice surface and template
+  studio while preserving control sizes and active-session capacity.
+- Improved first-screen information density on desktop, tablet and mobile.
+- Kept all enterprise APIs, database schemas and runtime behavior unchanged.
+
 ## 0.9.1 - 2026-08-11
 
 - Reorganized the public workbench so project preparation, evidence review and

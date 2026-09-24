@@ -32,3 +32,9 @@ dist/
 logs/
 backups/
 *.egg-info/
+
+# Local review artifacts can contain credentials, captures and deployment data.
+.ui-review/
+
+# WeChat Developer Tools keeps account-specific preferences outside shared code.
+apps/wechat/project.private.config.json

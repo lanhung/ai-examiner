@@ -1,13 +1,14 @@
-# AI Examiner v0.9.1
+# AI Examiner v0.9
 
-Current stable release: `main` / `v0.9.1`. The accepted v0.9.0 source remains
+Current stable release: `main` / `v0.9.0`. The accepted v0.9.0 source remains
 available at immutable tag `v0.9.0`; the accepted research source also remains
 available at `research/v0.9.0`, and the immutable release candidates remain at
 `v0.9.0-rc.1` and `v0.9.0-rc.2` for audit and rollback analysis.
 
-v0.9.1 is a frontend refinement release. It keeps the v0.9 enterprise APIs and
-data contracts intact while improving workbench hierarchy, responsive navigation,
-form clarity, status presentation and enterprise-console scanability.
+The current interface restores the original v0.9.0 workbench and enterprise
+console while retaining all enterprise, authentication, storage, audit,
+model-governance and assessment functionality. Interface-only adjustments use
+build revisions and do not advance the product version.
 
 The final release passed the complete deterministic gate, PostgreSQL RLS and S3
 verification, real Qwen Plus workflows, browser acceptance, disaster recovery and

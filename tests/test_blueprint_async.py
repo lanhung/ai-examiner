@@ -3,6 +3,30 @@ from ai_examiner.models import BackgroundJob, Blueprint
 from ai_examiner.services.jobs import dispatch_job_by_id
 
 
+def test_changed_blueprint_payload_returns_conflict_not_internal_error(client, monkeypatch):
+    project, document = _project_and_document(client)
+    monkeypatch.setattr("ai_examiner.main.dispatch_job_by_id", lambda _job_id: None)
+    other = client.post(
+        f"/api/projects/{project['id']}/documents",
+        files={"file": ("other.txt", "Another evidence document.", "text/plain")},
+    ).json()
+    url = f"/api/projects/{project['id']}/blueprints/async"
+    body = {"document_id": document["id"], "profile": "mock:heuristic-v2"}
+    headers = {"Idempotency-Key": "same-request-different-input"}
+    original = client.post(url, json=body, headers=headers)
+    assert original.status_code == 202
+    assert client.post(url, json=body, headers=headers).json()["id"] == original.json()["id"]
+    changed = {**body, "document_id": other["id"]}
+    conflict = client.post(url, json=changed, headers=headers)
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"]["code"] == "job_idempotency_conflict"
+    with SessionLocal() as db:
+        assert db.query(BackgroundJob).count() == 1
+    fresh = client.post(url, json=changed, headers={"Idempotency-Key": "new-input-new-request"})
+    assert fresh.status_code == 202
+    assert fresh.json()["id"] != original.json()["id"]
+
+
 def _project_and_document(client) -> tuple[dict, dict]:
     project = client.post(
         "/api/projects",

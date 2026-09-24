@@ -78,6 +78,15 @@ class RoutePolicy:
 
 
 ROUTE_POLICIES: dict[tuple[str, str], RoutePolicy] = {
+    ("GET", "/api/v1/wechat/status"): RoutePolicy(
+        "public", None, "none", "none"
+    ),
+    ("POST", "/api/v1/wechat/login"): RoutePolicy(
+        "public", None, "none", "authentication"
+    ),
+    ("POST", "/api/v1/wechat/logout"): RoutePolicy(
+        "required", None, "authenticated_principal", "authentication"
+    ),
     ("GET", "/api/v1/context"): RoutePolicy(
         "conditional", None, "selected_organization", "none"
     ),

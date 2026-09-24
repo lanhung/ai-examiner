@@ -1,0 +1,10 @@
+<view class="page">
+  <view class="title">答辩报告</view>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <block wx:if="{{report}}">
+    <view class="section"><view class="heading">本次表现</view><view wx:if="{{report.show_total_score !== false}}">{{report.overall_score}} / {{report.max_score}}</view><view class="muted">已答题目：{{report.questions_answered}}</view></view>
+    <view class="section"><view class="heading">值得继续思考的问题</view><view wx:for="{{report.priority_weaknesses}}" wx:key="*this" class="item body">{{item}}</view></view>
+    <view class="section muted">{{report.disclaimer || 'AI 评价仅供参考，不代替正式学术评审。'}}</view>
+  </block>
+  <button bindtap="load" disabled="{{busy}}" loading="{{busy}}">刷新报告</button>
+</view>

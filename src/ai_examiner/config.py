@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     oidc_http_timeout_seconds: float = Field(default=5.0, ge=1.0, le=30.0)
     oidc_login_ttl_minutes: int = Field(default=10, ge=2, le=30)
     oidc_session_max_minutes: int = Field(default=480, ge=5, le=1440)
+    oidc_session_idle_minutes: int = Field(default=120, ge=5, le=1440)
+    oidc_session_lifetime_policy: Literal["token_bound", "application"] = "token_bound"
+    wechat_enabled: bool = False
+    wechat_registration_mode: Literal["approval", "personal"] = "approval"
+    wechat_login_limit_per_minute: int = Field(default=30, ge=1, le=10000)
+    wechat_app_id: str = Field(default="", max_length=64)
+    wechat_app_secret: SecretStr | None = None
     oidc_session_cookie_name: str = Field(
         default="axe_session",
         pattern=r"^[A-Za-z][A-Za-z0-9_-]{2,63}$",

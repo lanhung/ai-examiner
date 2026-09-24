@@ -1,0 +1,13 @@
+<view class="page">
+  <view class="badge">论文答辩 · 小程序预览版</view>
+  <view class="title">AI Examiner</view>
+  <view class="subtitle">围绕你的论文，展开一场有依据的讨论。</view>
+  <view class="section muted">{{serviceStatus}}</view>
+  <button bindtap="checkService" disabled="{{checking || busy}}" loading="{{checking}}">检查服务连接</button>
+  <view wx:if="{{loginAvailable && registrationMode === 'personal'}}" class="section body">新账号自动开通个人空间，材料和答辩记录不与其他账号共享。已有账号的空间权限保持不变。</view>
+  <view wx:if="{{loginAvailable && registrationMode === 'approval'}}" class="section body">新账号需管理员启用并授权空间。</view>
+  <view class="section muted">登录将使用微信身份标识建立账号。上传的材料和回答会发送到本项目服务器；生成内容时会交由服务端授权的模型服务处理。请勿上传未经授权的个人信息或保密论文。删除与导出申请请联系服务管理员。正式发布前，运营方需提供完整隐私政策及联系渠道。</view>
+  <checkbox-group bindchange="consent"><label class="row section"><checkbox value="yes" checked="{{consent}}" color="#147563"/>我已了解上述数据处理说明</label></checkbox-group>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <button class="primary" disabled="{{!consent || busy || !loginAvailable}}" loading="{{busy}}" bindtap="login">微信登录</button>
+</view>

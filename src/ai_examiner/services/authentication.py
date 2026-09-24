@@ -57,11 +57,21 @@ def current_authentication(
             scheme, separator, token = authorization.partition(" ")
             if separator != " " or scheme.lower() != "bearer" or not token.strip():
                 raise OIDCError("authorization_header_invalid")
-            authentication = authenticator.authenticate_bearer(db, token.strip())
+            if token.strip().startswith("wxmp_"):
+                from .wechat import authenticate
+
+                authentication = authenticate(db, settings, token.strip())
+            else:
+                authentication = authenticator.authenticate_bearer(db, token.strip())
         else:
             cookie_value = request.cookies.get(settings.oidc_session_cookie_name)
             if cookie_value:
-                authentication = authenticator.authenticate_session(db, cookie_value)
+                if cookie_value.startswith("wxmp_"):
+                    from .wechat import authenticate
+
+                    authentication = authenticate(db, settings, cookie_value)
+                else:
+                    authentication = authenticator.authenticate_session(db, cookie_value)
             else:
                 raise OIDCError(
                     "authentication_required",

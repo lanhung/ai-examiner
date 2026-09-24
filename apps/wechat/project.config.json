@@ -1,0 +1,9 @@
+{
+  "appid": "touristappid",
+  "projectname": "ai-examiner-mini",
+  "description": "AI Examiner native mini-program preview",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "miniprogram/",
+  "setting": {"es6": true, "minified": true, "urlCheck": true},
+  "packOptions": {"ignore": []}
+}

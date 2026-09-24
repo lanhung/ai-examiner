@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import multiprocessing
 import re
 import zipfile
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from pathlib import Path
+from threading import BoundedSemaphore
 from typing import Any
 
 from fastapi import UploadFile
@@ -36,6 +40,25 @@ class ParsedDocument:
 
 
 ALLOWED_SUFFIXES = {".pdf", ".txt", ".md", ".markdown", ".pptx", ".docx"}
+_PDF_SLOTS = BoundedSemaphore(2)
+
+
+def parse_uploaded_document(
+    path: Path, raw: bytes, max_chars: int, *, evidence_output_dir: Path
+) -> ParsedDocument:
+    if path.suffix.lower() != ".pdf":
+        return parse_document(path, raw, max_chars, evidence_output_dir=evidence_output_dir)
+    # PyMuPDF is not thread-safe. Each upload owns a short-lived spawned process;
+    # no database handles or authorization context are passed to that process.
+    with _PDF_SLOTS, ProcessPoolExecutor(
+        max_workers=1, mp_context=multiprocessing.get_context("spawn")
+    ) as pool:
+        try:
+            return pool.submit(
+                parse_document, path, raw, max_chars, evidence_output_dir=evidence_output_dir
+            ).result()
+        except BrokenProcessPool as exc:
+            raise ValueError("PDF 解析进程失败，请检查文件完整性后重试") from exc
 
 CJK_FONT_CANDIDATES = (
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
@@ -53,18 +76,28 @@ FALLBACK_FONT_CANDIDATES = (
 
 def safe_filename(filename: str) -> str:
     name = Path(filename).name
-    return re.sub(r"[^A-Za-z0-9._\-\u4e00-\u9fff]", "_", name)[:180]
+    name = re.sub(r"[^A-Za-z0-9._\-\u4e00-\u9fff]", "_", name)
+    suffix = Path(name).suffix
+    return name[:180 - len(suffix)] + suffix if len(name) > 180 else name
 
 
-async def save_upload(upload: UploadFile, destination: Path, max_bytes: int) -> tuple[Path, bytes]:
-    raw = await upload.read(max_bytes + 1)
+def save_upload(
+    upload: UploadFile, destination: Path, max_bytes: int, *, original_filename: str | None = None
+) -> tuple[Path, bytes]:
+    # Called from the upload route's worker thread, never the ASGI event loop.
+    raw = upload.file.read(max_bytes + 1)
     if len(raw) > max_bytes:
         raise ValueError(f"文件超过 {max_bytes // (1024 * 1024)} MB 限制")
-    suffix = Path(upload.filename or "upload").suffix.lower()
+    filename = original_filename or upload.filename or "upload"
+    suffix = Path(filename).suffix.lower()
+    if suffix == ".doc":
+        raise ValueError("暂不支持旧版 .doc，请在 Word 中另存为 .docx 后上传")
     if suffix not in ALLOWED_SUFFIXES:
         raise ValueError("支持 PDF、PPTX、DOCX、TXT 和 Markdown")
     destination.mkdir(parents=True, exist_ok=True)
-    path = destination / safe_filename(upload.filename or f"document{suffix}")
+    # The caller supplies a unique staging directory. Keep physical names short
+    # for Windows paths; the original display name is saved in Document metadata.
+    path = destination / f"document{suffix}"
     path.write_bytes(raw)
     return path, raw
 

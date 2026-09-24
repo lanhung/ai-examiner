@@ -1,0 +1,7 @@
+{
+  "pages": ["pages/login/index", "pages/work/index", "pages/session/index", "pages/report/index"],
+  "window": {"navigationBarTitleText": "AI Examiner", "navigationBarBackgroundColor": "#ffffff", "navigationBarTextStyle": "black", "backgroundColor": "#f3f5f6"},
+  "style": "v2",
+  "networkTimeout": {"request": 60000, "uploadFile": 60000, "downloadFile": 60000},
+  "sitemapLocation": "sitemap.json"
+}

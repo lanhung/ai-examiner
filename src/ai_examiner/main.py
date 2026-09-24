@@ -21,6 +21,7 @@ from fastapi import (
     Depends,
     FastAPI,
     File,
+    Form,
     Header,
     HTTPException,
     Query,
@@ -198,7 +199,7 @@ from .services.data_lifecycle import (
     update_retention_policy,
 )
 from .services.datasets import dataset_diff, set_dataset_status
-from .services.documents import parse_document, save_upload
+from .services.documents import ParsedDocument, parse_uploaded_document, safe_filename, save_upload
 from .services.enterprise_identity import (
     EnterpriseIdentityError,
     resolve_organization_context,
@@ -209,6 +210,7 @@ from .services.enterprise_identity import (
 from .services.evidence import create_highlighted_crop, persist_evidence, serialize_asset
 from .services.golden import GoldenDatasetService
 from .services.jobs import (
+    JobIdempotencyConflict,
     JobQueueUnavailable,
     cancel_persisted_job,
     dispatch_job_by_id,
@@ -302,6 +304,7 @@ from .template_engine.compiler import (
     TemplateOverrideError,
     TemplateValidationError,
 )
+from .wechat_api import register_routes as register_wechat_routes
 
 logger = logging.getLogger(__name__)
 
@@ -391,6 +394,10 @@ WorkbenchDocumentCreateAccess = Annotated[
     AuthorizationContext | None,
     Depends(require_workbench_capability("document.create")),
 ]
+WorkbenchDocumentReadAccess = Annotated[
+    AuthorizationContext | None,
+    Depends(require_workbench_capability("document.read")),
+]
 WorkbenchBlueprintCreateAccess = Annotated[
     AuthorizationContext | None,
     Depends(require_workbench_capability("blueprint.create")),
@@ -461,6 +468,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, version=__version__, lifespan=lifespan)
+register_wechat_routes(app)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 instrument_sqlalchemy_engine(engine, settings)
 instrument_httpx(settings)
@@ -542,6 +550,14 @@ async def disable_dynamic_response_cache(request: Request, call_next):
 @app.exception_handler(JobQueueUnavailable)
 async def job_queue_unavailable_handler(_request: Request, exc: JobQueueUnavailable):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(JobIdempotencyConflict)
+async def job_idempotency_conflict_handler(_request: Request, _exc: JobIdempotencyConflict):
+    return JSONResponse(status_code=409, content={"detail": {
+        "code": "job_idempotency_conflict",
+        "message": "请求编号已用于另一组参数，请重新提交生成任务。",
+    }})
 
 
 @app.exception_handler(AuditWriteError)
@@ -1761,29 +1777,47 @@ def list_projects(
 
 
 @app.post("/api/projects/{project_id}/documents", status_code=201)
-async def upload_document(
+def upload_document(
     project_id: str,
     file: Annotated[UploadFile, File()],
     context: WorkbenchDocumentCreateAccess,
     db: Annotated[Session, Depends(get_db)],
+    original_filename: Annotated[str | None, Form(max_length=255)] = None,
 ):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
     authorize_workbench_resource(context, project.organization_id)
     destination = settings.upload_dir / project_id
-    try:
-        path, raw = await save_upload(file, destination, settings.max_upload_bytes)
-        evidence_output = settings.evidence_dir / project_id / path.stem
-        parsed = parse_document(
-            path, raw, settings.max_document_chars, evidence_output_dir=evidence_output
+    destination.mkdir(parents=True, exist_ok=True)
+    # FastAPI runs sync endpoints in its worker pool. Parsing and S3 writes can
+    # take longer than a client timeout; they must not block all other requests.
+    with TemporaryDirectory(prefix="upload-", dir=destination) as staging:
+        try:
+            path, raw = save_upload(
+                file, Path(staging), settings.max_upload_bytes,
+                original_filename=original_filename,
+            )
+            parsed = parse_uploaded_document(
+                path, raw, settings.max_document_chars,
+                evidence_output_dir=Path(staging) / "evidence",
+            )
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return _persist_uploaded_document(
+            db, project, file, raw, parsed,
+            filename=safe_filename(original_filename or file.filename or path.name),
         )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+
+
+def _persist_uploaded_document(
+    db: Session, project: Project, file: UploadFile, raw: bytes,
+    parsed: ParsedDocument, *, filename: str,
+) -> dict:
     document = Document(
         organization_id=project.organization_id,
-        project_id=project_id,
-        filename=file.filename or path.name,
+        project_id=project.id,
+        filename=filename,
         content_type=file.content_type or "application/octet-stream",
         storage_path=None,
         content_text=parsed.text,
@@ -1816,15 +1850,13 @@ async def upload_document(
     document.storage_object_id = stored.id
     assets = persist_evidence(
         db,
-        project_id=project_id,
+        project_id=project.id,
         document=document,
         drafts=parsed.evidence,
         settings=settings,
     )
     db.commit()
     db.refresh(document)
-    path.unlink(missing_ok=True)
-    shutil.rmtree(evidence_output, ignore_errors=True)
     return {
         "id": document.id,
         "filename": document.filename,
@@ -3541,13 +3573,21 @@ def run() -> None:
     uvicorn.run("ai_examiner.main:app", host="0.0.0.0", port=8000, reload=False)
 
 
-@app.get(
-    "/api/projects/{project_id}/documents",
-    dependencies=[Depends(require_workbench_capability("document.read"))],
-)
-def list_documents(project_id: str, db: Annotated[Session, Depends(get_db)]):
+@app.get("/api/projects/{project_id}/documents")
+def list_documents(
+    project_id: str,
+    context: WorkbenchDocumentReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    authorize_workbench_resource(context, project.organization_id)
     documents = db.scalars(
-        select(Document).where(Document.project_id == project_id).order_by(Document.created_at.desc())
+        select(Document).where(
+            Document.project_id == project_id,
+            Document.organization_id == project.organization_id,
+        ).order_by(Document.created_at.desc())
     ).all()
     return [
         {
@@ -3563,12 +3603,10 @@ def list_documents(project_id: str, db: Annotated[Session, Depends(get_db)]):
     ]
 
 
-@app.get(
-    "/api/documents/{document_id}/evidence",
-    dependencies=[Depends(require_workbench_capability("document.read"))],
-)
+@app.get("/api/documents/{document_id}/evidence")
 def get_document_evidence(
     document_id: str,
+    context: WorkbenchDocumentReadAccess,
     db: Annotated[Session, Depends(get_db)],
     kind: str | None = None,
     page: int | None = None,
@@ -3576,6 +3614,7 @@ def get_document_evidence(
     document = db.get(Document, document_id)
     if not document:
         raise HTTPException(404, "Document not found")
+    authorize_workbench_resource(context, document.organization_id)
     query = select(EvidenceAsset).where(EvidenceAsset.document_id == document_id)
     if kind:
         query = query.where(EvidenceAsset.kind == kind)

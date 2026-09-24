@@ -298,8 +298,10 @@ def test_disallowed_algorithm_is_rejected_before_key_lookup(signing_material):
     assert counts["jwks"] == 0
 
 
+@pytest.mark.parametrize("lifetime_policy", ["token_bound", "application"])
 def test_code_pkce_login_provisions_principal_and_hashes_browser_session(
     signing_material,
+    lifetime_policy,
 ):
     private_key, jwk = signing_material
     token_payload: dict[str, str] = {}
@@ -315,7 +317,7 @@ def test_code_pkce_login_provisions_principal_and_hashes_browser_session(
             return httpx.Response(200, json=token_payload)
         return httpx.Response(404)
 
-    settings = oidc_settings()
+    settings = oidc_settings(oidc_session_lifetime_policy=lifetime_policy)
     cache = OIDCDiscoveryCache(
         settings,
         client=httpx.Client(transport=httpx.MockTransport(handler)),
@@ -365,6 +367,11 @@ def test_code_pkce_login_provisions_principal_and_hashes_browser_session(
         assert browser_session is not None
         assert browser_session.session_token_hash != completed.session_token
         assert "one-time-code" not in browser_session.session_token_hash
+        remaining = (completed.expires_at - datetime.now(UTC)).total_seconds()
+        if lifetime_policy == "application":
+            assert 479 * 60 < remaining <= 480 * 60
+        else:
+            assert 9 * 60 < remaining <= 10 * 60
 
         context = authenticator.authenticate_session(db, completed.session_token)
         assert context.principal_id == principal.id
@@ -384,6 +391,63 @@ def test_code_pkce_login_provisions_principal_and_hashes_browser_session(
     token_form = parse_qs(token_request.content.decode("ascii"))
     assert token_form["code_verifier"]
     assert token_form["redirect_uri"] == [settings.oidc_redirect_uri]
+
+
+@pytest.mark.parametrize(
+    ("idle_minutes", "age_minutes", "deadline_minutes", "revoked", "active", "allowed"),
+    [
+        (119, 180, 300, False, True, True),
+        (120, 180, 300, False, True, False),
+        (121, 180, 300, False, True, False),
+        (0, 480, 300, False, True, False),
+        (0, 60, 0, False, True, False),
+        (0, 60, 300, True, True, False),
+        (0, 60, 300, False, False, False),
+    ],
+)
+def test_browser_session_idle_absolute_and_revocation_limits(
+    monkeypatch, idle_minutes, age_minutes, deadline_minutes, revoked, active, allowed,
+):
+    from ai_examiner.services import oidc as oidc_module
+
+    now = datetime.now(UTC)
+    monkeypatch.setattr(oidc_module, "utcnow", lambda: now)
+    secret = "idle-session-test-secret"
+    authenticator = OIDCAuthenticator(oidc_settings(oidc_session_lifetime_policy="application"))
+    with SessionLocal() as db:
+        principal = Principal(
+            issuer=ISSUER, subject="idle-test-user", status="active" if active else "pending",
+        )
+        db.add(principal)
+        db.flush()
+        session = BrowserAuthSession(
+            principal_id=principal.id,
+            session_token_hash=hashlib.sha256(secret.encode()).hexdigest(),
+            scopes_json=["exam:read"],
+            created_at=now - timedelta(minutes=age_minutes),
+            auth_time=now - timedelta(minutes=age_minutes),
+            last_seen_at=now - timedelta(minutes=idle_minutes),
+            expires_at=now + timedelta(minutes=deadline_minutes),
+            revoked_at=now if revoked else None,
+        )
+        db.add(session)
+        db.commit()
+        deadline = session.expires_at
+        if allowed:
+            authenticator.authenticate_session(db, secret)
+            assert session.last_seen_at.replace(tzinfo=UTC) == now
+            assert session.expires_at == deadline
+            # Activity at minute 119 moves only the idle window, not the deadline.
+            monkeypatch.setattr(oidc_module, "utcnow", lambda: now + timedelta(minutes=119))
+            authenticator.authenticate_session(db, secret)
+            monkeypatch.setattr(oidc_module, "utcnow", lambda: now + timedelta(minutes=239))
+            with pytest.raises(OIDCError):
+                authenticator.authenticate_session(db, secret)
+        else:
+            last_seen = session.last_seen_at
+            with pytest.raises(OIDCError):
+                authenticator.authenticate_session(db, secret)
+            assert session.last_seen_at == last_seen
 
 
 def test_id_token_rejects_wrong_access_token_hash(signing_material):

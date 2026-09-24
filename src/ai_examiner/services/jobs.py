@@ -45,6 +45,10 @@ class JobQueueUnavailable(RuntimeError):
     """Raised when a background job cannot be handed to the worker queue."""
 
 
+class JobIdempotencyConflict(ValueError):
+    """An existing request key cannot be reused for a different operation."""
+
+
 def enqueue_job(
     db: Session,
     *,
@@ -92,7 +96,7 @@ def enqueue_job(
     )
     if existing is not None:
         if existing.actor_principal_id != resolved_actor_id:
-            raise ValueError("Job idempotency key belongs to another actor")
+            raise JobIdempotencyConflict("Job idempotency key belongs to another actor")
         candidate = TaskEnvelope.create(
             job_id=existing.id,
             organization_id=resolved_organization_id,
@@ -105,7 +109,7 @@ def enqueue_job(
         )
         persisted = ensure_job_envelope(existing)
         if candidate.payload_digest != persisted.payload_digest:
-            raise ValueError("Job idempotency key was reused with a different payload")
+            raise JobIdempotencyConflict("Job idempotency key was reused with a different payload")
         return existing
     job_id = str(uuid4())
     authorization_mode = "membership" if resolved_actor_id else "legacy_local"
@@ -150,10 +154,10 @@ def enqueue_job(
         if existing is None:
             raise
         if existing.actor_principal_id != resolved_actor_id:
-            raise ValueError("Job idempotency key belongs to another actor") from None
+            raise JobIdempotencyConflict("Job idempotency key belongs to another actor") from None
         persisted = ensure_job_envelope(existing)
         if persisted.payload_digest != envelope.payload_digest:
-            raise ValueError(
+            raise JobIdempotencyConflict(
                 "Job idempotency key was reused with a different payload"
             ) from None
         return existing

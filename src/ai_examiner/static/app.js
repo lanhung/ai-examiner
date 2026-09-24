@@ -165,7 +165,7 @@ async function bootstrapWorkbenchIdentity() {
     return true;
   } catch (error) {
     showWorkbenchLogin();
-    $("providerBadge").textContent = error.message || "身份服务不可用";
+    $("providerBadge").textContent = "请先登录后加载模型";
     return false;
   }
 }

@@ -617,10 +617,9 @@ class OIDCAuthenticator:
         principal = self.resolve_principal(db, access_identity)
         session_now = utcnow()
         session_secret = secrets.token_urlsafe(48)
-        session_expiry = min(
-            access_identity.expires_at,
-            session_now + timedelta(minutes=self.settings.oidc_session_max_minutes),
-        )
+        session_expiry = session_now + timedelta(minutes=self.settings.oidc_session_max_minutes)
+        if self.settings.oidc_session_lifetime_policy == "token_bound":
+            session_expiry = min(access_identity.expires_at, session_expiry)
         browser_session = BrowserAuthSession(
             principal_id=principal.id,
             session_token_hash=_sha256(session_secret),
@@ -699,6 +698,10 @@ class OIDCAuthenticator:
             browser_session is None
             or browser_session.revoked_at is not None
             or _aware(browser_session.expires_at) <= now
+            or _aware(browser_session.created_at)
+            + timedelta(minutes=self.settings.oidc_session_max_minutes) <= now
+            or _aware(browser_session.last_seen_at)
+            + timedelta(minutes=self.settings.oidc_session_idle_minutes) <= now
         ):
             raise OIDCError("browser_session_invalid")
         principal = db.get(Principal, browser_session.principal_id)
@@ -708,9 +711,9 @@ class OIDCAuthenticator:
                 public_code="authorization_denied",
                 public_message="The requested operation is not permitted.",
             )
-        if now - _aware(browser_session.last_seen_at) >= timedelta(minutes=5):
-            browser_session.last_seen_at = now
-            db.commit()
+        # Never change the absolute deadline or revive an expired idle session.
+        browser_session.last_seen_at = now
+        db.commit()
         return AuthenticationContext(
             method="oidc_session",
             principal_id=principal.id,

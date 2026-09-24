@@ -1,3 +1,167 @@
+# AI Examiner v0.9 Status
+
+## Classic interface revision
+
+- Product version: `0.9.0`
+- Interface revision: `classic-refined-r2-20260904`
+- Release date: 2026-09-04
+- Scope: restore the accepted v0.9.0 interface without reverting platform code
+- API and database migrations: none
+
+This release restores the original workbench and enterprise-console HTML/CSS
+and removes the matching v0.9.5 session-switching browser behavior. Backend
+services and enterprise capabilities remain at the current v0.9 implementation.
+
+Classic interface verification:
+
+```text
+Full pytest                   356 passed
+Focused classic UI tests      16 passed
+Ruff                          passed
+JavaScript syntax             passed
+Database migration            not required
+```
+
+The Windows host still emits the documented AnyIO teardown access-violation
+diagnostic after completed tests; pytest exits with code zero and all 356 tests
+pass. Deployed browser acceptance is recorded after promotion.
+
+`v0.9.5` remains a historical rollback snapshot for the compact hierarchy
+experiment; `v0.9.0` remains the official product release tag and immutable
+source of the restored interface.
+
+---
+
+# AI Examiner v0.9.5 Status
+
+## Workbench hierarchy release
+
+- Version: `0.9.5`
+- Release date: 2026-09-04
+- Scope: primary workflow hierarchy, session modes and narrow-screen density
+- API and database migrations: none
+
+This release separates required examination setup from advanced evaluation,
+uses one active text-or-voice session surface, and reduces mobile header and
+control stacking. Existing IDs, event contracts, OIDC, API and enterprise
+behavior remain compatible.
+
+v0.9.5 verification:
+
+```text
+Full pytest                   358 passed
+Focused UI regression        18 passed
+Ruff                          passed
+JavaScript syntax             passed
+Database migration            not required
+```
+
+The Windows host still emits the documented AnyIO teardown access-violation
+diagnostic after completed tests; pytest exits with code zero and all 358 tests
+pass. Runtime browser measurements are completed after deployment.
+
+`v0.9.4` remains the immediate rollback tag.
+
+---
+
+# AI Examiner v0.9.4 Status
+
+## Preparation-rail layout release
+
+- Version: `0.9.4`
+- Release date: 2026-09-04
+- Scope: workbench desktop column balance and responsive setup controls
+- API and database migrations: none
+
+This release widens the preparation workflow, gives paired controls explicit
+minimum widths and switches compact desktops to one column before labels,
+selectors or action buttons become cramped. Existing IDs, event bindings, API
+contracts, OIDC flows and enterprise behavior remain unchanged.
+
+v0.9.4 verification:
+
+```text
+Full pytest                   356 passed
+Focused UI regression        16 passed
+Ruff                          passed
+JavaScript syntax             passed
+Database migration            not required
+```
+
+The Windows test host still emits the previously documented AnyIO teardown
+access-violation diagnostic after some completed tests; pytest exits with code
+zero and all 356 tests pass. Browser-control verification was unavailable on
+the development host and remains a deployment acceptance check.
+
+`v0.9.3` remains the immediate rollback tag.
+
+---
+
+# AI Examiner v0.9.3 Status
+
+## Compact operational UI release
+
+- Version: `0.9.3`
+- Release date: 2026-09-04
+- Scope: workbench and enterprise-console density system
+- API and database migrations: none
+
+This release introduces a versioned design system and reduces passive spacing
+across both operational surfaces. Existing DOM IDs, API contracts, OIDC flows,
+organization context, capability gates and data behavior remain unchanged.
+
+v0.9.3 verification:
+
+```text
+Full pytest                   355 passed
+Focused UI regression        15 passed
+Ruff                          passed
+JavaScript syntax             passed
+Local HTTP smoke              /, /enterprise and /health passed
+Database migration            not required
+```
+
+The Windows test host still emits the previously documented AnyIO teardown
+access-violation diagnostic after some completed tests; pytest exits with code
+zero and all 355 tests pass. Browser-control verification was unavailable on
+the development host and remains a deployment acceptance check.
+
+`v0.9.2` remains the immediate rollback tag.
+
+---
+
+# AI Examiner v0.9.2 Status
+
+## Compact-density release
+
+- Version: `0.9.2`
+- Release date: 2026-08-17
+- Scope: workbench module flow, whitespace and responsive density
+- API and database migrations: none
+
+The top workflow now uses two balanced desktop columns: preparation on the left
+and evidence, text examination and voice examination as one continuous right-side
+flow. This removes grid-row whitespace while preserving the existing DOM IDs and
+runtime behavior. Shared module gaps are 10px on desktop and 8px on mobile.
+
+v0.9.2 verification:
+
+```text
+Full pytest                   352 passed
+Focused UI regression        12 passed
+Ruff                          passed
+JavaScript syntax             passed
+Desktop workbench height      4182px -> 3249px (-22%)
+Desktop module gaps           10px
+Mobile module gaps            8px
+Horizontal overflow           none at 1280px and 390px
+Database migration            not required
+```
+
+`v0.9.1` remains the immediate rollback tag.
+
+---
+
 # AI Examiner v0.9.1 Status
 
 ## UI refinement release

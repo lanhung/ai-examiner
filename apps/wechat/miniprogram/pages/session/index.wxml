@@ -1,0 +1,13 @@
+<view class="page">
+  <view class="heading">文字答辩</view><view class="muted">状态：{{status}}</view>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <view wx:for="{{turns}}" wx:key="id" class="item {{item.role === 'user' ? 'answer' : ''}}"><view class="badge">{{item.role === 'user' ? '我的回答' : 'AI 考官'}}</view><view class="body">{{item.content}}</view></view>
+  <button wx:if="{{!turns.length}}" class="primary" bindtap="begin" disabled="{{busy || uncertain}}">请考官开始提问</button>
+  <block wx:if="{{turns.length && status !== 'completed'}}">
+    <textarea class="field" value="{{answer}}" bindinput="answer" maxlength="20000" placeholder="用自己的话回答当前问题" disabled="{{busy || uncertain}}"/>
+    <button class="primary" bindtap="submit" loading="{{busy}}" disabled="{{busy || uncertain || !answer}}">提交回答</button>
+  </block>
+  <view wx:if="{{uncertain}}" class="error">上一项操作结果尚未确认，已暂停再次提交。请刷新状态；若仍未恢复，请在网页查看本次会话。</view>
+  <button bindtap="refresh" disabled="{{busy}}">刷新会话状态</button>
+  <button wx:if="{{status === 'completed'}}" class="primary" bindtap="report">查看答辩报告</button>
+</view>
