@@ -1337,3 +1337,50 @@ def test_set_model_limits_cli_updates_policy(monkeypatch, capsys):
     with pytest.raises(SystemExit):
         enterprise_cli.set_model_limits(["--max-concurrent-calls", "0"])
     assert '"max_concurrent_calls": 16' in capsys.readouterr().out
+
+
+def test_production_pilot_mode_serves_the_single_workspace(client, monkeypatch):
+    from types import SimpleNamespace as Namespace
+
+    from ai_examiner.config import Settings, get_settings
+    from ai_examiner.services import authorization as authorization_module
+    from ai_examiner.services.job_control import (
+        JobAuthorizationError,
+        authorize_job_execution,
+    )
+
+    pilot = Settings(
+        app_env="production",
+        auth_mode="disabled",
+        allow_unsafe_auth_disabled_in_production=True,
+    )
+    strict = Settings(app_env="production", auth_mode="disabled")
+    assert pilot.single_workspace_mode and not pilot.trusts_principal_header
+    assert not strict.single_workspace_mode and not strict.trusts_principal_header
+    assert Settings(app_env="development", auth_mode="disabled").trusts_principal_header
+    assert not Settings(
+        app_env="development",
+        auth_mode="oidc",
+        oidc_issuer_url="http://localhost:9100",
+    ).single_workspace_mode
+
+    monkeypatch.setattr(authorization_module, "get_settings", lambda: pilot)
+    assert client.get("/api/projects").status_code == 200
+    assignment, _ = _publish(client)
+    assert assignment["created_by_principal_id"] is None
+    # The development principal header is ignored in production.
+    _org, headers = _organization_with_roles("examiner")
+    spoofed = client.get("/api/assignments", headers={
+        "X-AI-Examiner-Principal": headers["examiner"]["X-AI-Examiner-Principal"],
+    })
+    assert spoofed.status_code == 200
+    assert [item["id"] for item in spoofed.json()] == [assignment["id"]]
+
+    monkeypatch.setattr(authorization_module, "get_settings", lambda: strict)
+    assert client.get("/api/projects").status_code in {400, 401}
+
+    legacy_job = Namespace(authorization_mode="legacy_local")
+    authorize_job_execution(None, pilot, legacy_job)
+    with pytest.raises(JobAuthorizationError):
+        authorize_job_execution(None, strict, legacy_job)
+    assert get_settings().single_workspace_mode

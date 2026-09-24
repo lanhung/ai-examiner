@@ -1,0 +1,48 @@
+# Classroom pilot: use together with docker-compose.yml and docker-compose.prod.yml.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     -f docker-compose.pilot.yml up -d
+#
+# The application listens only on 127.0.0.1; Caddy terminates HTTPS and
+# protects every teacher route with a password (see Caddyfile.pilot).
+services:
+  ai-examiner:
+    ports: !override
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
+    environment:
+      APP_ENV: production
+      AUTH_MODE: disabled
+      ALLOW_UNSAFE_AUTH_DISABLED_IN_PRODUCTION: "true"
+      TRUST_PROXY_FORWARDED_FOR: "true"
+
+  worker:
+    environment:
+      APP_ENV: production
+      AUTH_MODE: disabled
+      ALLOW_UNSAFE_AUTH_DISABLED_IN_PRODUCTION: "true"
+
+  caddy:
+    image: caddy:2-alpine
+    env_file:
+      - ${APP_ENV_FILE:-.env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile.pilot:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+    depends_on:
+      ai-examiner:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  caddy-data:
+  caddy-config:

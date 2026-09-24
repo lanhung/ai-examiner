@@ -4,10 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-COMPOSE_FILES=(-f docker-compose.yml -f docker-compose.prod.yml)
-if [[ "${USE_HTTPS:-false}" == "true" ]]; then
-  COMPOSE_FILES+=(-f docker-compose.https.yml)
-fi
+source "$ROOT/deploy/compose-files.sh"
 
 printf '\n[1/9] Backing up application data...\n'
 ./deploy/backup.sh

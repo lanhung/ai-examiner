@@ -309,11 +309,7 @@ def resolve_authenticated_principal(
 ) -> Principal:
     settings = get_settings()
     principal_id = authentication.principal_id
-    if (
-        principal_id is None
-        and settings.auth_mode == "disabled"
-        and settings.app_env != "production"
-    ):
+    if principal_id is None and settings.trusts_principal_header:
         principal_id = disabled_principal_id
     if not principal_id:
         raise AuthorizationError(
@@ -471,10 +467,13 @@ def require_workbench_capability(capability: str):
     ) -> AuthorizationContext | None:
         settings = get_settings()
         organization_id = request.headers.get("X-AI-Examiner-Organization")
-        disabled_principal_id = request.headers.get("X-AI-Examiner-Principal")
+        disabled_principal_id = (
+            request.headers.get("X-AI-Examiner-Principal")
+            if settings.trusts_principal_header
+            else None
+        )
         if (
-            settings.auth_mode == "disabled"
-            and settings.app_env != "production"
+            settings.trusts_principal_header
             and not organization_id
             and disabled_principal_id
         ):
@@ -493,8 +492,7 @@ def require_workbench_capability(capability: str):
             if len(memberships) == 1:
                 organization_id = memberships[0].organization_id
         if (
-            settings.auth_mode == "disabled"
-            and settings.app_env != "production"
+            settings.single_workspace_mode
             and not organization_id
             and not disabled_principal_id
         ):

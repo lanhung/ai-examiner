@@ -254,6 +254,24 @@ class Settings(BaseSettings):
             issues.append("telemetry_insecure_otlp_not_allowed")
         return issues
 
+    @property
+    def single_workspace_mode(self) -> bool:
+        """Authentication is off and the legacy workspace is trusted.
+
+        True for local development, and for a production pilot only when the
+        operator explicitly accepted it (the reverse proxy then protects the
+        teacher surface with a password).
+        """
+        return self.auth_mode == "disabled" and (
+            self.app_env != "production"
+            or self.allow_unsafe_auth_disabled_in_production
+        )
+
+    @property
+    def trusts_principal_header(self) -> bool:
+        """The X-AI-Examiner-Principal development header is never trusted in production."""
+        return self.auth_mode == "disabled" and self.app_env != "production"
+
     def api_key_for(self, provider: str) -> str | None:
         return {
             "openai": self.openai_api_key,

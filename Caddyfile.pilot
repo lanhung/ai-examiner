@@ -1,0 +1,35 @@
+# Pilot profile: students reach only the exam pages anonymously; everything
+# else (teacher workbench, enterprise console, APIs, docs) needs the teacher
+# password. Set SITE_ADDRESS, TEACHER_USERNAME and TEACHER_PASSWORD_HASH
+# (bcrypt, from `caddy hash-password`) in the environment file.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+
+	@learner {
+		path /x/* /exam /api/join/* /api/attempts/* /static/exam.js /static/favicon.svg /health
+	}
+
+	handle @learner {
+		reverse_proxy ai-examiner:8000 {
+			# Students never act as a workbench principal.
+			header_up -X-AI-Examiner-Principal
+		}
+	}
+
+	handle {
+		basic_auth {
+			{$TEACHER_USERNAME} {$TEACHER_PASSWORD_HASH}
+		}
+		reverse_proxy ai-examiner:8000 {
+			header_up -X-AI-Examiner-Principal
+		}
+	}
+}

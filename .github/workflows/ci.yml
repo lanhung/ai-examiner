@@ -46,6 +46,23 @@ jobs:
             -f docker-compose.observability.yml \
             -f docker-compose.https.yml \
             config --quiet
+      - name: Validate classroom pilot Compose profile and deploy scripts
+        env:
+          APP_ENV_FILE: .env.pilot.example
+        run: |
+          bash -n deploy/*.sh
+          docker compose \
+            --env-file .env.pilot.example \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            -f docker-compose.pilot.yml \
+            config --quiet
+          docker run --rm \
+            -e SITE_ADDRESS=exam.example.com \
+            -e TEACHER_USERNAME=teacher \
+            -e 'TEACHER_PASSWORD_HASH=$2a$14$Zkx19XLiW6VYouLHR5NmfOFU0z2GTNmpkT/5qqR7hx4IjWJPDhjvG' \
+            -v "$PWD/Caddyfile.pilot:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
       - name: Run deterministic v0.9 release gate
         run: |
           uv run ai-examiner-verify-v09-release \
