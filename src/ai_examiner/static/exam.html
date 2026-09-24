@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <title>在线考试</title>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --surface: #ffffff;
+      --text: #1d2330;
+      --muted: #5d6677;
+      --line: #dde1e8;
+      --accent: #2f5bd3;
+      --accent-text: #ffffff;
+      --danger: #b42318;
+      --bubble-examiner: #eef2fb;
+      --bubble-learner: #e8f5ee;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151b;
+        --surface: #1b1f27;
+        --text: #e6e8ec;
+        --muted: #9aa3b2;
+        --line: #2c323d;
+        --accent: #6b8ff0;
+        --accent-text: #0d1017;
+        --danger: #f07167;
+        --bubble-examiner: #222a3a;
+        --bubble-learner: #1e3128;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.6 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 16px 48px; }
+    h1 { font-size: 1.5rem; margin: 0 0 8px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .muted { color: var(--muted); }
+    .hidden { display: none !important; }
+    label { display: block; margin: 16px 0 6px; font-weight: 600; }
+    input, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+    }
+    #codeInput { font-size: 1.5rem; letter-spacing: 0.4em; text-transform: uppercase; text-align: center; }
+    textarea { min-height: 120px; resize: vertical; }
+    button {
+      margin-top: 16px;
+      padding: 10px 20px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: var(--accent-text);
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .error { color: var(--danger); margin-top: 12px; min-height: 1.6em; }
+    .intro { white-space: pre-wrap; margin: 12px 0 0; }
+    .log { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
+    .bubble { padding: 12px 14px; border-radius: 10px; white-space: pre-wrap; max-width: 92%; }
+    .bubble.examiner { background: var(--bubble-examiner); align-self: flex-start; }
+    .bubble.learner { background: var(--bubble-learner); align-self: flex-end; }
+    .score { font-size: 2rem; font-weight: 700; margin: 8px 0; }
+    ul { padding-left: 20px; }
+  </style>
+</head>
+<body>
+  <main>
+    <section id="screenCode" class="card" aria-labelledby="codeTitle">
+      <h1 id="codeTitle">进入考试</h1>
+      <p class="muted">请输入老师提供的 6 位入口码。</p>
+      <form id="codeForm" autocomplete="off">
+        <label for="codeInput">入口码</label>
+        <input id="codeInput" maxlength="7" inputmode="text" autocapitalize="characters" required />
+        <button id="codeSubmit" type="submit">确认</button>
+      </form>
+      <div id="joinDetails" class="hidden">
+        <h2 id="joinTitle"></h2>
+        <p id="joinWindow" class="muted"></p>
+        <p id="joinIntro" class="intro"></p>
+        <form id="attemptForm" autocomplete="off">
+          <label for="displayName">姓名</label>
+          <input id="displayName" maxlength="120" />
+          <div id="learnerKeyField" class="hidden">
+            <label for="learnerKey">学号 / 考号</label>
+            <input id="learnerKey" maxlength="160" />
+          </div>
+          <button id="attemptSubmit" type="submit">开始作答</button>
+        </form>
+      </div>
+      <div id="codeError" class="error" role="alert"></div>
+    </section>
+
+    <section id="screenChat" class="card hidden" aria-labelledby="chatTitle">
+      <h1 id="chatTitle"></h1>
+      <div id="chatLog" class="log" aria-live="polite"></div>
+      <form id="answerForm">
+        <label for="answerInput">你的回答</label>
+        <textarea id="answerInput" maxlength="20000" required></textarea>
+        <button id="answerSubmit" type="submit">提交回答</button>
+      </form>
+      <div id="chatError" class="error" role="alert"></div>
+    </section>
+
+    <section id="screenReport" class="card hidden" aria-labelledby="reportTitle">
+      <h1 id="reportTitle">已提交</h1>
+      <div id="reportBody"></div>
+      <button id="reportRefresh" type="button">刷新结果</button>
+      <div id="reportError" class="error" role="alert"></div>
+    </section>
+  </main>
+  <script src="/static/exam.js"></script>
+</body>
+</html>

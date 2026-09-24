@@ -74,6 +74,9 @@ CAPABILITIES = frozenset(
         "provider_health.read",
         "system_metrics.read",
         "system_backup.run",
+        "assignment.manage",
+        "assignment.read",
+        "assignment.attempt",
     }
 )
 
@@ -117,6 +120,9 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
             "job.read",
             "job.manage",
             "usage.read",
+            "assignment.manage",
+            "assignment.read",
+            "assignment.attempt",
         }
     ),
     "template_author": frozenset(
@@ -140,6 +146,7 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
             "review_case.create",
             "review_case.review",
             "review_case.appeal",
+            "assignment.read",
         }
     ),
     "learner": frozenset(
@@ -148,6 +155,7 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
             "learner_memory.read_self",
             "learner_memory.manage_self",
             "review_case.appeal",
+            "assignment.attempt",
         }
     ),
     "auditor": frozenset(
@@ -165,6 +173,7 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
             "job.read",
             "provider_health.read",
             "system_metrics.read",
+            "assignment.read",
         }
     ),
 }
