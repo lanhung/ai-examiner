@@ -82,6 +82,10 @@ class Settings(BaseSettings):
     benchmark_case_limit: int = Field(default=4, ge=1, le=20)
 
     database_url: str = "sqlite:///./data/ai_examiner.db"
+    # Each in-flight model call holds a connection; keep the pool comfortably
+    # above learner_model_concurrency plus ordinary page traffic.
+    database_pool_size: int = Field(default=20, ge=1, le=500)
+    database_max_overflow: int = Field(default=30, ge=0, le=500)
     database_schema_management: str = Field(
         default="startup",
         pattern="^(startup|external)$",
@@ -173,11 +177,15 @@ class Settings(BaseSettings):
     max_model_retries: int = Field(default=2, ge=0, le=5)
     model_governance_enabled: bool = True
     learner_rate_limit_enabled: bool = True
-    learner_join_lookups_per_ip_per_minute: int = Field(default=60, ge=1)
-    learner_attempts_per_ip_per_10_minutes: int = Field(default=120, ge=1)
+    learner_join_lookups_per_ip_per_minute: int = Field(default=300, ge=1)
+    learner_attempts_per_ip_per_10_minutes: int = Field(default=300, ge=1)
     learner_answers_per_attempt_per_minute: int = Field(default=10, ge=1)
     learner_answer_max_chars: int = Field(default=4000, ge=200, le=20_000)
     trust_proxy_forwarded_for: bool = False
+    # Keep equal to (or below) the organization's max_concurrent_calls policy.
+    learner_model_concurrency: int = Field(default=3, ge=1, le=200)
+    learner_model_queue_timeout_seconds: float = Field(default=90.0, ge=1.0, le=600.0)
+    http_worker_threads: int = Field(default=100, ge=10, le=1000)
     model_rate_limit_backend: Literal["redis", "memory"] = "redis"
     model_rate_limit_required: bool = True
     model_rate_limit_window_seconds: int = Field(default=60, ge=10, le=3600)

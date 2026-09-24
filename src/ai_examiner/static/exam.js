@@ -14,6 +14,7 @@
     attempt_not_found: "找不到这次作答，请重新输入入口码。",
     answer_too_long: "回答太长了，请精简到 4000 字以内。",
     rate_limited: "提交太频繁，请稍等几秒再试。",
+    examiner_busy: "现在作答的同学很多，考官正在排队处理。请过几秒再点提交，你的回答不会丢失。",
   };
   const WINDOW_TEXT = {
     open: "考试进行中",

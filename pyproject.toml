@@ -64,6 +64,7 @@ ai-examiner-probe-template-providers = "ai_examiner.template_provider_probe_cli:
 ai-examiner-evaluate-template-relevance = "ai_examiner.template_relevance_cli:run_template_relevance_evaluation"
 ai-examiner-probe-template-relevance = "ai_examiner.template_relevance_probe_cli:run_template_relevance_probe"
 ai-examiner-bootstrap-admin = "ai_examiner.enterprise_cli:bootstrap_admin"
+ai-examiner-set-model-limits = "ai_examiner.enterprise_cli:run_set_model_limits"
 ai-examiner-migrate-storage = "ai_examiner.storage_cli:run_storage_migration"
 ai-examiner-verify-v09-release = "ai_examiner.release_hardening:main"
 ai-examiner-generate-v09-evidence = "ai_examiner.release_evidence:main"

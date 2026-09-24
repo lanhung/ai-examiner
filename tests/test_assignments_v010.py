@@ -1201,3 +1201,139 @@ def test_workbench_can_publish_and_exam_page_is_resilient(client):
     assert "AbortController" in exam
     assert "thinkingBubble" in exam
     assert "reconcile" in exam
+
+
+def _started_attempt(client, **publish_overrides):
+    assignment, _ = _publish(client, **publish_overrides)
+    created = _join(client, assignment["join_code"]).json()
+    headers = _token_headers(created["attempt_token"])
+    attempt_id = created["attempt"]["id"]
+    client.post(f"/api/attempts/{attempt_id}/start", headers=headers)
+    return attempt_id, headers
+
+
+def test_learner_answers_wait_in_line_and_report_busy_on_timeout(client, monkeypatch):
+    from ai_examiner.config import get_settings
+    from ai_examiner.services.rate_limit import learner_model_gate
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "learner_model_concurrency", 1)
+    monkeypatch.setattr(settings, "learner_model_queue_timeout_seconds", 1.0)
+    attempt_id, headers = _started_attempt(client)
+    slot = learner_model_gate.acquire(capacity=1, timeout=1)
+    assert slot is not None
+    try:
+        busy = client.post(
+            f"/api/attempts/{attempt_id}/answers",
+            json={"answer": ANSWERS[0]},
+            headers=headers,
+        )
+    finally:
+        slot.release()
+    assert busy.status_code == 503
+    assert busy.json()["detail"]["code"] == "examiner_busy"
+    assert busy.headers["Retry-After"] == "5"
+    # Nothing was recorded, so the same answer can simply be submitted again.
+    assert client.get(f"/api/attempts/{attempt_id}", headers=headers).json()["turns"][-1][
+        "role"
+    ] == "assistant"
+    retried = client.post(
+        f"/api/attempts/{attempt_id}/answers",
+        json={"answer": ANSWERS[0]},
+        headers=headers,
+    )
+    assert retried.status_code == 200
+
+
+def test_learner_answers_retry_governance_concurrency_rejections(client, monkeypatch):
+    from ai_examiner import main as main_module
+    from ai_examiner.services.model_governance import ModelGovernanceError
+
+    attempt_id, headers = _started_attempt(client)
+    real_submit = main_module._submit_exam_answer
+    calls = {"count": 0}
+
+    def flaky_submit(db, session, answer):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise ModelGovernanceError(
+                "organization_concurrency_limited", "busy", status_code=429
+            )
+        return real_submit(db, session, answer)
+
+    monkeypatch.setattr(main_module, "_submit_exam_answer", flaky_submit)
+    monkeypatch.setattr(main_module.time, "sleep", lambda _seconds: None)
+    answered = client.post(
+        f"/api/attempts/{attempt_id}/answers",
+        json={"answer": ANSWERS[0]},
+        headers=headers,
+    )
+    assert answered.status_code == 200
+    assert calls["count"] == 2
+    user_turns = [
+        turn
+        for turn in client.get(f"/api/attempts/{attempt_id}", headers=headers).json()["turns"]
+        if turn["role"] == "user"
+    ]
+    assert len(user_turns) == 1
+
+    def always_busy(db, session, answer):
+        raise ModelGovernanceError("organization_rate_limited", "busy", status_code=429)
+
+    monkeypatch.setattr(main_module, "_submit_exam_answer", always_busy)
+    exhausted = client.post(
+        f"/api/attempts/{attempt_id}/answers",
+        json={"answer": ANSWERS[1]},
+        headers=headers,
+    )
+    assert exhausted.status_code == 503
+    assert exhausted.json()["detail"]["code"] == "examiner_busy"
+
+    def denied(db, session, answer):
+        raise ModelGovernanceError("model_budget_exhausted", "no budget", status_code=402)
+
+    monkeypatch.setattr(main_module, "_submit_exam_answer", denied)
+    budget = client.post(
+        f"/api/attempts/{attempt_id}/answers",
+        json={"answer": ANSWERS[1]},
+        headers=headers,
+    )
+    assert budget.status_code == 402
+
+
+def test_concurrent_first_sessions_do_not_race_on_the_blueprint_graph(client):
+    from sqlalchemy import func
+
+    from ai_examiner.models import KnowledgeUnit
+
+    assignment, blueprint = _publish(client, max_attempts=5)
+    with SessionLocal() as db:
+        units = db.scalar(
+            select(func.count(KnowledgeUnit.id)).where(
+                KnowledgeUnit.blueprint_id == blueprint["id"]
+            )
+        )
+    # Built at publish time, before any student joins.
+    assert units and units > 0
+    for index in range(3):
+        assert _join(client, assignment["join_code"], learner_key=f"R{index}").status_code == 201
+
+
+def test_set_model_limits_cli_updates_policy(monkeypatch, capsys):
+    from ai_examiner import enterprise_cli
+    from ai_examiner.models import OrganizationModelPolicy
+
+    monkeypatch.setattr(enterprise_cli, "init_db", lambda: None)
+    result = enterprise_cli.set_model_limits(
+        ["--max-concurrent-calls", "16", "--organization-requests-per-minute", "900"]
+    )
+    assert result["max_concurrent_calls"] == 16
+    assert result["organization_requests_per_minute"] == 900
+    assert result["changed"] == ["max_concurrent_calls", "organization_requests_per_minute"]
+    with SessionLocal() as db:
+        policy = db.scalar(select(OrganizationModelPolicy))
+        assert policy.max_concurrent_calls == 16
+        assert policy.version >= 2
+    with pytest.raises(SystemExit):
+        enterprise_cli.set_model_limits(["--max-concurrent-calls", "0"])
+    assert '"max_concurrent_calls": 16' in capsys.readouterr().out

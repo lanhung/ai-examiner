@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 import shutil
 import time
 from contextlib import asynccontextmanager
@@ -16,6 +17,7 @@ from uuid import uuid4
 
 import httpx
 import websockets
+from anyio import to_thread
 from fastapi import (
     BackgroundTasks,
     Body,
@@ -33,6 +35,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import __version__
@@ -282,7 +285,7 @@ from .services.oidc import AuthenticationContext, OIDCError
 from .services.policy_benchmark import PolicyBenchmarkService
 from .services.preferences import PreferencePolicyError, PreferenceService
 from .services.prompts import activate_prompt, create_prompt_version, prompt_manifest
-from .services.rate_limit import learner_limiter
+from .services.rate_limit import learner_limiter, learner_model_gate
 from .services.retest import RetestLifecycleError, RetestLifecycleService
 from .services.session_templates import (
     SessionTemplateService,
@@ -487,6 +490,11 @@ async def lifespan(app: FastAPI):
         )
     bind_and_validate_route_policies(app)
     init_db()
+    # Sync endpoints wait on model calls; a class answering at once needs more
+    # worker threads than AnyIO's default of 40.
+    to_thread.current_default_thread_limiter().total_tokens = (
+        settings.http_worker_threads
+    )
     yield
 
 
@@ -2223,7 +2231,12 @@ def _create_exam_session(
     )
     _profiles([profile], profile)
     cognitive = CognitiveStateService(db)
-    cognitive.ensure_blueprint_graph(blueprint)
+    try:
+        cognitive.ensure_blueprint_graph(blueprint)
+        db.commit()
+    except IntegrityError:
+        # Another request built the same blueprint graph concurrently.
+        db.rollback()
     subject = cognitive.get_or_create_subject(project.id, payload.learner_subject_key)
     config = payload.model_dump(
         exclude={
@@ -2728,7 +2741,9 @@ def create_assignment(
     )
     _profiles([profile], profile)
     frozen["profile"] = profile
-    # Fail at publish time, not when the first student joins.
+    # Build the knowledge graph now so a class joining at once does not race
+    # to create it, and fail at publish time rather than when students join.
+    CognitiveStateService(db).ensure_blueprint_graph(blueprint)
     validate_blueprint_template_compatibility(
         blueprint,
         SessionTemplateService(db).resolve(
@@ -3108,7 +3123,7 @@ def submit_assignment_answer(
         ensure_window_open(assignment)
     except AssignmentError as exc:
         raise _assignment_http_error(exc) from exc
-    result, _retest_item = _submit_exam_answer(db, session, payload.answer)
+    result = _submit_learner_answer(db, session, payload.answer)
     return {
         "id": attempt.id,
         "completed": result["completed"],
@@ -3118,6 +3133,60 @@ def submit_assignment_answer(
             learner_turn_view(result["assistant_turn"]),
         ],
     }
+
+
+LEARNER_RETRYABLE_GOVERNANCE_CODES = frozenset(
+    {
+        "organization_concurrency_limited",
+        "organization_rate_limited",
+        "principal_rate_limited",
+        "organization_token_rate_limited",
+    }
+)
+
+
+def _examiner_busy() -> HTTPException:
+    return HTTPException(
+        503,
+        detail={
+            "code": "examiner_busy",
+            "message": "Many students are answering right now. Please submit again shortly.",
+        },
+        headers={"Retry-After": "5"},
+    )
+
+
+def _submit_learner_answer(db: Session, session: ExamSession, answer: str) -> dict:
+    """Queue learner answers in memory instead of failing at the governance limit.
+
+    The model is called before the answer is written, so a rejected call leaves
+    nothing behind and can be retried.
+    """
+    runtime_settings = get_settings()
+    # Give the database connection back to the pool while waiting in line;
+    # nothing is pending yet and loaded objects stay usable.
+    db.commit()
+    slot = learner_model_gate.acquire(
+        capacity=runtime_settings.learner_model_concurrency,
+        timeout=runtime_settings.learner_model_queue_timeout_seconds,
+    )
+    if slot is None:
+        raise _examiner_busy()
+    try:
+        for attempt in range(3):
+            try:
+                result, _retest_item = _submit_exam_answer(db, session, answer)
+                return result
+            except ModelGovernanceError as exc:
+                if exc.code not in LEARNER_RETRYABLE_GOVERNANCE_CODES:
+                    raise
+                db.rollback()
+                if attempt == 2:
+                    raise _examiner_busy() from exc
+                time.sleep(1.0 + attempt + random.random())
+        raise _examiner_busy()
+    finally:
+        slot.release()
 
 
 @app.get("/api/attempts/{attempt_id}")
@@ -6195,7 +6264,12 @@ def start_voice_session(
         model=model_for(payload.provider, settings),
     )
     cognitive = CognitiveStateService(db)
-    cognitive.ensure_blueprint_graph(blueprint)
+    try:
+        cognitive.ensure_blueprint_graph(blueprint)
+        db.commit()
+    except IntegrityError:
+        # Another request built the same blueprint graph concurrently.
+        db.rollback()
     subject = cognitive.get_or_create_subject(project.id, payload.learner_subject_key)
     if payload.analysis_profile:
         _profiles([payload.analysis_profile], payload.analysis_profile)

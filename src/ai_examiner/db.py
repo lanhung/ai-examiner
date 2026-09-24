@@ -20,7 +20,20 @@ class Base(DeclarativeBase):
 settings = get_settings()
 is_sqlite = settings.database_url.startswith("sqlite")
 connect_args = {"check_same_thread": False, "timeout": 30} if is_sqlite else {}
-engine = create_engine(settings.database_url, connect_args=connect_args, future=True)
+pool_args = (
+    {}
+    if ":memory:" in settings.database_url
+    else {
+        "pool_size": settings.database_pool_size,
+        "max_overflow": settings.database_max_overflow,
+    }
+)
+engine = create_engine(
+    settings.database_url,
+    connect_args=connect_args,
+    future=True,
+    **pool_args,
+)
 audit_engine = create_engine(
     settings.database_url,
     connect_args=connect_args,

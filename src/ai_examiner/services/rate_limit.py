@@ -59,4 +59,31 @@ class SlidingWindowLimiter:
             self._events.clear()
 
 
+class ModelCallGate:
+    """Bounded waiting line in front of model calls made for learners.
+
+    Organization model governance rejects calls above its concurrency limit.
+    A class answering at the same moment would otherwise see errors; instead
+    each request waits here (in memory, without touching the database) for
+    one of ``capacity`` slots.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._capacity = 0
+        self._semaphore: threading.BoundedSemaphore | None = None
+
+    def _semaphore_for(self, capacity: int) -> threading.BoundedSemaphore:
+        with self._lock:
+            if self._semaphore is None or capacity != self._capacity:
+                self._capacity = capacity
+                self._semaphore = threading.BoundedSemaphore(capacity)
+            return self._semaphore
+
+    def acquire(self, *, capacity: int, timeout: float) -> threading.BoundedSemaphore | None:
+        semaphore = self._semaphore_for(max(1, capacity))
+        return semaphore if semaphore.acquire(timeout=timeout) else None
+
+
 learner_limiter = SlidingWindowLimiter()
+learner_model_gate = ModelCallGate()
