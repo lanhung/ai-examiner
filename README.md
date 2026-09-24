@@ -1,9 +1,15 @@
-# AI Examiner v0.9.1
+# AI Examiner v0.10.0
 
-Current stable release: `main` / `v0.9.1`. The accepted v0.9.0 source remains
-available at immutable tag `v0.9.0`; the accepted research source also remains
-available at `research/v0.9.0`, and the immutable release candidates remain at
-`v0.9.0-rc.1` and `v0.9.0-rc.2` for audit and rollback analysis.
+上传学习材料，AI 考官像导师一样逐题提问、追问，并告诉学生哪里答得不够。
+老师发布后，学生用 6 位入口码或链接在手机上直接作答，不需要注册。
+
+- 课堂试点上线：[`docs/deployment/V0_10_PILOT_LAUNCH_RUNBOOK.md`](docs/deployment/V0_10_PILOT_LAUNCH_RUNBOOK.md)
+- 考试窗口设计：[`docs/product/V0_10_ASSIGNMENT_EXAM_WINDOW.md`](docs/product/V0_10_ASSIGNMENT_EXAM_WINDOW.md)
+- 多领域质量与成本评测：[`docs/evaluation/V0_10_QUALITY_LAB.md`](docs/evaluation/V0_10_QUALITY_LAB.md)
+- 发布说明：[`RELEASE_NOTES_v0.10.0.md`](RELEASE_NOTES_v0.10.0.md)
+
+Current stable release: `main` / `v0.10.0`. Earlier releases remain available at
+immutable tags `v0.9.1`, `v0.9.0`, `v0.9.0-rc.1` and `v0.9.0-rc.2`.
 
 v0.9.1 is a frontend refinement release. It keeps the v0.9 enterprise APIs and
 data contracts intact while improving workbench hierarchy, responsive navigation,

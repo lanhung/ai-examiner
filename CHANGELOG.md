@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.10.0 - 2026-09-24
+
+- Exam window: teachers publish an assignment from the workbench and share a
+  six-character join code or `/x/{code}` link; students answer on a three-screen
+  mobile page without an account. Practice mode shows results on submission;
+  exam mode locks hints, corrections and answer disclosure and shows only
+  "submitted" until the teacher releases results. Per-student dashboard,
+  transcript view and CSV export.
+- Classroom pilot deployment profile (`docker-compose.pilot.yml`,
+  `Caddyfile.pilot`, `.env.pilot.example`): anonymous exam pages, teacher
+  password for everything else, cross-site write protection, post-deploy
+  smoke test and a Chinese launch runbook.
+- Class-scale robustness from load testing: knowledge graph built at publish
+  time, in-memory waiting line in front of the model concurrency limit,
+  connection pool and worker-thread sizing, per-IP and per-attempt rate
+  limits sized for a class behind one school NAT, `ai-examiner-set-model-limits`.
+- Production with `ALLOW_UNSAFE_AUTH_DISABLED_IN_PRODUCTION=true` now serves the
+  single workspace and its background jobs (previously every workbench request
+  failed); the development principal header stays ignored in production.
+- Examiner wording: varied follow-up openers and no "sufficient evidence"
+  transition after a weak answer.
+- `ai-examiner-quality-lab`: multi-domain, multi-model quality and cost
+  evaluation with simulated learners and an independent judge.
+- CI green again: refreshed `uv.lock` (it still recorded 0.9.0), patched
+  anyio/pypdf/pip advisories, PostgreSQL test fixture drops RLS policies before
+  rebuilding the schema. The Docker image installs the hash-pinned lock.
+- Consistent SQLite backups via the online backup API; rollback restores the
+  pre-update backup and uses the same Compose files as updates.
+- Migration `20260924_0018` adds `assignments` and `assignment_attempts`
+  with PostgreSQL RLS.
+
 ## 0.9.1 - 2026-08-11
 
 - Reorganized the public workbench so project preparation, evidence review and
