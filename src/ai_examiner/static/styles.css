@@ -580,3 +580,21 @@ footer { max-width: 1440px; padding: 0 28px 34px; }
   .bubble { max-width: 94%; }
   footer { padding: 0 14px 24px; }
 }
+
+/* Publishing to students */
+#assignmentPanel { grid-column: 1 / -1; }
+.inline-check { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.inline-check input { width: auto; }
+.join-code { font: 700 32px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.25em; margin: 8px 0; }
+.join-code.small { font-size: 16px; letter-spacing: 0.15em; margin: 0; }
+.assignment-list { display: grid; gap: 10px; margin: 8px 0 16px; }
+.assignment-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line, #dde3df); border-radius: 10px; }
+.assignment-row small { display: block; color: var(--muted); }
+.assignment-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.assignment-actions button, .attempt-table button { padding: 6px 10px; font-size: 13px; }
+.table-scroll { overflow-x: auto; margin-top: 10px; }
+.attempt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.attempt-table th, .attempt-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line, #dde3df); white-space: nowrap; }
+.transcript-turn { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); }
+.transcript-turn.learner { background: #f4f7f5; }
+.transcript-turn p { margin: 4px 0 0; white-space: pre-wrap; }

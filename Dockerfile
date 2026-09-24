@@ -8,14 +8,23 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
-COPY pyproject.toml README.md /app/
+# Install exactly the versions pinned (with hashes) in uv.lock, so production
+# runs what CI tested. Dependencies are installed before the source is copied
+# so code-only rebuilds reuse this layer.
+COPY pyproject.toml uv.lock README.md /app/
+RUN pip install --upgrade pip \
+    && pip install "uv==0.8.17" \
+    && uv export --frozen --no-dev --extra providers --no-emit-project \
+       -o /tmp/requirements.txt \
+    && pip install --require-hashes -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
 COPY src /app/src
 COPY prompts /app/prompts
 COPY alembic.ini /app/alembic.ini
 COPY migrations /app/migrations
 COPY deploy/enterprise /app/deploy/enterprise
 COPY deploy/verify-v09-rls.py /app/deploy/verify-v09-rls.py
-RUN pip install --upgrade pip && pip install ".[providers]"
+RUN pip install --no-deps .
 RUN mkdir -p /app/data/uploads /app/data/evidence /app/data/exports /app/data/backups
 
 EXPOSE 8000

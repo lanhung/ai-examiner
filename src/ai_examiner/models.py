@@ -1757,3 +1757,81 @@ class AdaptiveDecision(TenantOwnedMixin, Base):
     policy_config: Mapped[dict] = mapped_column(JSON, default=dict)
     policy_version: Mapped[str] = mapped_column(String(50), default="adaptive-v1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Assignment(TenantOwnedMixin, Base):
+    __tablename__ = "assignments"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "join_code",
+            name="uq_assignment_organization_join_code",
+        ),
+        Index("ix_assignment_project", "organization_id", "project_id"),
+        CheckConstraint(
+            "mode IN ('practice', 'exam')",
+            name="ck_assignment_mode",
+        ),
+        CheckConstraint(
+            "status IN ('published', 'closed')",
+            name="ck_assignment_status",
+        ),
+        CheckConstraint(
+            "max_attempts >= 1",
+            name="ck_assignment_max_attempts",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE")
+    )
+    blueprint_id: Mapped[str] = mapped_column(
+        ForeignKey("blueprints.id", ondelete="CASCADE")
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    mode: Mapped[str] = mapped_column(String(20), default="practice")
+    status: Mapped[str] = mapped_column(String(20), default="published")
+    join_code: Mapped[str] = mapped_column(String(12))
+    intro_text: Mapped[str] = mapped_column(Text, default="")
+    session_settings: Mapped[dict] = mapped_column(JSON, default=dict)
+    opens_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    closes_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    max_attempts: Mapped[int] = mapped_column(Integer, default=1)
+    require_learner_key: Mapped[bool] = mapped_column(Boolean, default=False)
+    results_released: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_by_principal_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AssignmentAttempt(TenantOwnedMixin, Base):
+    __tablename__ = "assignment_attempts"
+    __table_args__ = (
+        UniqueConstraint("session_id", name="uq_assignment_attempt_session"),
+        Index(
+            "ix_assignment_attempt_assignment",
+            "assignment_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    assignment_id: Mapped[str] = mapped_column(
+        ForeignKey("assignments.id", ondelete="CASCADE")
+    )
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("exam_sessions.id", ondelete="CASCADE")
+    )
+    principal_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    learner_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    display_name: Mapped[str] = mapped_column(String(120), default="")
+    attempt_number: Mapped[int] = mapped_column(Integer, default=1)
+    token_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import re
+import time
 from collections import Counter
 from copy import deepcopy
 from typing import Any
@@ -30,6 +32,13 @@ STOPWORDS = {
     "可以",
     "主要",
 }
+
+
+def _simulate_latency() -> None:
+    """Load testing only: MOCK_PROVIDER_LATENCY_MS makes mock calls as slow as real ones."""
+    delay_ms = float(os.environ.get("MOCK_PROVIDER_LATENCY_MS") or 0)
+    if delay_ms > 0:
+        time.sleep(delay_ms / 1000)
 
 
 class MockProvider(ModelProvider):
@@ -419,6 +428,7 @@ class MockProvider(ModelProvider):
         schema_hint: dict[str, Any],
     ) -> ProviderResult:
         del instructions, schema_hint
+        _simulate_latency()
         if agent == "session_planner":
             data = self._planner(payload)
         elif agent == "answer_analyzer":

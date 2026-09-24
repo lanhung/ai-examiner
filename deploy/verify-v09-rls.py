@@ -50,6 +50,8 @@ REQUIRED_TENANT_TABLES = (
     "data_subject_requests",
     "human_review_cases",
     "human_review_events",
+    "assignments",
+    "assignment_attempts",
 )
 
 RLS_TABLES = REQUIRED_TENANT_TABLES + (

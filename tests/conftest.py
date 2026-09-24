@@ -41,20 +41,43 @@ os.environ["PROMPT_DIR"] = "./prompts"
 os.environ["CELERY_ALWAYS_EAGER"] = "true"
 os.environ["MEMORY_IDENTITY_SECRET"] = "test-only-memory-identity-secret"
 
+from sqlalchemy import text  # noqa: E402
+
 from ai_examiner.db import Base, SessionLocal, engine  # noqa: E402
 from ai_examiner.main import app  # noqa: E402
 from ai_examiner.services.enterprise_identity import ensure_legacy_organization  # noqa: E402
+from ai_examiner.services.rate_limit import learner_limiter  # noqa: E402
+
+
+def _drop_all_tables() -> None:
+    # A schema migrated by Alembic carries PostgreSQL RLS policies that reference
+    # other tables (for example organization_self_discovery). Drop them first so
+    # the disposable test schema can be recreated from model metadata.
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as connection:
+            policies = connection.execute(
+                text(
+                    "SELECT tablename, policyname FROM pg_policies "
+                    "WHERE schemaname = current_schema()"
+                )
+            ).all()
+            for table_name, policy_name in policies:
+                connection.execute(
+                    text(f'DROP POLICY IF EXISTS "{policy_name}" ON "{table_name}"')
+                )
+    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture(autouse=True)
 def clean_database():
-    Base.metadata.drop_all(bind=engine)
+    learner_limiter.reset()
+    _drop_all_tables()
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         ensure_legacy_organization(db)
         db.commit()
     yield
-    Base.metadata.drop_all(bind=engine)
+    _drop_all_tables()
 
 
 @pytest.fixture

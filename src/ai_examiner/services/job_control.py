@@ -274,7 +274,7 @@ def authorize_job_execution(
     job: BackgroundJob,
 ) -> None:
     if job.authorization_mode == "legacy_local":
-        if settings.auth_mode != "disabled" or settings.app_env == "production":
+        if not settings.single_workspace_mode:
             raise JobAuthorizationError("Legacy local jobs are not permitted")
         return
     if not job.actor_principal_id:

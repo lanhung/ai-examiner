@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-examiner-mvp"
-version = "0.9.1"
+version = "0.10.0"
 description = "A deployable multimodal, evidence-grounded AI examiner with low-latency realtime voice."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -64,12 +64,14 @@ ai-examiner-probe-template-providers = "ai_examiner.template_provider_probe_cli:
 ai-examiner-evaluate-template-relevance = "ai_examiner.template_relevance_cli:run_template_relevance_evaluation"
 ai-examiner-probe-template-relevance = "ai_examiner.template_relevance_probe_cli:run_template_relevance_probe"
 ai-examiner-bootstrap-admin = "ai_examiner.enterprise_cli:bootstrap_admin"
+ai-examiner-set-model-limits = "ai_examiner.enterprise_cli:run_set_model_limits"
 ai-examiner-migrate-storage = "ai_examiner.storage_cli:run_storage_migration"
 ai-examiner-verify-v09-release = "ai_examiner.release_hardening:main"
 ai-examiner-generate-v09-evidence = "ai_examiner.release_evidence:main"
 ai-examiner-rehearse-host-recovery = "ai_examiner.recovery_evidence:main"
 ai-examiner-observe-v09-staging = "ai_examiner.staging_observer:main"
 ai-examiner-probe-model-governance = "ai_examiner.model_governance_probe:main"
+ai-examiner-quality-lab = "ai_examiner.quality_lab.cli:run_quality_lab"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ai_examiner"]

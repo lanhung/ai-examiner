@@ -82,6 +82,10 @@ class Settings(BaseSettings):
     benchmark_case_limit: int = Field(default=4, ge=1, le=20)
 
     database_url: str = "sqlite:///./data/ai_examiner.db"
+    # Each in-flight model call holds a connection; keep the pool comfortably
+    # above learner_model_concurrency plus ordinary page traffic.
+    database_pool_size: int = Field(default=20, ge=1, le=500)
+    database_max_overflow: int = Field(default=30, ge=0, le=500)
     database_schema_management: str = Field(
         default="startup",
         pattern="^(startup|external)$",
@@ -172,6 +176,16 @@ class Settings(BaseSettings):
     max_concurrent_model_calls: int = Field(default=3, ge=1, le=20)
     max_model_retries: int = Field(default=2, ge=0, le=5)
     model_governance_enabled: bool = True
+    learner_rate_limit_enabled: bool = True
+    learner_join_lookups_per_ip_per_minute: int = Field(default=300, ge=1)
+    learner_attempts_per_ip_per_10_minutes: int = Field(default=300, ge=1)
+    learner_answers_per_attempt_per_minute: int = Field(default=10, ge=1)
+    learner_answer_max_chars: int = Field(default=4000, ge=200, le=20_000)
+    trust_proxy_forwarded_for: bool = False
+    # Keep equal to (or below) the organization's max_concurrent_calls policy.
+    learner_model_concurrency: int = Field(default=3, ge=1, le=200)
+    learner_model_queue_timeout_seconds: float = Field(default=90.0, ge=1.0, le=600.0)
+    http_worker_threads: int = Field(default=100, ge=10, le=1000)
     model_rate_limit_backend: Literal["redis", "memory"] = "redis"
     model_rate_limit_required: bool = True
     model_rate_limit_window_seconds: int = Field(default=60, ge=10, le=3600)
@@ -239,6 +253,24 @@ class Settings(BaseSettings):
         elif parsed.scheme == "http" and not self.telemetry_allow_insecure_otlp:
             issues.append("telemetry_insecure_otlp_not_allowed")
         return issues
+
+    @property
+    def single_workspace_mode(self) -> bool:
+        """Authentication is off and the legacy workspace is trusted.
+
+        True for local development, and for a production pilot only when the
+        operator explicitly accepted it (the reverse proxy then protects the
+        teacher surface with a password).
+        """
+        return self.auth_mode == "disabled" and (
+            self.app_env != "production"
+            or self.allow_unsafe_auth_disabled_in_production
+        )
+
+    @property
+    def trusts_principal_header(self) -> bool:
+        """The X-AI-Examiner-Principal development header is never trusted in production."""
+        return self.auth_mode == "disabled" and self.app_env != "production"
 
     def api_key_for(self, provider: str) -> str | None:
         return {

@@ -905,6 +905,8 @@ $("generateBlueprint").onclick = async () => {
       $("textProfile").value = profile;
     }
     syncBlueprintTemplateCompatibility();
+    syncPublishButton();
+    if (!$("assignmentTitle").value) $("assignmentTitle").value = blueprint.data.title || "";
     setStatus("blueprintStatus", `蓝图 v${blueprint.version} 已生成：${blueprint.provider} · ${blueprint.model}，共 ${blueprint.data.questions.length} 个问题`, "success");
     const preview = $("blueprintPreview");
     preview.classList.remove("hidden");
@@ -1504,6 +1506,7 @@ bootstrapWorkbenchIdentity().then((ready) => {
   if (!ready) return;
   loadEnvironment();
   loadTemplates();
+  loadAssignments().catch(() => {});
 });
 
 function setVoiceVisual(mode, text) {
@@ -2065,3 +2068,225 @@ if (state.identityId) {
     $("memoryState").textContent = "尚未启用";
   });
 }
+
+
+// ---------------------------------------------------------------------------
+// Publishing to students (assignments)
+// ---------------------------------------------------------------------------
+
+const ASSIGNMENT_WINDOW_LABEL = {open: "进行中", scheduled: "未开始", ended: "已截止", closed: "已关闭"};
+const ASSIGNMENT_MODE_LABEL = {practice: "练习", exam: "考试"};
+const ATTEMPT_STATUS_LABEL = {not_started: "未开始", in_progress: "作答中", submitted: "已提交"};
+
+function syncPublishButton() {
+  $("publishAssignment").disabled = !(state.projectId && state.blueprintId);
+}
+
+function assignmentLink(code) {
+  const query = state.organizationId ? `?org=${encodeURIComponent(state.organizationId)}` : "";
+  return `${window.location.origin}/x/${code}${query}`;
+}
+
+function formatLocalTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+}
+
+async function copyToClipboard(text, statusId) {
+  try {
+    await navigator.clipboard.writeText(text);
+    setStatus(statusId, "已复制到剪贴板", "success");
+  } catch {
+    setStatus(statusId, `请手动复制：${text}`);
+  }
+}
+
+function renderPublishResult(assignment) {
+  const link = assignmentLink(assignment.join_code);
+  const box = $("publishResult");
+  box.classList.remove("hidden");
+  box.innerHTML = `
+    <p>发布成功。把入口码或链接发给学生（可直接粘贴到微信群）：</p>
+    <div class="join-code" aria-label="入口码">${escapeHtml(assignment.join_code)}</div>
+    <p><a href="${escapeHtml(link)}" target="_blank" rel="noopener">${escapeHtml(link)}</a></p>
+    <button type="button" id="copyPublishedLink" class="secondary-button">复制链接</button>`;
+  $("copyPublishedLink").onclick = () => copyToClipboard(link, "publishStatus");
+}
+
+$("assignmentMode").onchange = () => {
+  $("assignmentModeHint").textContent = $("assignmentMode").value === "exam"
+    ? "考试：全程没有提示，学生提交后只显示“已提交”，由你公布成绩。"
+    : "练习：答错会有提示，提交后立即看到结果。";
+};
+
+$("publishAssignment").onclick = async () => {
+  const title = $("assignmentTitle").value.trim();
+  if (!title) return setStatus("publishStatus", "请填写考试标题", "error");
+  const mode = $("assignmentMode").value;
+  const sessionSettings = {question_limit: Number($("assignmentQuestionLimit").value) || 5};
+  if ($("textProfile").value) sessionSettings.profile = $("textProfile").value;
+  if (state.blueprintTemplateVersionId) sessionSettings.template_version_id = state.blueprintTemplateVersionId;
+  const closesAt = $("assignmentClosesAt").value;
+  const body = {
+    project_id: state.projectId,
+    blueprint_id: state.blueprintId,
+    title,
+    mode,
+    intro_text: $("assignmentIntro").value.trim(),
+    session_settings: sessionSettings,
+    max_attempts: Number($("assignmentMaxAttempts").value) || 1,
+    require_learner_key: $("assignmentRequireKey").checked,
+    closes_at: closesAt ? new Date(closesAt).toISOString() : null,
+  };
+  $("publishAssignment").disabled = true;
+  setStatus("publishStatus", "正在发布…");
+  try {
+    const assignment = await api("/api/assignments", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    });
+    setStatus("publishStatus", `已发布「${assignment.title}」`, "success");
+    renderPublishResult(assignment);
+    await loadAssignments();
+  } catch (error) {
+    setStatus("publishStatus", error.message, "error");
+  } finally {
+    syncPublishButton();
+  }
+};
+
+async function loadAssignments() {
+  const list = $("assignmentList");
+  const assignments = await api("/api/assignments");
+  state.assignments = assignments;
+  if (!assignments.length) {
+    list.innerHTML = '<div class="muted">尚未发布考试。</div>';
+    return;
+  }
+  list.innerHTML = assignments.map((item) => {
+    const deadline = item.closes_at ? ` · 截止 ${escapeHtml(formatLocalTime(item.closes_at))}` : "";
+    const toggle = item.status === "published" ? "关闭" : "重新开放";
+    const release = item.mode === "exam" && !item.results_released
+      ? `<button type="button" class="secondary-button" data-assignment-action="release" data-id="${item.id}">公布结果</button>`
+      : "";
+    return `<div class="assignment-row">
+      <div><strong>${escapeHtml(item.title)}</strong>
+        <small>${ASSIGNMENT_MODE_LABEL[item.mode] || item.mode} · ${ASSIGNMENT_WINDOW_LABEL[item.window_state] || item.window_state}${deadline}${item.mode === "exam" ? (item.results_released ? " · 结果已公布" : " · 结果未公布") : ""}</small></div>
+      <span class="join-code small">${escapeHtml(item.join_code)}</span>
+      <div class="assignment-actions">
+        <button type="button" class="secondary-button" data-assignment-action="copy" data-id="${item.id}">复制链接</button>
+        <button type="button" class="secondary-button" data-assignment-action="dashboard" data-id="${item.id}">查看作答</button>
+        <button type="button" class="secondary-button" data-assignment-action="toggle" data-id="${item.id}">${toggle}</button>
+        ${release}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function patchAssignment(id, changes) {
+  return api(`/api/assignments/${id}`, {
+    method: "PATCH",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(changes),
+  });
+}
+
+function csvCell(value) {
+  const text = value === null || value === undefined ? "" : String(value);
+  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function downloadDashboardCsv(dashboard) {
+  const header = ["姓名", "学号/考号", "第几次", "状态", "回答数", "平均得分", "开始时间", "提交时间"];
+  const rows = dashboard.attempts.map((row) => [
+    row.display_name, row.learner_key, row.attempt_number,
+    ATTEMPT_STATUS_LABEL[row.status] || row.status, row.answers,
+    row.average_answer_score, formatLocalTime(row.created_at), formatLocalTime(row.completed_at),
+  ]);
+  const csv = "﻿" + [header, ...rows].map((line) => line.map(csvCell).join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${dashboard.assignment.title}-作答记录.csv`;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function showAttemptTranscript(sessionId, displayName) {
+  const box = $("attemptTranscript");
+  box.innerHTML = '<div class="muted">正在读取…</div>';
+  try {
+    const session = await api(`/api/sessions/${sessionId}`);
+    box.innerHTML = `<h4>${escapeHtml(displayName || "学生")} 的对话</h4>` + session.turns.map((turn) => {
+      const score = turn.role === "user" && turn.evaluation && typeof turn.evaluation.score === "number"
+        ? ` <span class="badge secondary">${turn.evaluation.score.toFixed(1)} 分</span>` : "";
+      return `<div class="transcript-turn ${turn.role === "user" ? "learner" : "examiner"}"><strong>${turn.role === "user" ? "学生" : "考官"}</strong>${score}<p>${escapeHtml(turn.content)}</p></div>`;
+    }).join("");
+  } catch (error) {
+    box.innerHTML = `<div class="status error">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function showAssignmentDashboard(id) {
+  const box = $("assignmentDashboard");
+  box.classList.remove("hidden");
+  box.innerHTML = '<div class="muted">正在读取作答情况…</div>';
+  const dashboard = await api(`/api/assignments/${id}/dashboard`);
+  const counts = dashboard.counts;
+  const rows = dashboard.attempts.map((row) => `<tr>
+      <td>${escapeHtml(row.display_name || "（未填写）")}</td>
+      <td>${escapeHtml(row.learner_key || "")}</td>
+      <td>${row.attempt_number}</td>
+      <td>${ATTEMPT_STATUS_LABEL[row.status] || row.status}</td>
+      <td>${row.answers}</td>
+      <td>${row.average_answer_score ?? "–"}</td>
+      <td>${escapeHtml(formatLocalTime(row.completed_at))}</td>
+      <td><button type="button" class="secondary-button" data-transcript="${row.session_id}" data-name="${escapeHtml(row.display_name || "")}">对话</button></td>
+    </tr>`).join("");
+  box.innerHTML = `
+    <h3>${escapeHtml(dashboard.assignment.title)}</h3>
+    <p>共 ${counts.attempts} 人次 · 已提交 ${counts.submitted} · 作答中 ${counts.in_progress} · 未开始 ${counts.not_started}</p>
+    <button type="button" id="exportAssignmentCsv" class="secondary-button">导出 CSV</button>
+    <div class="table-scroll"><table class="attempt-table">
+      <thead><tr><th>姓名</th><th>学号/考号</th><th>次数</th><th>状态</th><th>回答数</th><th>平均得分</th><th>提交时间</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="8" class="muted">还没有学生作答。</td></tr>'}</tbody>
+    </table></div>
+    <div id="attemptTranscript"></div>`;
+  $("exportAssignmentCsv").onclick = () => downloadDashboardCsv(dashboard);
+  box.querySelectorAll("[data-transcript]").forEach((button) => {
+    button.onclick = () => showAttemptTranscript(button.dataset.transcript, button.dataset.name);
+  });
+}
+
+$("assignmentList").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-assignment-action]");
+  if (!button) return;
+  const assignment = (state.assignments || []).find((item) => item.id === button.dataset.id);
+  if (!assignment) return;
+  const action = button.dataset.assignmentAction;
+  try {
+    if (action === "copy") {
+      await copyToClipboard(assignmentLink(assignment.join_code), "assignmentStatus");
+    } else if (action === "dashboard") {
+      await showAssignmentDashboard(assignment.id);
+    } else if (action === "toggle") {
+      const status = assignment.status === "published" ? "closed" : "published";
+      await patchAssignment(assignment.id, {status});
+      setStatus("assignmentStatus", status === "closed" ? "已关闭，学生不能再作答" : "已重新开放", "success");
+      await loadAssignments();
+    } else if (action === "release") {
+      if (!window.confirm("公布后，学生即可看到自己的成绩和建议。确定公布吗？")) return;
+      await patchAssignment(assignment.id, {results_released: true});
+      setStatus("assignmentStatus", "结果已公布", "success");
+      await loadAssignments();
+    }
+  } catch (error) {
+    setStatus("assignmentStatus", error.message, "error");
+  }
+});
+
+$("refreshAssignments").onclick = () => loadAssignments()
+  .then(() => setStatus("assignmentStatus", "已刷新", "success"))
+  .catch((error) => setStatus("assignmentStatus", error.message, "error"));

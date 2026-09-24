@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 import shutil
 import time
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -15,6 +17,7 @@ from uuid import uuid4
 
 import httpx
 import websockets
+from anyio import to_thread
 from fastapi import (
     BackgroundTasks,
     Body,
@@ -32,6 +35,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import __version__
@@ -47,6 +51,8 @@ from .enterprise_constants import (
 from .model_catalog import CATALOG
 from .models import (
     AdaptiveDecision,
+    Assignment,
+    AssignmentAttempt,
     AuditEvent,
     BackgroundJob,
     BenchmarkRun,
@@ -79,6 +85,7 @@ from .models import (
     Principal,
     Project,
     PromptVersion,
+    RetestItem,
     RetestPlan,
     ScenarioTemplate,
     ScenarioTemplateVersion,
@@ -93,6 +100,9 @@ from .providers.base import ProviderResult
 from .providers.factory import build_provider, parse_profile, profile_ready
 from .schemas import (
     AnswerSubmit,
+    AssignmentCreate,
+    AssignmentUpdate,
+    AttemptCreate,
     BenchmarkCreate,
     BlueprintCreate,
     ConceptCreate,
@@ -149,6 +159,27 @@ from .schemas import (
     VoiceSessionCreate,
 )
 from .services.agreement import agreement_summary
+from .services.assignments import (
+    ATTEMPT_TOKEN_HEADER,
+    AssignmentError,
+    attempt_belongs_to,
+    ensure_attempt_allowed,
+    ensure_window_open,
+    freeze_session_settings,
+    generate_join_code,
+    iso_timestamp,
+    issue_attempt_token,
+    learner_attempt_view,
+    learner_report_view,
+    learner_session_status,
+    learner_turn_view,
+    lock_conversation_policy,
+    normalize_join_code,
+    normalize_learner_key,
+    public_assignment_view,
+    results_visible,
+    serialize_assignment,
+)
 from .services.audit import (
     AuditFilters,
     AuditWriteError,
@@ -165,6 +196,7 @@ from .services.audit import (
 from .services.authentication import (
     CurrentAuthentication,
     authentication_http_error,
+    current_authentication,
     get_oidc_authenticator,
 )
 from .services.authorization import (
@@ -249,10 +281,11 @@ from .services.observability import (
     request_correlation,
     telemetry_status,
 )
-from .services.oidc import OIDCError
+from .services.oidc import AuthenticationContext, OIDCError
 from .services.policy_benchmark import PolicyBenchmarkService
 from .services.preferences import PreferencePolicyError, PreferenceService
 from .services.prompts import activate_prompt, create_prompt_version, prompt_manifest
+from .services.rate_limit import learner_limiter, learner_model_gate
 from .services.retest import RetestLifecycleError, RetestLifecycleService
 from .services.session_templates import (
     SessionTemplateService,
@@ -285,7 +318,7 @@ from .services.templates import (
     serialize_template_version,
     serialize_validation_run,
 )
-from .services.tenancy import current_tenant_context
+from .services.tenancy import current_tenant_context, set_tenant_context
 from .services.visual import VisualEvidenceService
 from .services.voice import (
     VOICE_PROVIDERS,
@@ -457,6 +490,11 @@ async def lifespan(app: FastAPI):
         )
     bind_and_validate_route_policies(app)
     init_db()
+    # Sync endpoints wait on model calls; a class answering at once needs more
+    # worker threads than AnyIO's default of 40.
+    to_thread.current_default_thread_limiter().total_tokens = (
+        settings.http_worker_threads
+    )
     yield
 
 
@@ -830,6 +868,19 @@ def index():
         STATIC_DIR / "index.html",
         headers={"Cache-Control": "no-store"},
     )
+
+
+@app.get("/exam", include_in_schema=False)
+def exam_index():
+    return FileResponse(
+        STATIC_DIR / "exam.html",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/x/{code}", include_in_schema=False)
+def exam_join_index(code: str):
+    return exam_index()
 
 
 @app.get("/enterprise", include_in_schema=False)
@@ -2133,6 +2184,25 @@ def get_agreement(dataset_id: str, db: Annotated[Session, Depends(get_db)]):
     dependencies=[Depends(require_workbench_capability("session.create"))],
 )
 def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db)]):
+    session = _create_exam_session(db, payload)
+    return {
+        "id": session.id,
+        "status": session.status,
+        "config": session.config,
+        "question_strategy": session.question_strategy,
+        "policy_version": session.policy_version,
+        "learner_subject_id": session.learner_subject_id,
+        "template_version_id": session.template_version_id,
+        "template_fingerprint": session.template_fingerprint,
+    }
+
+
+def _create_exam_session(
+    db: Session,
+    payload: SessionCreate,
+    *,
+    exam_lock: bool = False,
+) -> ExamSession:
     project = db.get(Project, payload.project_id)
     blueprint = db.get(Blueprint, payload.blueprint_id)
     if not project or not blueprint or blueprint.project_id != project.id:
@@ -2161,7 +2231,12 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
     )
     _profiles([profile], profile)
     cognitive = CognitiveStateService(db)
-    cognitive.ensure_blueprint_graph(blueprint)
+    try:
+        cognitive.ensure_blueprint_graph(blueprint)
+        db.commit()
+    except IntegrityError:
+        # Another request built the same blueprint graph concurrently.
+        db.rollback()
     subject = cognitive.get_or_create_subject(project.id, payload.learner_subject_key)
     config = payload.model_dump(
         exclude={
@@ -2198,6 +2273,9 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
         user_allows_active_interruption=payload.allow_interruptions,
         legacy_config=config,
     )
+    if exam_lock:
+        conversation_policy = lock_conversation_policy(conversation_policy)
+        config["exam_lock"] = True
     config.update(
         {
             "allow_hints": conversation_policy["hints"]["allowed"],
@@ -2252,16 +2330,7 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
     db.add(session)
     db.commit()
     db.refresh(session)
-    return {
-        "id": session.id,
-        "status": session.status,
-        "config": session.config,
-        "question_strategy": session.question_strategy,
-        "policy_version": session.policy_version,
-        "learner_subject_id": session.learner_subject_id,
-        "template_version_id": session.template_version_id,
-        "template_fingerprint": session.template_fingerprint,
-    }
+    return session
 
 
 @app.post(
@@ -2298,6 +2367,11 @@ def start_session(session_id: str, db: Annotated[Session, Depends(get_db)]):
     session = db.get(ExamSession, session_id)
     if not session:
         raise HTTPException(404, "Session not found")
+    turn = _start_exam_session(db, session)
+    return {"session_id": session.id, "status": session.status, "turn": serialize_turn(turn)}
+
+
+def _start_exam_session(db: Session, session: ExamSession) -> Turn:
     blueprint = db.get(Blueprint, session.blueprint_id)
     provider = provider_or_503(
         session.config.get("profile"),
@@ -2309,10 +2383,9 @@ def start_session(session_id: str, db: Annotated[Session, Depends(get_db)]):
         db, provider, project_id=session.project_id, session_id=session.id
     )
     try:
-        turn = orchestrator.start_session(session, blueprint)
+        return orchestrator.start_session(session, blueprint)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
-    return {"session_id": session.id, "status": session.status, "turn": serialize_turn(turn)}
 
 
 @app.post(
@@ -2327,6 +2400,24 @@ def submit_answer(
     session = db.get(ExamSession, session_id)
     if not session:
         raise HTTPException(404, "Session not found")
+    result, retest_item = _submit_exam_answer(db, session, payload.answer)
+    return {
+        "completed": result["completed"],
+        "analysis": result["analysis"],
+        "evaluation": result["evaluation"],
+        "decision": result["decision"],
+        "turns": [serialize_turn(result["user_turn"]), serialize_turn(result["assistant_turn"])],
+        "retest_item": RetestLifecycleService.serialize_item(retest_item)
+        if retest_item
+        else None,
+    }
+
+
+def _submit_exam_answer(
+    db: Session,
+    session: ExamSession,
+    answer: str,
+) -> tuple[dict, RetestItem | None]:
     blueprint = db.get(Blueprint, session.blueprint_id)
     provider = provider_or_503(
         session.config.get("profile"),
@@ -2338,7 +2429,7 @@ def submit_answer(
         db, provider, project_id=session.project_id, session_id=session.id
     )
     try:
-        result = orchestrator.submit_answer(session, blueprint, payload.answer)
+        result = orchestrator.submit_answer(session, blueprint, answer)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     retest_item = None
@@ -2348,16 +2439,7 @@ def submit_answer(
         )
         if retest_item:
             db.commit()
-    return {
-        "completed": result["completed"],
-        "analysis": result["analysis"],
-        "evaluation": result["evaluation"],
-        "decision": result["decision"],
-        "turns": [serialize_turn(result["user_turn"]), serialize_turn(result["assistant_turn"])],
-        "retest_item": RetestLifecycleService.serialize_item(retest_item)
-        if retest_item
-        else None,
-    }
+    return result, retest_item
 
 
 @app.get(
@@ -2406,6 +2488,10 @@ def get_report(session_id: str, db: Annotated[Session, Depends(get_db)]):
     session = db.get(ExamSession, session_id)
     if not session:
         raise HTTPException(404, "Session not found")
+    return _build_session_report(db, session)
+
+
+def _build_session_report(db: Session, session: ExamSession) -> dict:
     blueprint = db.get(Blueprint, session.blueprint_id)
     turns = [serialize_turn(turn) for turn in session.turns]
     cognitive = CognitiveStateService(db)
@@ -2431,6 +2517,705 @@ def get_report(session_id: str, db: Annotated[Session, Depends(get_db)]):
     )
     report["session_status"] = session.status
     return report
+
+
+AssignmentManageAccess = Annotated[
+    AuthorizationContext | None,
+    Depends(require_workbench_capability("assignment.manage")),
+]
+AssignmentReadAccess = Annotated[
+    AuthorizationContext | None,
+    Depends(require_workbench_capability("assignment.read")),
+]
+
+
+@dataclass(frozen=True)
+class LearnerAccess:
+    organization_id: str
+    principal_id: str | None
+
+
+def optional_current_authentication(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> AuthenticationContext | None:
+    """Authenticate when credentials are presented; otherwise stay anonymous."""
+    runtime_settings = get_settings()
+    if runtime_settings.auth_mode == "disabled":
+        return current_authentication(request, db)
+    if request.headers.get("Authorization") or request.cookies.get(
+        runtime_settings.oidc_session_cookie_name
+    ):
+        return current_authentication(request, db)
+    return None
+
+
+def assignment_learner_access(
+    request: Request,
+    authentication: Annotated[
+        AuthenticationContext | None,
+        Depends(optional_current_authentication),
+    ],
+    db: Annotated[Session, Depends(get_db)],
+) -> LearnerAccess:
+    runtime_settings = get_settings()
+    organization_id = request.headers.get("X-AI-Examiner-Organization")
+    disabled_principal_id = (
+        request.headers.get("X-AI-Examiner-Principal")
+        if runtime_settings.auth_mode == "disabled"
+        and runtime_settings.app_env != "production"
+        else None
+    )
+    principal_id = (
+        authentication.principal_id if authentication else None
+    ) or disabled_principal_id
+    if authentication is None or not principal_id:
+        # Anonymous learners hold only the join code and, later, the attempt
+        # token. They are bound to one organization for the whole request.
+        organization_id = organization_id or LEGACY_ORGANIZATION_ID
+        set_tenant_context(db, organization_id=organization_id, principal_id=None)
+        request.state.audit_actor_type = "anonymous"
+        return LearnerAccess(organization_id=organization_id, principal_id=None)
+    if not organization_id:
+        memberships = db.scalars(
+            select(OrganizationMembership)
+            .join(
+                Organization,
+                Organization.id == OrganizationMembership.organization_id,
+            )
+            .where(
+                OrganizationMembership.principal_id == principal_id,
+                OrganizationMembership.status == "active",
+                Organization.status == "active",
+            )
+        ).all()
+        if len(memberships) == 1:
+            organization_id = memberships[0].organization_id
+    try:
+        context = resolve_authorization_context(
+            db,
+            authentication=authentication,
+            organization_id=organization_id,
+            required_capability="assignment.attempt",
+            disabled_principal_id=disabled_principal_id,
+        )
+    except AuthorizationError as exc:
+        request.state.audit_reason_code = exc.code
+        raise authorization_http_error(exc) from exc
+    request.state.audit_actor_type = "principal"
+    request.state.audit_actor_id = context.principal_id
+    return LearnerAccess(
+        organization_id=context.organization_id,
+        principal_id=context.principal_id,
+    )
+
+
+AssignmentLearnerAccess = Annotated[
+    LearnerAccess,
+    Depends(assignment_learner_access),
+]
+AttemptToken = Annotated[
+    str | None,
+    Header(alias=ATTEMPT_TOKEN_HEADER),
+]
+
+
+def _assignment_http_error(exc: AssignmentError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={"code": exc.code, "message": exc.public_message},
+    )
+
+
+def _assignment_not_found() -> HTTPException:
+    return HTTPException(
+        404,
+        detail={
+            "code": "assignment_not_found",
+            "message": "The requested exam was not found.",
+        },
+    )
+
+
+def _attempt_not_found() -> HTTPException:
+    return HTTPException(
+        404,
+        detail={
+            "code": "attempt_not_found",
+            "message": "The requested attempt was not found.",
+        },
+    )
+
+
+def _workbench_organization_id(context: AuthorizationContext | None) -> str:
+    return context.organization_id if context else LEGACY_ORGANIZATION_ID
+
+
+def _managed_assignment_or_404(
+    db: Session,
+    context: AuthorizationContext | None,
+    assignment_id: str,
+) -> Assignment:
+    assignment = db.get(Assignment, assignment_id)
+    if (
+        assignment is None
+        or assignment.organization_id != _workbench_organization_id(context)
+    ):
+        raise _assignment_not_found()
+    return assignment
+
+
+def _validate_assignment_window(
+    opens_at: datetime | None,
+    closes_at: datetime | None,
+) -> None:
+    def aware(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+    if opens_at and closes_at and aware(closes_at) <= aware(opens_at):
+        raise HTTPException(
+            422,
+            detail={
+                "code": "assignment_window_invalid",
+                "message": "closes_at must be later than opens_at.",
+            },
+        )
+
+
+def _unique_join_code(db: Session, organization_id: str) -> str:
+    for _ in range(32):
+        candidate = generate_join_code()
+        exists = db.scalar(
+            select(Assignment.id).where(
+                Assignment.organization_id == organization_id,
+                Assignment.join_code == candidate,
+            )
+        )
+        if exists is None:
+            return candidate
+    raise HTTPException(
+        503,
+        detail={
+            "code": "join_code_exhausted",
+            "message": "A unique join code could not be allocated.",
+        },
+    )
+
+
+@app.post("/api/assignments", status_code=201)
+def create_assignment(
+    payload: AssignmentCreate,
+    context: AssignmentManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    organization_id = _workbench_organization_id(context)
+    project = db.get(Project, payload.project_id)
+    blueprint = db.get(Blueprint, payload.blueprint_id)
+    if (
+        project is None
+        or blueprint is None
+        or blueprint.project_id != project.id
+        or project.organization_id != organization_id
+    ):
+        raise HTTPException(404, "Project or blueprint not found")
+    if not blueprint.data.get("questions"):
+        raise HTTPException(
+            409,
+            detail={
+                "code": "blueprint_empty",
+                "message": "The blueprint contains no questions.",
+            },
+        )
+    _validate_assignment_window(payload.opens_at, payload.closes_at)
+    try:
+        frozen = freeze_session_settings(
+            payload.mode,
+            payload.session_settings.model_dump(exclude_unset=True),
+        )
+    except AssignmentError as exc:
+        raise _assignment_http_error(exc) from exc
+    profile = frozen["profile"] or (
+        f"{settings.model_provider}:{settings.default_model_for(settings.model_provider)}"
+    )
+    _profiles([profile], profile)
+    frozen["profile"] = profile
+    # Build the knowledge graph now so a class joining at once does not race
+    # to create it, and fail at publish time rather than when students join.
+    CognitiveStateService(db).ensure_blueprint_graph(blueprint)
+    validate_blueprint_template_compatibility(
+        blueprint,
+        SessionTemplateService(db).resolve(
+            project,
+            mode=frozen["session_mode"],
+            template_version_id=frozen["template_version_id"],
+            template_overrides={},
+            request_overrides={},
+        ),
+    )
+    now = datetime.now(UTC)
+    assignment = Assignment(
+        organization_id=organization_id,
+        project_id=project.id,
+        blueprint_id=blueprint.id,
+        title=payload.title.strip(),
+        mode=payload.mode,
+        status="published",
+        join_code=_unique_join_code(db, organization_id),
+        intro_text=payload.intro_text,
+        session_settings=frozen,
+        opens_at=payload.opens_at,
+        closes_at=payload.closes_at,
+        max_attempts=payload.max_attempts,
+        require_learner_key=payload.require_learner_key,
+        results_released=False,
+        created_by_principal_id=context.principal_id if context else None,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+    return serialize_assignment(assignment)
+
+
+@app.get("/api/assignments")
+def list_assignments(
+    context: AssignmentReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+    project_id: str | None = None,
+):
+    query = select(Assignment).where(
+        Assignment.organization_id == _workbench_organization_id(context)
+    )
+    if project_id:
+        query = query.where(Assignment.project_id == project_id)
+    assignments = db.scalars(
+        query.order_by(Assignment.created_at.desc(), Assignment.id)
+    ).all()
+    return [serialize_assignment(assignment) for assignment in assignments]
+
+
+@app.get("/api/assignments/{assignment_id}")
+def get_assignment(
+    assignment_id: str,
+    context: AssignmentReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    return serialize_assignment(
+        _managed_assignment_or_404(db, context, assignment_id)
+    )
+
+
+@app.patch("/api/assignments/{assignment_id}")
+def update_assignment(
+    assignment_id: str,
+    payload: AssignmentUpdate,
+    context: AssignmentManageAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    assignment = _managed_assignment_or_404(db, context, assignment_id)
+    changes = payload.model_dump(exclude_unset=True)
+    for field in ("title", "status", "max_attempts", "require_learner_key", "results_released"):
+        if field in changes and changes[field] is None:
+            raise HTTPException(
+                422,
+                detail={
+                    "code": "assignment_field_required",
+                    "message": f"{field} cannot be null.",
+                },
+            )
+    _validate_assignment_window(
+        changes.get("opens_at", assignment.opens_at),
+        changes.get("closes_at", assignment.closes_at),
+    )
+    for field, value in changes.items():
+        if field == "title":
+            value = value.strip()
+        setattr(assignment, field, value)
+    assignment.updated_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(assignment)
+    return serialize_assignment(assignment)
+
+
+@app.get("/api/assignments/{assignment_id}/dashboard")
+def get_assignment_dashboard(
+    assignment_id: str,
+    context: AssignmentReadAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    assignment = _managed_assignment_or_404(db, context, assignment_id)
+    attempts = db.scalars(
+        select(AssignmentAttempt)
+        .where(AssignmentAttempt.assignment_id == assignment.id)
+        .order_by(AssignmentAttempt.created_at, AssignmentAttempt.id)
+    ).all()
+    counts = {"not_started": 0, "in_progress": 0, "submitted": 0}
+    rows = []
+    for attempt in attempts:
+        session = db.get(ExamSession, attempt.session_id)
+        if session is None:
+            continue
+        status = learner_session_status(session)
+        counts[status] += 1
+        scores = [
+            float(turn.evaluation["score"])
+            for turn in session.turns
+            if turn.role == "user"
+            and isinstance(turn.evaluation, dict)
+            and isinstance(turn.evaluation.get("score"), int | float)
+        ]
+        rows.append(
+            {
+                "id": attempt.id,
+                "session_id": attempt.session_id,
+                "attempt_number": attempt.attempt_number,
+                "display_name": attempt.display_name,
+                "learner_key": attempt.learner_key,
+                "principal_id": attempt.principal_id,
+                "status": status,
+                "answers": sum(1 for turn in session.turns if turn.role == "user"),
+                "average_answer_score": (
+                    round(sum(scores) / len(scores), 2) if scores else None
+                ),
+                "created_at": iso_timestamp(attempt.created_at),
+                "completed_at": iso_timestamp(session.completed_at),
+            }
+        )
+    return {
+        "assignment": serialize_assignment(assignment),
+        "counts": {"attempts": len(rows), **counts},
+        "attempts": rows,
+    }
+
+
+def _learner_client_ip(request: Request) -> str:
+    runtime_settings = get_settings()
+    if runtime_settings.trust_proxy_forwarded_for:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        # The trusted reverse proxy appends the real client address last.
+        candidates = [part.strip() for part in forwarded.split(",") if part.strip()]
+        if candidates:
+            return candidates[-1]
+    return request.client.host if request.client else "unknown"
+
+
+def _enforce_learner_rate_limit(
+    bucket: str,
+    key: str,
+    *,
+    limit: int,
+    window_seconds: float,
+) -> None:
+    if not get_settings().learner_rate_limit_enabled:
+        return
+    retry_after = learner_limiter.check(
+        f"{bucket}:{key}", limit=limit, window_seconds=window_seconds
+    )
+    if retry_after is not None:
+        raise HTTPException(
+            429,
+            detail={
+                "code": "rate_limited",
+                "message": "Too many requests. Please wait and try again.",
+            },
+            headers={"Retry-After": str(max(1, int(retry_after + 0.999)))},
+        )
+
+
+def _assignment_by_code_or_404(
+    db: Session,
+    access: LearnerAccess,
+    code: str,
+) -> Assignment:
+    normalized = normalize_join_code(code)
+    if normalized is None:
+        raise _assignment_not_found()
+    assignment = db.scalar(
+        select(Assignment).where(
+            Assignment.organization_id == access.organization_id,
+            Assignment.join_code == normalized,
+        )
+    )
+    if assignment is None:
+        raise _assignment_not_found()
+    return assignment
+
+
+def _owned_attempt_or_404(
+    db: Session,
+    access: LearnerAccess,
+    attempt_id: str,
+    token: str | None,
+) -> tuple[AssignmentAttempt, Assignment, ExamSession]:
+    attempt = db.get(AssignmentAttempt, attempt_id)
+    if (
+        attempt is None
+        or attempt.organization_id != access.organization_id
+        or not attempt_belongs_to(
+            attempt,
+            principal_id=access.principal_id,
+            token=token,
+        )
+    ):
+        raise _attempt_not_found()
+    assignment = db.get(Assignment, attempt.assignment_id)
+    session = db.get(ExamSession, attempt.session_id)
+    if assignment is None or session is None:
+        raise _attempt_not_found()
+    return attempt, assignment, session
+
+
+@app.get("/api/join/{code}")
+def get_join_assignment(
+    code: str,
+    request: Request,
+    access: AssignmentLearnerAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    _enforce_learner_rate_limit(
+        "join",
+        _learner_client_ip(request),
+        limit=get_settings().learner_join_lookups_per_ip_per_minute,
+        window_seconds=60,
+    )
+    return public_assignment_view(_assignment_by_code_or_404(db, access, code))
+
+
+@app.post("/api/join/{code}/attempts", status_code=201)
+def create_assignment_attempt(
+    code: str,
+    payload: AttemptCreate,
+    request: Request,
+    access: AssignmentLearnerAccess,
+    db: Annotated[Session, Depends(get_db)],
+):
+    _enforce_learner_rate_limit(
+        "attempt",
+        _learner_client_ip(request),
+        limit=get_settings().learner_attempts_per_ip_per_10_minutes,
+        window_seconds=600,
+    )
+    assignment = _assignment_by_code_or_404(db, access, code)
+    learner_key = normalize_learner_key(payload.learner_key)
+    identity_filter = None
+    if access.principal_id:
+        identity_filter = AssignmentAttempt.principal_id == access.principal_id
+    elif learner_key:
+        identity_filter = AssignmentAttempt.learner_key == learner_key
+    prior_attempts = 0
+    if identity_filter is not None:
+        prior_attempts = int(
+            db.scalar(
+                select(func.count(AssignmentAttempt.id)).where(
+                    AssignmentAttempt.assignment_id == assignment.id,
+                    identity_filter,
+                )
+            )
+            or 0
+        )
+    try:
+        attempt_number = ensure_attempt_allowed(
+            assignment,
+            prior_attempts=prior_attempts,
+            learner_key=learner_key,
+        )
+    except AssignmentError as exc:
+        raise _assignment_http_error(exc) from exc
+    frozen = assignment.session_settings or {}
+    session = _create_exam_session(
+        db,
+        SessionCreate(
+            project_id=assignment.project_id,
+            blueprint_id=assignment.blueprint_id,
+            profile=frozen.get("profile"),
+            mode=str(frozen.get("session_mode") or "defense"),
+            allow_hints=bool(frozen.get("allow_hints")),
+            allow_corrections=bool(frozen.get("allow_corrections")),
+            max_followups_per_question=int(
+                frozen.get("max_followups_per_question", 2)
+            ),
+            question_limit=int(frozen.get("question_limit", 5)),
+            question_strategy=frozen.get("question_strategy") or "fixed",
+            learner_subject_key=(
+                f"principal:{access.principal_id}"
+                if access.principal_id
+                else None
+            ),
+            template_version_id=frozen.get("template_version_id"),
+        ),
+        exam_lock=bool(frozen.get("exam_lock")),
+    )
+    token, token_hash = issue_attempt_token()
+    attempt = AssignmentAttempt(
+        organization_id=assignment.organization_id,
+        assignment_id=assignment.id,
+        session_id=session.id,
+        principal_id=access.principal_id,
+        learner_key=learner_key,
+        display_name=payload.display_name.strip(),
+        attempt_number=attempt_number,
+        token_hash=token_hash,
+    )
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+    return {
+        "attempt_token": token,
+        "attempt": learner_attempt_view(assignment, attempt, session),
+    }
+
+
+@app.post("/api/attempts/{attempt_id}/start")
+def start_assignment_attempt(
+    attempt_id: str,
+    access: AssignmentLearnerAccess,
+    db: Annotated[Session, Depends(get_db)],
+    attempt_token: AttemptToken = None,
+):
+    attempt, assignment, session = _owned_attempt_or_404(
+        db, access, attempt_id, attempt_token
+    )
+    try:
+        ensure_window_open(assignment)
+    except AssignmentError as exc:
+        raise _assignment_http_error(exc) from exc
+    turn = _start_exam_session(db, session)
+    return {
+        "id": attempt.id,
+        "status": learner_session_status(session),
+        "turn": learner_turn_view(turn),
+    }
+
+
+@app.post("/api/attempts/{attempt_id}/answers")
+def submit_assignment_answer(
+    attempt_id: str,
+    payload: AnswerSubmit,
+    access: AssignmentLearnerAccess,
+    db: Annotated[Session, Depends(get_db)],
+    attempt_token: AttemptToken = None,
+):
+    attempt, assignment, session = _owned_attempt_or_404(
+        db, access, attempt_id, attempt_token
+    )
+    runtime_settings = get_settings()
+    if len(payload.answer) > runtime_settings.learner_answer_max_chars:
+        raise HTTPException(
+            422,
+            detail={
+                "code": "answer_too_long",
+                "message": (
+                    "Answers are limited to "
+                    f"{runtime_settings.learner_answer_max_chars} characters."
+                ),
+            },
+        )
+    _enforce_learner_rate_limit(
+        "answer",
+        attempt.id,
+        limit=runtime_settings.learner_answers_per_attempt_per_minute,
+        window_seconds=60,
+    )
+    try:
+        ensure_window_open(assignment)
+    except AssignmentError as exc:
+        raise _assignment_http_error(exc) from exc
+    result = _submit_learner_answer(db, session, payload.answer)
+    return {
+        "id": attempt.id,
+        "completed": result["completed"],
+        "status": learner_session_status(session),
+        "turns": [
+            learner_turn_view(result["user_turn"]),
+            learner_turn_view(result["assistant_turn"]),
+        ],
+    }
+
+
+LEARNER_RETRYABLE_GOVERNANCE_CODES = frozenset(
+    {
+        "organization_concurrency_limited",
+        "organization_rate_limited",
+        "principal_rate_limited",
+        "organization_token_rate_limited",
+    }
+)
+
+
+def _examiner_busy() -> HTTPException:
+    return HTTPException(
+        503,
+        detail={
+            "code": "examiner_busy",
+            "message": "Many students are answering right now. Please submit again shortly.",
+        },
+        headers={"Retry-After": "5"},
+    )
+
+
+def _submit_learner_answer(db: Session, session: ExamSession, answer: str) -> dict:
+    """Queue learner answers in memory instead of failing at the governance limit.
+
+    The model is called before the answer is written, so a rejected call leaves
+    nothing behind and can be retried.
+    """
+    runtime_settings = get_settings()
+    # Give the database connection back to the pool while waiting in line;
+    # nothing is pending yet and loaded objects stay usable.
+    db.commit()
+    slot = learner_model_gate.acquire(
+        capacity=runtime_settings.learner_model_concurrency,
+        timeout=runtime_settings.learner_model_queue_timeout_seconds,
+    )
+    if slot is None:
+        raise _examiner_busy()
+    try:
+        for attempt in range(3):
+            try:
+                result, _retest_item = _submit_exam_answer(db, session, answer)
+                return result
+            except ModelGovernanceError as exc:
+                if exc.code not in LEARNER_RETRYABLE_GOVERNANCE_CODES:
+                    raise
+                db.rollback()
+                if attempt == 2:
+                    raise _examiner_busy() from exc
+                time.sleep(1.0 + attempt + random.random())
+        raise _examiner_busy()
+    finally:
+        slot.release()
+
+
+@app.get("/api/attempts/{attempt_id}")
+def get_assignment_attempt(
+    attempt_id: str,
+    access: AssignmentLearnerAccess,
+    db: Annotated[Session, Depends(get_db)],
+    attempt_token: AttemptToken = None,
+):
+    attempt, assignment, session = _owned_attempt_or_404(
+        db, access, attempt_id, attempt_token
+    )
+    return learner_attempt_view(assignment, attempt, session)
+
+
+@app.get("/api/attempts/{attempt_id}/report")
+def get_assignment_attempt_report(
+    attempt_id: str,
+    access: AssignmentLearnerAccess,
+    db: Annotated[Session, Depends(get_db)],
+    attempt_token: AttemptToken = None,
+):
+    _attempt, assignment, session = _owned_attempt_or_404(
+        db, access, attempt_id, attempt_token
+    )
+    report = None
+    if session.status == "completed" and results_visible(assignment):
+        report = _build_session_report(db, session)
+    return learner_report_view(assignment, session, report)
 
 
 @app.get(
@@ -3457,7 +4242,7 @@ def delete_project(project_id: str, db: Annotated[Session, Depends(get_db)]):
                 "legal_hold_ids": [hold.id for hold in holds],
             },
         )
-    if settings.auth_mode != "disabled" or settings.app_env == "production":
+    if not get_settings().single_workspace_mode:
         raise HTTPException(
             409,
             detail={
@@ -5479,7 +6264,12 @@ def start_voice_session(
         model=model_for(payload.provider, settings),
     )
     cognitive = CognitiveStateService(db)
-    cognitive.ensure_blueprint_graph(blueprint)
+    try:
+        cognitive.ensure_blueprint_graph(blueprint)
+        db.commit()
+    except IntegrityError:
+        # Another request built the same blueprint graph concurrently.
+        db.rollback()
     subject = cognitive.get_or_create_subject(project.id, payload.learner_subject_key)
     if payload.analysis_profile:
         _profiles([payload.analysis_profile], payload.analysis_profile)

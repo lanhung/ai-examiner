@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -496,3 +497,49 @@ class MemoryDeletionCreate(BaseModel):
     learner_subject_id: str | None = None
     preference_id: str | None = None
     confirmation: Literal["delete"]
+
+
+class AssignmentSessionSettings(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    question_limit: int = Field(default=5, ge=1, le=20)
+    max_followups_per_question: int = Field(default=2, ge=0, le=5)
+    question_strategy: Literal["fixed", "adaptive"] = "fixed"
+    session_mode: str = Field(default="defense", min_length=1, max_length=50)
+    allow_hints: bool = True
+    allow_corrections: bool = True
+    profile: str | None = Field(default=None, max_length=160)
+    template_version_id: str | None = Field(default=None, max_length=36)
+
+
+class AssignmentCreate(BaseModel):
+    project_id: str
+    blueprint_id: str
+    title: str = Field(min_length=1, max_length=200)
+    mode: Literal["practice", "exam"] = "practice"
+    intro_text: str = Field(default="", max_length=4000)
+    session_settings: AssignmentSessionSettings = Field(
+        default_factory=AssignmentSessionSettings
+    )
+    opens_at: datetime | None = None
+    closes_at: datetime | None = None
+    max_attempts: int = Field(default=1, ge=1, le=50)
+    require_learner_key: bool = False
+
+
+class AssignmentUpdate(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    intro_text: str | None = Field(default=None, max_length=4000)
+    status: Literal["published", "closed"] | None = None
+    opens_at: datetime | None = None
+    closes_at: datetime | None = None
+    max_attempts: int | None = Field(default=None, ge=1, le=50)
+    require_learner_key: bool | None = None
+    results_released: bool | None = None
+
+
+class AttemptCreate(BaseModel):
+    display_name: str = Field(default="", max_length=120)
+    learner_key: str | None = Field(default=None, max_length=160)
