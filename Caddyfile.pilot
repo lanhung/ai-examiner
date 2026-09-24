@@ -24,6 +24,17 @@
 		}
 	}
 
+	# Browsers resend the teacher password automatically; refuse writes that
+	# another website triggers (defence in depth against CSRF).
+	@cross_site_write {
+		method POST PUT PATCH DELETE
+		header Sec-Fetch-Site cross-site
+	}
+
+	handle @cross_site_write {
+		respond "Cross-site request refused" 403
+	}
+
 	handle {
 		basic_auth {
 			{$TEACHER_USERNAME} {$TEACHER_PASSWORD_HASH}

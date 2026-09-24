@@ -4242,7 +4242,7 @@ def delete_project(project_id: str, db: Annotated[Session, Depends(get_db)]):
                 "legal_hold_ids": [hold.id for hold in holds],
             },
         )
-    if settings.auth_mode != "disabled" or settings.app_env == "production":
+    if not get_settings().single_workspace_mode:
         raise HTTPException(
             409,
             detail={

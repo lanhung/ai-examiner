@@ -1384,3 +1384,30 @@ def test_production_pilot_mode_serves_the_single_workspace(client, monkeypatch):
     with pytest.raises(JobAuthorizationError):
         authorize_job_execution(None, strict, legacy_job)
     assert get_settings().single_workspace_mode
+
+
+def test_pilot_teacher_can_delete_student_data_but_strict_production_cannot(
+    client, monkeypatch
+):
+    from ai_examiner import main as main_module
+    from ai_examiner.config import Settings
+
+    strict = Settings(app_env="production", auth_mode="disabled")
+    pilot = Settings(
+        app_env="production",
+        auth_mode="disabled",
+        allow_unsafe_auth_disabled_in_production=True,
+    )
+    assignment, blueprint = _publish(client)
+    _join(client, assignment["join_code"])
+    project_id = blueprint["project_id"]
+
+    monkeypatch.setattr(main_module, "get_settings", lambda: strict)
+    refused = client.delete(f"/api/projects/{project_id}")
+    assert refused.status_code == 409
+    assert refused.json()["detail"]["code"] == "reviewed_deletion_required"
+
+    monkeypatch.setattr(main_module, "get_settings", lambda: pilot)
+    assert client.delete(f"/api/projects/{project_id}").status_code == 200
+    with SessionLocal() as db:
+        assert db.scalars(select(AssignmentAttempt)).all() == []
