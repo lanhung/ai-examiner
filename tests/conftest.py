@@ -46,6 +46,7 @@ from sqlalchemy import text  # noqa: E402
 from ai_examiner.db import Base, SessionLocal, engine  # noqa: E402
 from ai_examiner.main import app  # noqa: E402
 from ai_examiner.services.enterprise_identity import ensure_legacy_organization  # noqa: E402
+from ai_examiner.services.rate_limit import learner_limiter  # noqa: E402
 
 
 def _drop_all_tables() -> None:
@@ -69,6 +70,7 @@ def _drop_all_tables() -> None:
 
 @pytest.fixture(autouse=True)
 def clean_database():
+    learner_limiter.reset()
     _drop_all_tables()
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:

@@ -282,6 +282,7 @@ from .services.oidc import AuthenticationContext, OIDCError
 from .services.policy_benchmark import PolicyBenchmarkService
 from .services.preferences import PreferencePolicyError, PreferenceService
 from .services.prompts import activate_prompt, create_prompt_version, prompt_manifest
+from .services.rate_limit import learner_limiter
 from .services.retest import RetestLifecycleError, RetestLifecycleService
 from .services.session_templates import (
     SessionTemplateService,
@@ -2727,6 +2728,17 @@ def create_assignment(
     )
     _profiles([profile], profile)
     frozen["profile"] = profile
+    # Fail at publish time, not when the first student joins.
+    validate_blueprint_template_compatibility(
+        blueprint,
+        SessionTemplateService(db).resolve(
+            project,
+            mode=frozen["session_mode"],
+            template_version_id=frozen["template_version_id"],
+            template_overrides={},
+            request_overrides={},
+        ),
+    )
     now = datetime.now(UTC)
     assignment = Assignment(
         organization_id=organization_id,
@@ -2864,6 +2876,40 @@ def get_assignment_dashboard(
     }
 
 
+def _learner_client_ip(request: Request) -> str:
+    runtime_settings = get_settings()
+    if runtime_settings.trust_proxy_forwarded_for:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        # The trusted reverse proxy appends the real client address last.
+        candidates = [part.strip() for part in forwarded.split(",") if part.strip()]
+        if candidates:
+            return candidates[-1]
+    return request.client.host if request.client else "unknown"
+
+
+def _enforce_learner_rate_limit(
+    bucket: str,
+    key: str,
+    *,
+    limit: int,
+    window_seconds: float,
+) -> None:
+    if not get_settings().learner_rate_limit_enabled:
+        return
+    retry_after = learner_limiter.check(
+        f"{bucket}:{key}", limit=limit, window_seconds=window_seconds
+    )
+    if retry_after is not None:
+        raise HTTPException(
+            429,
+            detail={
+                "code": "rate_limited",
+                "message": "Too many requests. Please wait and try again.",
+            },
+            headers={"Retry-After": str(max(1, int(retry_after + 0.999)))},
+        )
+
+
 def _assignment_by_code_or_404(
     db: Session,
     access: LearnerAccess,
@@ -2910,9 +2956,16 @@ def _owned_attempt_or_404(
 @app.get("/api/join/{code}")
 def get_join_assignment(
     code: str,
+    request: Request,
     access: AssignmentLearnerAccess,
     db: Annotated[Session, Depends(get_db)],
 ):
+    _enforce_learner_rate_limit(
+        "join",
+        _learner_client_ip(request),
+        limit=get_settings().learner_join_lookups_per_ip_per_minute,
+        window_seconds=60,
+    )
     return public_assignment_view(_assignment_by_code_or_404(db, access, code))
 
 
@@ -2920,9 +2973,16 @@ def get_join_assignment(
 def create_assignment_attempt(
     code: str,
     payload: AttemptCreate,
+    request: Request,
     access: AssignmentLearnerAccess,
     db: Annotated[Session, Depends(get_db)],
 ):
+    _enforce_learner_rate_limit(
+        "attempt",
+        _learner_client_ip(request),
+        limit=get_settings().learner_attempts_per_ip_per_10_minutes,
+        window_seconds=600,
+    )
     assignment = _assignment_by_code_or_404(db, access, code)
     learner_key = normalize_learner_key(payload.learner_key)
     identity_filter = None
@@ -3025,6 +3085,24 @@ def submit_assignment_answer(
 ):
     attempt, assignment, session = _owned_attempt_or_404(
         db, access, attempt_id, attempt_token
+    )
+    runtime_settings = get_settings()
+    if len(payload.answer) > runtime_settings.learner_answer_max_chars:
+        raise HTTPException(
+            422,
+            detail={
+                "code": "answer_too_long",
+                "message": (
+                    "Answers are limited to "
+                    f"{runtime_settings.learner_answer_max_chars} characters."
+                ),
+            },
+        )
+    _enforce_learner_rate_limit(
+        "answer",
+        attempt.id,
+        limit=runtime_settings.learner_answers_per_attempt_per_minute,
+        window_seconds=60,
     )
     try:
         ensure_window_open(assignment)

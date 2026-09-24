@@ -35,6 +35,7 @@
       <div class="workspace-nav-links">
         <a href="#workflow">准备</a>
         <a href="#evidenceLab">证据</a>
+        <a href="#assignmentPanel">发布与作答</a>
         <a href="#conversationPanel">文本答辩</a>
         <a href="#voicePanel">语音答辩</a>
         <a href="#memoryPanel">学习记忆</a>
@@ -86,7 +87,23 @@
       </div>
       <div class="dual-actions"><button id="startSession" disabled>开始文本答辩</button><button id="startVoice" class="voice-primary" disabled>开始实时语音答辩</button></div>
       <div id="voicePrereq" class="status">语音需要已配置的 Realtime 提供商，并建议通过 HTTPS 或 localhost 使用。</div>
+
+      <div id="publishStep" class="step"><span>6</span><div><h2>发布给学生</h2><p>生成蓝图后发布，学生用 6 位入口码或链接直接作答，不需要注册。</p></div></div>
+      <label>考试标题<input id="assignmentTitle" maxlength="200" placeholder="例如：第三章 课堂口试" /></label>
+      <div class="compact-grid">
+        <label>模式<select id="assignmentMode"><option value="practice" selected>练习</option><option value="exam">考试</option></select></label>
+        <label>题目数<input id="assignmentQuestionLimit" type="number" min="1" max="20" value="5" /></label>
+        <label>每人可作答次数<input id="assignmentMaxAttempts" type="number" min="1" max="50" value="1" /></label>
+        <label>截止时间（可选）<input id="assignmentClosesAt" type="datetime-local" /></label>
+      </div>
+      <div id="assignmentModeHint" class="status">练习：答错会有提示，提交后立即看到结果。</div>
+      <label class="inline-check"><input id="assignmentRequireKey" type="checkbox" /> 要求学生填写学号 / 考号</label>
+      <label>给学生的说明（可选）<textarea id="assignmentIntro" rows="2" maxlength="4000" placeholder="例如：请独立完成，预计 15 分钟。"></textarea></label>
+      <button id="publishAssignment" disabled>发布并生成入口码</button>
+      <div id="publishStatus" class="status"></div>
+      <div id="publishResult" class="blueprint hidden" aria-live="polite"></div>
     </section>
+
 
     <section id="evidenceLab" class="panel evidence-lab">
       <div class="conversation-head">
@@ -259,6 +276,16 @@
     <section id="reportPanel" class="panel report hidden">
       <div class="conversation-head"><div><span class="eyebrow">Evidence report</span><h2>答辩报告</h2></div></div>
       <div id="reportContent"></div>
+    </section>
+
+    <section id="assignmentPanel" class="panel">
+      <div class="conversation-head">
+        <div><span class="eyebrow">Published exams</span><h2>已发布的考试</h2></div>
+        <button id="refreshAssignments" class="secondary-button">刷新</button>
+      </div>
+      <div id="assignmentStatus" class="status"></div>
+      <div id="assignmentList" class="assignment-list"><div class="muted">尚未发布考试。</div></div>
+      <div id="assignmentDashboard" class="blueprint hidden"></div>
     </section>
   </main>
 

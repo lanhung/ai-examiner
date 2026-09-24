@@ -2,6 +2,7 @@
   "use strict";
 
   const TOKEN_HEADER = "X-AI-Examiner-Attempt-Token";
+  const REQUEST_TIMEOUT_MS = 120000;
   const CODE_PATTERN = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;
   const ERROR_TEXT = {
     assignment_not_found: "入口码无效，请核对后重试。",
@@ -11,6 +12,8 @@
     attempt_limit_reached: "作答次数已用完。",
     learner_key_required: "请填写学号 / 考号。",
     attempt_not_found: "找不到这次作答，请重新输入入口码。",
+    answer_too_long: "回答太长了，请精简到 4000 字以内。",
+    rate_limited: "提交太频繁，请稍等几秒再试。",
   };
   const WINDOW_TEXT = {
     open: "考试进行中",
@@ -22,15 +25,26 @@
   const $ = (id) => document.getElementById(id);
   const params = new URLSearchParams(window.location.search);
   const organizationId = params.get("org") || "";
-  const state = { code: "", assignment: null, attemptId: "", token: "" };
+  const MAX_ANSWER_LENGTH = 4000;
+  const state = { code: "", assignment: null, attemptId: "", token: "", submitting: false };
 
   function storageKey(code) {
     return `ai-examiner-attempt:${organizationId}:${code}`;
   }
 
+  // localStorage survives closing the in-app browser (e.g. WeChat), so a student
+  // who reopens the link resumes the same attempt instead of starting a new one.
+  function storage() {
+    try {
+      return window.localStorage;
+    } catch (_error) {
+      return null;
+    }
+  }
+
   function remember() {
     try {
-      window.sessionStorage.setItem(
+      storage().setItem(
         storageKey(state.code),
         JSON.stringify({ attemptId: state.attemptId, token: state.token }),
       );
@@ -41,7 +55,7 @@
 
   function recall(code) {
     try {
-      return JSON.parse(window.sessionStorage.getItem(storageKey(code)) || "null");
+      return JSON.parse(storage().getItem(storageKey(code)) || "null");
     } catch (_error) {
       return null;
     }
@@ -49,7 +63,7 @@
 
   function forget(code) {
     try {
-      window.sessionStorage.removeItem(storageKey(code));
+      storage().removeItem(storageKey(code));
     } catch (_error) {
       // Ignore unavailable storage.
     }
@@ -64,12 +78,24 @@
     if (options.body !== undefined) headers["Content-Type"] = "application/json";
     if (organizationId) headers["X-AI-Examiner-Organization"] = organizationId;
     if (state.token) headers[TOKEN_HEADER] = state.token;
-    const response = await fetch(path, {
-      method: options.method || "GET",
-      headers,
-      credentials: "same-origin",
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), options.timeoutMs || REQUEST_TIMEOUT_MS);
+    let response;
+    try {
+      response = await fetch(path, {
+        method: options.method || "GET",
+        headers,
+        credentials: "same-origin",
+        signal: controller.signal,
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      });
+    } catch (_error) {
+      const error = new Error("网络不稳定，请检查网络后重试。你的回答不会丢失。");
+      error.code = "network";
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
     let payload = null;
     try {
       payload = await response.json();
@@ -79,7 +105,12 @@
     if (!response.ok) {
       const detail = payload && payload.detail;
       const code = detail && typeof detail === "object" ? detail.code : "";
-      const error = new Error(ERROR_TEXT[code] || "操作未成功，请稍后重试。");
+      const error = new Error(
+        ERROR_TEXT[code]
+          || (response.status === 429 ? "提交太频繁，请稍等几秒再试。" : "")
+          || (response.status >= 500 ? "服务器繁忙，请稍后重试。你的回答不会丢失。" : "")
+          || "操作未成功，请稍后重试。",
+      );
       error.code = code;
       error.status = response.status;
       throw error;
@@ -270,23 +301,84 @@
     }
   }
 
+  function showThinking() {
+    const bubble = document.createElement("div");
+    bubble.className = "bubble examiner thinking";
+    bubble.id = "thinkingBubble";
+    bubble.setAttribute("role", "status");
+    bubble.textContent = "考官正在思考";
+    $("chatLog").appendChild(bubble);
+    bubble.scrollIntoView({ block: "end", behavior: "smooth" });
+  }
+
+  function hideThinking() {
+    const bubble = $("thinkingBubble");
+    if (bubble) bubble.remove();
+  }
+
+  // After a failed request the server may still have accepted the answer.
+  // Re-read the attempt instead of blindly resubmitting (which would count twice).
+  async function reconcile(answer) {
+    try {
+      const attempt = await api(`/api/attempts/${state.attemptId}`);
+      const learnerTurns = attempt.turns.filter((turn) => turn.role === "user");
+      const last = learnerTurns[learnerTurns.length - 1];
+      if (last && last.content.trim() === answer) {
+        $("chatLog").replaceChildren();
+        for (const turn of attempt.turns) appendTurn(turn);
+        $("answerInput").value = "";
+        if (attempt.status === "submitted") await openReport();
+        return true;
+      }
+    } catch (_error) {
+      // Keep the answer in the box so the student can retry.
+    }
+    return false;
+  }
+
+  function updateCounter() {
+    const length = $("answerInput").value.length;
+    $("answerCounter").textContent = `${length} / ${MAX_ANSWER_LENGTH}`;
+  }
+
   async function submitAnswer() {
     const answer = $("answerInput").value.trim();
-    if (!answer) return;
+    if (!answer || state.submitting) return;
+    state.submitting = true;
     setError("chatError", null);
     $("answerSubmit").disabled = true;
+    $("answerInput").readOnly = true;
+    const pending = document.createElement("div");
+    pending.className = "bubble learner";
+    pending.textContent = answer;
+    $("chatLog").appendChild(pending);
+    showThinking();
     try {
       const result = await api(`/api/attempts/${state.attemptId}/answers`, {
         method: "POST",
         body: { answer },
       });
+      hideThinking();
+      pending.remove();
       $("answerInput").value = "";
+      updateCounter();
       for (const turn of result.turns) appendTurn(turn);
       if (result.completed) await openReport();
     } catch (error) {
-      setError("chatError", error);
+      hideThinking();
+      pending.remove();
+      if (!(await reconcile(answer))) {
+        if (error.status === 409 && error.code !== "assignment_closed"
+            && error.code !== "assignment_ended") {
+          await openReport();
+        } else {
+          setError("chatError", error);
+        }
+      }
     } finally {
+      state.submitting = false;
       $("answerSubmit").disabled = false;
+      $("answerInput").readOnly = false;
     }
   }
 
@@ -303,6 +395,13 @@
     submitAnswer();
   });
   $("reportRefresh").addEventListener("click", () => openReport());
+  $("answerInput").addEventListener("input", updateCounter);
+  $("answerInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      submitAnswer();
+    }
+  });
 
   const pathMatch = window.location.pathname.match(/^\/x\/([^/]+)\/?$/);
   const initialCode = pathMatch ? decodeURIComponent(pathMatch[1]) : params.get("code");

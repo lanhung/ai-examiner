@@ -1031,3 +1031,173 @@ def test_oidc_mode_keeps_teacher_routes_private_but_allows_token_attempts(
     headers = _token_headers(created.json()["attempt_token"])
     assert client.get(f"/api/attempts/{attempt_id}", headers=headers).status_code == 200
     assert client.get(f"/api/attempts/{attempt_id}").status_code == 404
+
+
+# --------------------------------------------------------------------------
+# Launch hardening
+# --------------------------------------------------------------------------
+
+
+def test_publish_rejects_template_that_does_not_match_blueprint(client):
+    project_id, blueprint = _prepare_blueprint(client)
+    templates = client.get("/api/templates").json()
+    planned = (blueprint["data"].get("template_plan") or {}).get("template_version_id")
+    other = next(
+        template["version_id"]
+        for template in templates
+        if template["version_id"] != planned and template["lifecycle_status"] == "published"
+    )
+    response = client.post(
+        "/api/assignments",
+        json={
+            "project_id": project_id,
+            "blueprint_id": blueprint["id"],
+            "title": "错配",
+            "session_settings": {"template_version_id": other},
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "BLUEPRINT_TEMPLATE_MISMATCH"
+
+
+def test_sliding_window_limiter_expires_events():
+    from ai_examiner.services.rate_limit import SlidingWindowLimiter
+
+    limiter = SlidingWindowLimiter()
+    assert limiter.check("k", limit=2, window_seconds=10, now=0) is None
+    assert limiter.check("k", limit=2, window_seconds=10, now=1) is None
+    assert limiter.check("k", limit=2, window_seconds=10, now=2) == pytest.approx(8)
+    assert limiter.check("other", limit=2, window_seconds=10, now=2) is None
+    assert limiter.check("k", limit=2, window_seconds=10, now=10.5) is None
+
+
+def test_learner_answers_are_rate_limited_and_length_capped(client, monkeypatch):
+    from ai_examiner.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "learner_answers_per_attempt_per_minute", 2)
+    assignment, _ = _publish(
+        client, session_settings={"question_limit": 5, "max_followups_per_question": 2}
+    )
+    created = _join(client, assignment["join_code"]).json()
+    headers = _token_headers(created["attempt_token"])
+    attempt_id = created["attempt"]["id"]
+    client.post(f"/api/attempts/{attempt_id}/start", headers=headers)
+
+    too_long = client.post(
+        f"/api/attempts/{attempt_id}/answers",
+        json={"answer": "长" * 4001},
+        headers=headers,
+    )
+    assert too_long.status_code == 422
+    assert too_long.json()["detail"]["code"] == "answer_too_long"
+
+    statuses = [
+        client.post(
+            f"/api/attempts/{attempt_id}/answers",
+            json={"answer": "不知道"},
+            headers=headers,
+        )
+        for _ in range(3)
+    ]
+    assert [response.status_code for response in statuses] == [200, 200, 429]
+    assert statuses[2].json()["detail"]["code"] == "rate_limited"
+    assert int(statuses[2].headers["Retry-After"]) >= 1
+
+
+def test_attempt_creation_and_lookup_are_rate_limited_per_client(client, monkeypatch):
+    from ai_examiner.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "learner_attempts_per_ip_per_10_minutes", 2)
+    monkeypatch.setattr(settings, "learner_join_lookups_per_ip_per_minute", 3)
+    assignment, _ = _publish(client, max_attempts=10)
+    code = assignment["join_code"]
+    assert [_join(client, code).status_code for _ in range(3)] == [201, 201, 429]
+    assert [client.get(f"/api/join/{code}").status_code for _ in range(4)] == [
+        200, 200, 200, 429,
+    ]
+
+    # Behind a trusted proxy each real client gets its own bucket.
+    monkeypatch.setattr(settings, "trust_proxy_forwarded_for", True)
+    for address in ("203.0.113.7", "203.0.113.8"):
+        response = _join(client, code, headers={"X-Forwarded-For": f"10.0.0.1, {address}"})
+        assert response.status_code == 201, address
+
+
+def test_rate_limits_can_be_disabled(client, monkeypatch):
+    from ai_examiner.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "learner_rate_limit_enabled", False)
+    monkeypatch.setattr(settings, "learner_join_lookups_per_ip_per_minute", 1)
+    assignment, _ = _publish(client)
+    assert all(
+        client.get(f"/api/join/{assignment['join_code']}").status_code == 200
+        for _ in range(3)
+    )
+
+
+def test_interviewer_never_calls_a_weak_answer_sufficient():
+    from ai_examiner.agents.interviewer import (
+        FOLLOWUP_OPENERS,
+        MOVE_ON_ADEQUATE,
+        MOVE_ON_WEAK,
+        Interviewer,
+    )
+
+    interviewer = Interviewer()
+    question = {"id": "Q1", "text": "第一题", "expected_points": ["要点"]}
+    next_question = {"id": "Q2", "text": "第二题"}
+    weak = interviewer.respond(
+        decision={"action": "MOVE_ON"},
+        analysis={"answered": True, "coverage": 0.3, "errors": []},
+        question=question,
+        next_question=next_question,
+    )
+    strong = interviewer.respond(
+        decision={"action": "MOVE_ON"},
+        analysis={"answered": True, "coverage": 0.9, "errors": []},
+        question=question,
+        next_question=next_question,
+    )
+    assert any(weak.startswith(option) for option in MOVE_ON_WEAK)
+    assert any(strong.startswith(option) for option in MOVE_ON_ADEQUATE)
+    assert "基本判断依据" not in weak
+    assert weak.endswith("下一个问题：第二题")
+    followups = {
+        interviewer.respond(
+            decision={"action": "ASK_FOLLOWUP", "followup": f"追问{index}"},
+            analysis={},
+            question=question,
+            next_question=None,
+        )
+        for index in range(12)
+    }
+    assert len({text[: text.index("追问")] for text in followups}) > 1
+    assert all(any(text.startswith(opener) for opener in FOLLOWUP_OPENERS) for text in followups)
+    ended = interviewer.respond(
+        decision={"action": "END"}, analysis={}, question=question, next_question=None
+    )
+    assert "答辩" not in ended
+
+
+def test_workbench_can_publish_and_exam_page_is_resilient(client):
+    html = client.get("/").text
+    for element in (
+        'id="publishAssignment"',
+        'id="assignmentTitle"',
+        'id="assignmentMode"',
+        'id="assignmentList"',
+        'id="assignmentDashboard"',
+        'href="#assignmentPanel"',
+    ):
+        assert element in html
+    script = client.get("/static/app.js").text
+    assert "/api/assignments" in script
+    assert "/dashboard" in script
+    assert "results_released: true" in script
+    exam = client.get("/static/exam.js").text
+    assert "localStorage" in exam
+    assert "AbortController" in exam
+    assert "thinkingBubble" in exam
+    assert "reconcile" in exam

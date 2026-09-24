@@ -81,6 +81,23 @@
     .bubble.learner { background: var(--bubble-learner); align-self: flex-end; }
     .score { font-size: 2rem; font-weight: 700; margin: 8px 0; }
     ul { padding-left: 20px; }
+    .answer-meta { display: flex; justify-content: flex-end; font-size: 0.85rem; margin-top: 4px; }
+    .bubble.thinking::after {
+      content: "";
+      display: inline-block;
+      width: 1.5em;
+      text-align: left;
+      animation: thinking-dots 1.2s steps(4, end) infinite;
+    }
+    @keyframes thinking-dots {
+      0% { content: ""; }
+      25% { content: "."; }
+      50% { content: ".."; }
+      75% { content: "..."; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .bubble.thinking::after { animation: none; content: "..."; }
+    }
   </style>
 </head>
 <body>
@@ -115,7 +132,8 @@
       <div id="chatLog" class="log" aria-live="polite"></div>
       <form id="answerForm">
         <label for="answerInput">你的回答</label>
-        <textarea id="answerInput" maxlength="20000" required></textarea>
+        <textarea id="answerInput" maxlength="4000" required></textarea>
+        <div class="answer-meta"><span id="answerCounter" class="muted">0 / 4000</span></div>
         <button id="answerSubmit" type="submit">提交回答</button>
       </form>
       <div id="chatError" class="error" role="alert"></div>

@@ -180,7 +180,8 @@ def ensure_attempt_allowed(
 
 def normalize_learner_key(raw: str | None) -> str | None:
     value = (raw or "").strip()
-    return value.casefold() if value else None
+    # Case-insensitive matching; upper case reads naturally for student IDs.
+    return value.upper() if value else None
 
 
 def hash_attempt_token(token: str) -> str:

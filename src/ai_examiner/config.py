@@ -172,6 +172,12 @@ class Settings(BaseSettings):
     max_concurrent_model_calls: int = Field(default=3, ge=1, le=20)
     max_model_retries: int = Field(default=2, ge=0, le=5)
     model_governance_enabled: bool = True
+    learner_rate_limit_enabled: bool = True
+    learner_join_lookups_per_ip_per_minute: int = Field(default=60, ge=1)
+    learner_attempts_per_ip_per_10_minutes: int = Field(default=120, ge=1)
+    learner_answers_per_attempt_per_minute: int = Field(default=10, ge=1)
+    learner_answer_max_chars: int = Field(default=4000, ge=200, le=20_000)
+    trust_proxy_forwarded_for: bool = False
     model_rate_limit_backend: Literal["redis", "memory"] = "redis"
     model_rate_limit_required: bool = True
     model_rate_limit_window_seconds: int = Field(default=60, ge=10, le=3600)
