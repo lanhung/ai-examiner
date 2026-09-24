@@ -1,0 +1,72 @@
+name: Quality lab
+on:
+  schedule:
+    - cron: "0 18 * * 0"
+  workflow_dispatch:
+    inputs:
+      planners:
+        description: "Planner profiles (comma separated)"
+        default: "mock:heuristic-v2"
+      analyzers:
+        description: "Analyzer profiles (comma separated)"
+        default: "mock:heuristic-v2"
+      judge:
+        description: "Independent judge profile (mock = offline heuristic)"
+        default: "mock:heuristic-v2"
+      learner:
+        description: "Simulated learner profile (empty = rule-based)"
+        default: ""
+      judge_fraction:
+        description: "Share of first answers sent to the judge"
+        default: "0.3"
+      repeats:
+        description: "Repeats per material and persona"
+        default: "1"
+      max_cost_usd:
+        description: "Hard budget for model spend in this run"
+        default: "5"
+      prices:
+        description: "Price overrides, e.g. qwen:qwen-turbo=0.05,0.2 (space separated)"
+        default: ""
+jobs:
+  lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra dev
+      - name: Run quality lab
+        env:
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PLANNERS: ${{ inputs.planners || 'mock:heuristic-v2' }}
+          ANALYZERS: ${{ inputs.analyzers || 'mock:heuristic-v2' }}
+          JUDGE: ${{ inputs.judge || 'mock:heuristic-v2' }}
+          LEARNER: ${{ inputs.learner }}
+          JUDGE_FRACTION: ${{ inputs.judge_fraction || '1.0' }}
+          REPEATS: ${{ inputs.repeats || '1' }}
+          MAX_COST_USD: ${{ inputs.max_cost_usd || '5' }}
+          PRICES: ${{ inputs.prices }}
+        run: |
+          args=(run --planner "$PLANNERS" --analyzer "$ANALYZERS" --judge "$JUDGE"
+                --judge-fraction "$JUDGE_FRACTION" --repeats "$REPEATS"
+                --max-cost-usd "$MAX_COST_USD" --out "$RUNNER_TEMP/quality-lab")
+          if [ -n "$LEARNER" ]; then args+=(--learner "$LEARNER"); fi
+          for price in $PRICES; do args+=(--price "$price"); done
+          uv run ai-examiner-quality-lab "${args[@]}"
+          cat "$RUNNER_TEMP/quality-lab/report.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload quality lab results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-lab
+          path: |
+            ${{ runner.temp }}/quality-lab/results*.jsonl
+            ${{ runner.temp }}/quality-lab/summary.json
+            ${{ runner.temp }}/quality-lab/report.md
+          if-no-files-found: warn

@@ -70,6 +70,7 @@ ai-examiner-generate-v09-evidence = "ai_examiner.release_evidence:main"
 ai-examiner-rehearse-host-recovery = "ai_examiner.recovery_evidence:main"
 ai-examiner-observe-v09-staging = "ai_examiner.staging_observer:main"
 ai-examiner-probe-model-governance = "ai_examiner.model_governance_probe:main"
+ai-examiner-quality-lab = "ai_examiner.quality_lab.cli:run_quality_lab"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ai_examiner"]
