@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased WeChat teacher exam preview - 2026-10-15
+
+- Add owner-only, real-model teacher rehearsals in a separate table with forced
+  PostgreSQL RLS (migration 0019); formal student grades and counts stay unchanged.
+- Reuse grading, quota checks, idempotency and answer recovery; label previews and
+  manually recovered scores explicitly, and hide self-enrollment forms.
+- Preserve answers on HTTP quota failures instead of leaving them grading forever;
+  failed stale calls cannot overwrite a newer submission.
+- Keep backend version 0.9.0; a single-account preview is not a two-user acceptance.
+- Verify 102 isolated backend tests and 31 client tests; complete a six-question
+  real qwen-plus preview in WeChat Developer Tools, with formal grades still empty.
+- Record deployment, RLS checks and remaining UI/acceptance limits in
+  `docs/wechat/TEACHER_STUDENT_EXAMS.md`.
+
+## Unreleased WeChat teacher/student exams - 2026-09-24
+
+- Add a student exam hall and an explicitly authorized teacher view; existing
+  personal workspaces and memberships remain unchanged.
+- Publish immutable questions and material snapshots, share only published
+  exams, accept one individually authorized attempt per student, and return
+  original answers plus evidence-based AI grades to the publishing teacher.
+- Add original-material preview, teacher grade review, failed-scoring recovery,
+  idempotent submissions, scoped model usage and PostgreSQL RLS migration 0018.
+- Preserve old grades and block source-project deletion before any file removal.
+- Keep backend 0.9.0 and the mini-program in preview; no production exam claim.
+- See `docs/wechat/TEACHER_STUDENT_EXAMS.md` for scope, rollout and limitations.
+
 ## WeChat preview snapshot - 2026-09-24
 
 - Save the native mini-program, server-verified login, isolated personal spaces,
@@ -11,6 +38,77 @@
 - Record the real qwen-plus UI acceptance and known scoring/report/recovery gaps;
   this snapshot is not a claim of production readiness or completed remediation.
 - Exclude credentials, runtime data, local review artifacts and private tool settings.
+
+## Unreleased WeChat personal spaces - 2026-09-22
+
+- Add opt-in `WECHAT_REGISTRATION_MODE=personal`: a verified new or pending
+  WeChat identity gets its own private organization and examiner membership.
+  Default deployments retain manual approval; existing memberships are unchanged.
+- Serialize first-login provisioning with PostgreSQL row locks and stable space
+  IDs. Activation, membership, audit events and login session commit atomically;
+  disabled accounts and revoked memberships are not reactivated.
+- Add explicit tenant checks to document-list and document-evidence endpoints.
+- Test isolated spaces, concurrent registration, rollback, cross-tenant access,
+  and legacy approval. UI uses "space"; backend version remains 0.9.0.
+
+## Unreleased mini-program upload recovery - 2026-09-22
+
+- Move synchronous document parsing and storage off the ASGI event loop. Isolate
+  PDF parsing in spawned processes because PyMuPDF is not thread-safe.
+- Give each upload a private temporary directory, clean it on success or failure,
+  and preserve original mini-program filenames through validated multipart data.
+- Show native upload progress and distinguish transmission from server parsing.
+- Add project-scoped uploaded-material discovery and explicit selection after an
+  uncertain upload. Never automatically repeat a file upload; persist only the
+  uncertainty flag and resource IDs, not document content or temporary file paths.
+- Add Word upload, evidence, responsiveness, filename/size validation, WeChat
+  recovery and cross-project stale-response regressions. Backend remains 0.9.0.
+
+
+## Unreleased mini-program integration fix - 2026-09-21
+
+- Fixed invalid escaped operators in native WXML conditions and removed an
+  optional-chain expression incompatible with the imported developer-tool setup.
+- Added a public, non-cacheable WeChat configuration status endpoint and client
+  preflight checks for missing server credentials or mismatched AppID.
+- Classified WeChat domain, TLS and timeout failures without exposing raw network
+  details or retrying uncertain mutations.
+- Added optional private wechat.env loading to the AutoDL startup script.
+- Deployed the opt-in backend adapter to the existing AutoDL service. Real login
+  remains blocked by missing AppSecret and the client domain allowlist; no
+  real-device or real-model acceptance is claimed. Backend remains 0.9.0.
+
+## Unreleased mini-program preview - 2026-09-10
+
+- Added a native WeChat client under apps/wechat, independently versioned
+  0.1.0-preview; backend version remains 0.9.0.
+- Added opt-in server-verified WeChat login, pending-account approval with audit,
+  revocable hashed sessions and a fail-closed Redis login admission limit.
+- Reused tenant/RBAC-protected project, upload, asynchronous blueprint, text
+  examination and report APIs. No client model keys or mock fallback.
+- Added scoped progress pointers, timeout reconciliation, security/protocol tests
+  and deployment guidance. AppID, developer-tools and real-device acceptance are
+  still required; native voice and evidence preview are not part of this preview.
+
+## Unreleased fix - 2026-09-07
+
+- Removed training wording from built-in Chinese product display copy, including
+  workbench defaults, template labels and report notices. Preserved immutable
+  template sources, user text, scientific terminology and disclaimer restrictions.
+- Removed the enterprise-edition suffix from the workbench heading and renamed
+  the console labels to "控制器" without changing routes, permissions or version.
+- Added a 120-minute server-enforced browser idle timeout and an explicit opt-in
+  application-session policy (480-minute absolute limit). Bearer token validation
+  remains unchanged; existing sessions are not extended.
+- Bind blueprint request keys to organization, project, document, model and
+  template parameters; preserve same-request retries and reset terminal failures.
+- Return a structured HTTP 409 for job idempotency conflicts instead of HTTP 500.
+- Fixed protected evidence thumbnails: image downloads now carry the active
+  organization header and session credentials before being decoded as images.
+- Show per-page failures instead of claiming that listed evidence has rendered.
+  Bound download concurrency and release preview URLs on reload or organization change.
+- Added preview authorization, error handling and cleanup regression tests.
+- Retained application version 0.9.0; only the frontend cache revision changed.
 
 ## Unreleased interface revision - 2026-09-04
 

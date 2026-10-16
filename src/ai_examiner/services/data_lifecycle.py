@@ -14,6 +14,7 @@ from ..config import Settings
 from ..db import Base
 from ..models import (
     DataSubjectRequest,
+    ExamPaper,
     HumanReviewCase,
     HumanReviewEvent,
     LearnerIdentity,
@@ -25,7 +26,10 @@ from ..models import (
     OrganizationRetentionPolicy,
     Principal,
     Project,
+    PublishedExam,
+    SchoolAttempt,
     StoredObject,
+    TeacherExamPreview,
 )
 from .memory_control import MemoryControlService
 from .storage import (
@@ -462,6 +466,10 @@ def _scope_query(model, artifact: OrganizationExportArtifact):
             return query.where(Project.id == artifact.scope_id)
         if hasattr(model, "project_id"):
             return query.where(model.project_id == artifact.scope_id)
+        if model in {PublishedExam, SchoolAttempt, TeacherExamPreview}:
+            exam_ids = select(ExamPaper.exam_id).where(ExamPaper.project_id == artifact.scope_id)
+            key = PublishedExam.id if model is PublishedExam else model.exam_id
+            return query.where(key.in_(exam_ids))
         return None
     if artifact.scope_type == "learner_identity":
         if hasattr(model, "learner_identity_id"):
@@ -920,6 +928,11 @@ class DataSubjectRequestService:
             return (
                 {"projects": 0, "objects": 0},
                 {"verified": True, "relational_remaining": 0, "objects_remaining": 0},
+            )
+        if self.db.scalar(select(ExamPaper.exam_id).where(ExamPaper.project_id == project_id).limit(1)):
+            raise DataLifecycleError(
+                "published_exam_retained",
+                "Project has published exams. Exam retention review is required before deletion.",
             )
         storage = StorageService(self.db, self.settings)
         objects = self.db.scalars(

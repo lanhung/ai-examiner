@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
 from ai_examiner.db import SessionLocal
 from ai_examiner.enterprise_constants import LEGACY_ORGANIZATION_ID
 from ai_examiner.models import DataSubjectRequest, Project
@@ -19,6 +25,42 @@ def _owner(subject: str) -> str:
         return principal.id
 
 
+def test_evidence_preview_javascript_contract():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js is required for preview JavaScript regression tests")
+    subprocess.run(
+        [node, "tests/evidence_previews.cjs"],
+        cwd=Path(__file__).parents[1],
+        check=True,
+        timeout=30,
+    )
+
+
+def test_evidence_file_requires_explicit_organization(client):
+    owner_id = _owner("preview-owner")
+    headers = _headers(owner_id)
+    project = client.post("/api/projects", headers=headers, json={"name": "Preview test"}).json()
+    uploaded = client.post(
+        f"/api/projects/{project['id']}/documents",
+        headers=headers,
+        files={"file": ("preview.md", b"# Preview\nA non-sensitive test page.", "text/markdown")},
+    )
+    assert uploaded.status_code == 201
+    assets = client.get(
+        f"/api/documents/{uploaded.json()['id']}/evidence", headers=headers
+    ).json()["assets"]
+    page = next(asset for asset in assets if asset["kind"] == "page")
+    path = page["authorized_file_url"]
+    missing_organization = client.get(path, headers={"X-AI-Examiner-Principal": owner_id})
+    assert missing_organization.status_code == 400
+    assert client.get(path, headers={**headers, "X-AI-Examiner-Organization": "other"}).status_code in (403, 404)
+    allowed = client.get(path, headers=headers)
+    assert allowed.status_code == 200
+    assert allowed.headers["content-type"].startswith("image/png")
+    assert allowed.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+
 def _headers(principal_id: str) -> dict[str, str]:
     return {
         "X-AI-Examiner-Organization": LEGACY_ORGANIZATION_ID,
@@ -32,7 +74,8 @@ def test_enterprise_console_is_a_dedicated_operational_surface(client):
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     html = response.text
-    assert "AI Examiner 企业控制台" in html
+    assert "AI Examiner 控制器" in html
+    assert "企业控制台" not in html
     assert "成员与权限" in html
     assert "模型治理" in html
     assert "审计日志" in html

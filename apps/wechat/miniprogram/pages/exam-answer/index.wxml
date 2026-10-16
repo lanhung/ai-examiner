@@ -1,0 +1,49 @@
+<view class="page">
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <block wx:if="{{attempt}}">
+    <view class="title">{{attempt.title}}</view>
+    <view wx:if="{{attempt.is_preview}}" class="badge">教师试答 · 不计入学生成绩</view>
+    <view class="muted">{{attempt.student_name}} · {{attempt.statusLabel}} · {{attempt.position}} / {{attempt.question_count}} 题</view>
+    <block wx:if="{{attempt.status==='completed'}}">
+      <view class="section"><view class="title">{{attempt.final_score}} / 100</view>
+        <view class="muted">{{attempt.is_preview ? '试答结果（含各题评分来源）' : attempt.reviewed_score !== null ? '教师复核成绩' : 'AI 初评，待教师复核'}}</view>
+        <view wx:if="{{attempt.review_note}}" class="body">{{attempt.review_note}}</view>
+      </view>
+    </block>
+    <view wx:for="{{attempt.answers}}" wx:key="request_id" class="section">
+      <view class="heading">{{index+1}}. {{item.question}}</view>
+      <view class="body">{{item.answer}}</view>
+      <block wx:if="{{item.evaluation}}">
+        <view class="badge">{{item.evaluation.score}} / 5</view>
+        <view class="muted">{{item.evaluation.source==='teacher_review'?'人工评分':'AI 评分'}}</view>
+        <view class="body">{{item.evaluation.reasoning}}</view>
+        <view wx:if="{{item.evaluation.supporting_quote}}" class="muted">回答依据：{{item.evaluation.supporting_quote}}</view>
+        <view wx:for="{{item.evaluation.point_assessments}}" wx:for-item="point" wx:key="point_id" class="muted">{{point.reason}}</view>
+        <view wx:for="{{item.evaluation.missing_points}}" wx:for-item="point" wx:key="*this" class="muted">{{point}}</view>
+      </block>
+    </view>
+    <view wx:if="{{attempt.pending_answer}}" class="section body">待处理答案：{{attempt.pending_answer}}</view>
+    <block wx:if="{{!teacher && attempt.status==='active'}}">
+      <view class="section"><view class="heading">第 {{attempt.position+1}} 题</view><view class="body">{{attempt.question.text}}</view></view>
+      <textarea class="field" placeholder="输入你的回答" maxlength="12000" value="{{answer}}" data-field="answer" bindinput="field" disabled="{{busy || uncertain}}"/>
+      <button class="primary" bindtap="submit" loading="{{busy}}" disabled="{{busy || uncertain || !answer}}">提交回答</button>
+      <button wx:if="{{uncertain}}" bindtap="retry" disabled="{{busy}}">用原提交编号确认结果</button>
+    </block>
+    <view wx:if="{{attempt.status==='grading'}}" class="muted">答案已保存，正在评分。请稍后刷新。</view>
+    <view wx:if="{{attempt.status==='needs_review'}}" class="error">自动评分未完成，答案已保留，等待教师处理。</view>
+    <view wx:if="{{(teacher || preview) && attempt.pending_answer}}" class="section">
+      <view class="heading">处理未完成评分</view>
+      <input class="field" type="digit" placeholder="本题分数（0–5）" value="{{score}}" data-field="score" bindinput="field"/>
+      <textarea class="field" placeholder="评分依据" maxlength="2000" value="{{note}}" data-field="note" bindinput="field"/>
+      <button bindtap="reviewAnswer" disabled="{{busy}}">人工评分并恢复答卷</button>
+    </view>
+    <block wx:if="{{teacher && attempt.status==='completed'}}">
+      <view class="section"><view class="heading">教师复核</view>
+        <input class="field" type="digit" placeholder="复核总分（0–100）" value="{{score}}" data-field="score" bindinput="field"/>
+        <textarea class="field" maxlength="2000" placeholder="复核理由" value="{{note}}" data-field="note" bindinput="field"/>
+        <button class="primary" bindtap="review" disabled="{{busy}}">保存复核成绩</button>
+      </view>
+    </block>
+  </block>
+  <button bindtap="refresh" disabled="{{busy}}">刷新答卷</button>
+</view>

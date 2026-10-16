@@ -1,0 +1,24 @@
+<view class="page">
+  <view class="title">{{mode === 'teacher' ? '教师端' : '学生端'}}</view>
+  <view wx:if="{{teacher}}" class="row tabs">
+    <button class="{{mode==='student'?'primary':''}}" data-mode="student" bindtap="mode" disabled="{{busy}}">学生端</button>
+    <button class="{{mode==='teacher'?'primary':''}}" data-mode="teacher" bindtap="mode" disabled="{{busy}}">教师端</button>
+  </view>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <button wx:if="{{mode==='teacher'}}" class="primary" bindtap="prepare" disabled="{{busy}}">准备材料与发布考试</button>
+  <view class="section">
+    <view class="heading">{{mode==='teacher'?'我发布的考试':'考试大厅'}}</view>
+    <button bindtap="refresh" loading="{{busy}}" disabled="{{busy}}">刷新</button>
+    <view wx:if="{{!exams.length && !busy}}" class="muted">暂无已发布考试</view>
+    <view wx:for="{{exams}}" wx:key="id" class="item">
+      <view class="heading">{{item.title}}</view>
+      <view class="muted">{{item.teacher_name}} · {{item.question_count}} 题 · {{item.statusLabel}}</view>
+      <view class="muted">{{item.material_name}}</view>
+      <button data-id="{{item.id}}" bindtap="open">{{mode==='teacher'?'查看答卷与成绩':item.attempt_id?'继续 / 查看结果':'查看考试'}}</button>
+    </view>
+    <button wx:if="{{more}}" bindtap="more" disabled="{{busy}}">加载更多</button>
+  </view>
+  <button bindtap="personal">个人答辩</button>
+  <view class="muted selectable" user-select>账号编号：{{principalId}}</view>
+  <button bindtap="logout">退出登录</button>
+</view>

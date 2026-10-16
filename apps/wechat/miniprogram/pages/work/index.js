@@ -1,10 +1,17 @@
 const api = require('../../lib/api');
 const progress = require('../../lib/progress');
+const school = require('../../lib/school');
 Page({
   data:{busy:false,error:'',organizations:[],orgIndex:0,providers:[],providerIndex:0,projects:[],projectIndex:0,name:'',document:null,documents:[],documentIndex:0,uploadProgress:-1,uploadMessage:'',uploadUncertain:false,blueprint:null,job:null,sessionId:''},
-  async onLoad() {await this.run(async()=>{
+  async onLoad(options={}) {await this.run(async()=>{
     const me=await api.request('/api/v1/me'); getApp().globalData.me=me;
-    const organizations=me.organizations.filter(o=>o.status==='active');
+    let organizations=me.organizations.filter(o=>o.status==='active');
+    if(options.teacher==='1'){
+      const identity=await school.request('/me');
+      if(!identity.teacher)throw new Error('教师身份未开通');
+      organizations=organizations.filter(o=>o.id===identity.teacher_organization_id);
+      this.setData({teacherMode:true,examTitle:'',teacherName:'',examInstructions:'',shareConfirmed:false,questionCount:'6'});
+    }
     const old=wx.getStorageSync(api.ORG);
     const orgIndex=Math.max(0,organizations.findIndex(o=>o.id===old));
     this.setData({organizations,orgIndex});
@@ -45,6 +52,7 @@ Page({
   },
   selectDocument(){this.document({detail:{value:this.data.documentIndex}});},
   useDocument(document,documentIndex=0){
+    this.publishRequest=null;
     const project=this.data.projects[this.data.projectIndex];
     progress.save({projectId:project.id,documentId:document.id,jobId:null,sessionId:null,uploadUncertain:false});
     this.setData({document,documentIndex,blueprint:null,job:null,sessionId:'',error:'',uploadUncertain:false,uploadProgress:-1,uploadMessage:'材料已就绪'});
@@ -105,12 +113,25 @@ Page({
       const job=await api.request(`/api/v1/jobs/${id}`);
       if(generation!==(this.generation||0)||id!==(this.data.job && this.data.job.id))return;
       this.setData({job});
-      if(job.status==='completed')this.setData({blueprint:job.result.blueprint});
-      else if(['failed','cancelled','canceled'].includes(job.status))this.setData({error:'蓝图任务未完成，请在网页任务中心查看失败详情。'});
+      if(job.status==='completed')this.setData({blueprint:job.result.blueprint,job:null});
+      else if(['failed','cancelled','canceled'].includes(job.status)){progress.save({jobId:null});this.setData({job:null,error:'蓝图任务未完成，请在网页任务中心查看失败详情。'});}
       else if(this.visible)this.timer=setTimeout(()=>this.poll(),2500);
-    }catch(e){this.setData({error:e.message});}finally{this.polling=false;}
+    }catch(e){if(generation===(this.generation||0)&&id===(this.data.job && this.data.job.id))this.setData({error:e.message});}finally{this.polling=false;}
   },
   refreshJob(){this.poll();},
+  examField(e){this.publishRequest=null;this.setData({[e.currentTarget.dataset.field]:e.detail.value});},
+  share(e){this.setData({shareConfirmed:e.detail.value.includes('yes')});},
+  async publish(){await this.run(async()=>{
+    if(!this.data.teacherMode||!this.data.blueprint)throw new Error('请先准备考试蓝图');
+    if(!this.data.shareConfirmed)throw new Error('请确认材料可向学生公开');
+    const model=this.data.providers[this.data.providerIndex];
+    const question_count=Number(this.data.questionCount);
+    if(!Number.isInteger(question_count)||question_count<1||question_count>20)throw new Error('题数应为 1 到 20');
+    if(!this.data.examTitle.trim()||!this.data.teacherName.trim())throw new Error('请填写考试名称和教师署名');
+    this.publishRequest=this.publishRequest||{request_id:school.id(),blueprint_id:this.data.blueprint.id,title:this.data.examTitle.trim(),teacher_name:this.data.teacherName.trim(),instructions:this.data.examInstructions.trim(),profile:model.id,question_count,share_material_confirmed:true};
+    const exam=await school.request('/teacher/exams','POST',this.publishRequest);
+    wx.navigateTo({url:`/pages/exam/index?id=${exam.id}&teacher=1`});
+  });},
   async start(){await this.run(async()=>{
     const p=this.data.projects[this.data.projectIndex],model=this.data.providers[this.data.providerIndex];
     if(!this.data.blueprint || !model)throw new Error('请先完成蓝图');

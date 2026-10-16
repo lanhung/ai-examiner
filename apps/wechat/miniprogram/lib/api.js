@@ -86,4 +86,16 @@ function upload(projectId, filePath, options = {}) {
     if(task && task.onProgressUpdate && options.onProgress) task.onProgressUpdate(options.onProgress);
   });
 }
-module.exports = {request, upload, clear, url, decode, TOKEN, ORG};
+function openDocument(path, fileType) {
+  return new Promise((resolve,reject)=>{
+    if(!['pdf','docx','pptx'].includes(fileType)){reject(new Error('该格式请查看页面中的材料正文'));return;}
+    let endpoint, header;
+    try{endpoint=url(path);header=headers();}catch(e){reject(e);return;}
+    wx.downloadFile({url:endpoint,header,timeout:60000,success:r=>{
+      if(r.statusCode!==200){try{decode(r);}catch(e){reject(e);return;}reject(new Error('下载失败'));return;}
+      wx.openDocument({filePath:r.tempFilePath,fileType,showMenu:false,success:resolve,
+        fail:()=>reject(new Error('微信无法预览此文件，请查看材料正文'))});
+    },fail:e=>reject(networkError(e,'材料下载失败，请刷新后重试'))});
+  });
+}
+module.exports = {request, upload, openDocument, clear, url, decode, TOKEN, ORG};

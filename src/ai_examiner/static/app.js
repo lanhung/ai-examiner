@@ -105,7 +105,10 @@ async function api(path, options = {}) {
     try { body = JSON.parse(raw); } catch { body = { detail: raw }; }
   }
   if (!response.ok) {
-    throw new Error(responseErrorMessage(body, response.status));
+    const error = new Error(responseErrorMessage(body, response.status));
+    error.status = response.status;
+    error.code = body.detail?.code;
+    throw error;
   }
   return body;
 }
@@ -122,6 +125,7 @@ function showWorkbenchLogin() {
 }
 
 function activateWorkbenchOrganization(organizationId) {
+  if (state.organizationId !== (organizationId || null)) clearEvidencePreviews();
   state.organizationId = organizationId || null;
   if (state.organizationId) {
     localStorage.setItem("ai-examiner.organization", state.organizationId);
@@ -182,9 +186,33 @@ function selectedProfiles() {
   return [...document.querySelectorAll("input[name='modelProfile']:checked")].map((node) => node.value);
 }
 
+function productDisplayCopy(value) {
+  // Keep immutable template sources and users' scientific content unchanged.
+  const aliases = new Map([
+    ["论文答辩训练", "论文答辩"],
+    ["基金申请评审训练", "基金申请评审"],
+    ["课程口试训练", "课程口试"],
+    ["产品知识训练", "产品知识"],
+    ["销售异议训练", "销售异议应对"],
+    ["技术面试训练", "技术面试"],
+    ["基于论文材料、用户回答和证据链的论文答辩训练。", "基于论文材料、用户回答和证据链的论文答辩。"],
+    ["围绕科学价值、创新、方法与可行性的证据化评审训练。", "围绕科学价值、创新、方法与可行性的证据化评审。"],
+    ["训练产品事实、适用场景、客户匹配与边界表达。", "讨论产品事实、适用场景、客户匹配与边界表达。"],
+    ["通过角色扮演训练需求发现、价值表达、异议处理与合规边界。", "通过角色扮演探讨需求发现、价值表达、异议处理与合规边界。"],
+    ["面向问题分析、架构权衡与工程风险的技术面试训练。", "面向问题分析、架构权衡与工程风险的技术面试。"],
+    ["本报告仅用于训练和辅助判断，不应作为正式学位、录取、招聘或人事决定的唯一依据。", "本报告仅用于模拟交流和辅助判断，不应作为正式学位、录取、招聘或人事决定的唯一依据。"],
+    ["本报告仅用于训练，不得用于自动作出招聘、晋升或解雇决定。", "本报告仅用于模拟交流，不得用于自动作出招聘、晋升或解雇决定。"],
+    ["本报告仅用于训练，不构成医疗建议、诊断或治疗决定。", "本报告仅用于模拟交流，不构成医疗建议、诊断或治疗决定。"],
+  ]);
+  const text = String(value || "");
+  return aliases.get(text) ?? text;
+}
+
 function localized(value) {
-  if (!value || typeof value !== "object") return String(value || "");
-  return value["zh-CN"] || value.en || Object.values(value)[0] || "";
+  const text = !value || typeof value !== "object"
+    ? String(value || "")
+    : value["zh-CN"] || value.en || Object.values(value)[0] || "";
+  return productDisplayCopy(text);
 }
 
 function templateMode() {
@@ -356,9 +384,9 @@ function templateEditorMarkup(source, editable) {
     </div>
     <div class="template-editor-panel" data-template-panel="overview">
       <div class="template-form-grid">
-        <label>中文名称<input id="templateTitleZh" value="${escapeHtml(metadata.title?.["zh-CN"] || "")}" ${disabled} /></label>
+        <label>中文名称<input id="templateTitleZh" value="${escapeHtml(editable ? (metadata.title?.["zh-CN"] || "") : productDisplayCopy(metadata.title?.["zh-CN"]))}" ${disabled} /></label>
         <label>English title<input id="templateTitleEn" value="${escapeHtml(metadata.title?.en || "")}" ${disabled} /></label>
-        <label>中文说明<textarea id="templateDescriptionZh" rows="3" ${disabled}>${escapeHtml(metadata.description?.["zh-CN"] || "")}</textarea></label>
+        <label>中文说明<textarea id="templateDescriptionZh" rows="3" ${disabled}>${escapeHtml(editable ? (metadata.description?.["zh-CN"] || "") : productDisplayCopy(metadata.description?.["zh-CN"]))}</textarea></label>
         <label>English description<textarea id="templateDescriptionEn" rows="3" ${disabled}>${escapeHtml(metadata.description?.en || "")}</textarea></label>
       </div>
       <h3>目标与权重</h3>
@@ -840,6 +868,7 @@ $("createProject").onclick = async () => {
       body: JSON.stringify({name: $("projectName").value}),
     });
     state.projectId = project.id;
+    clearEvidencePreviews();
     $("documentFile").disabled = false;
     $("uploadDocument").disabled = false;
     setStatus("projectStatus", `项目已创建：${project.name}`, "success");
@@ -869,28 +898,33 @@ $("uploadDocument").onclick = async () => {
   } catch (error) { setStatus("documentStatus", error.message, "error"); }
 };
 
+function blueprintRequestKeyFor(projectId, payload) {
+  const signature = JSON.stringify({organizationId: state.organizationId, projectId, payload});
+  if (!state.blueprintRequestKey || state.blueprintRequestSignature !== signature) {
+    state.blueprintRequestKey = globalThis.crypto?.randomUUID?.() || `blueprint-${Date.now()}-${Math.random()}`;
+    state.blueprintRequestSignature = signature;
+  }
+  return state.blueprintRequestKey;
+}
+
 $("generateBlueprint").onclick = async () => {
   const profile = $("blueprintProfile").value;
   if (!profile) return setStatus("blueprintStatus", "请选择已就绪的蓝图模型", "error");
-  const requestKey = state.blueprintRequestKey
-    || (globalThis.crypto?.randomUUID?.() || `blueprint-${Date.now()}-${Math.random()}`);
-  state.blueprintRequestKey = requestKey;
+  const projectId = state.projectId;
+  const payload = {document_id: state.documentId, profile, ...selectedTemplateRequest()};
+  const requestKey = blueprintRequestKeyFor(projectId, payload);
   $("generateBlueprint").disabled = true;
   $("cancelBlueprint").classList.remove("hidden");
   $("blueprintProgress").classList.remove("hidden");
   setStatus("blueprintStatus", `已提交给 ${profile}，可以继续留在页面查看进度。`);
   try {
-    const queued = await api(`/api/projects/${state.projectId}/blueprints/async`, {
+    const queued = await api(`/api/projects/${projectId}/blueprints/async`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Idempotency-Key": requestKey,
       },
-      body: JSON.stringify({
-        document_id: state.documentId,
-        profile,
-        ...selectedTemplateRequest(),
-      }),
+      body: JSON.stringify(payload),
     });
     state.blueprintJobId = queued.id;
     const job = await pollBlueprintJob(queued.id);
@@ -912,7 +946,7 @@ $("generateBlueprint").onclick = async () => {
     state.blueprintRequestKey = null;
   } catch (error) {
     setStatus("blueprintStatus", error.message, "error");
-    if (/取消|失败|dead.?letter/i.test(error.message)) state.blueprintRequestKey = null;
+    if (error.jobTerminal || error.code === "job_idempotency_conflict" || /取消|失败|dead.?letter/i.test(error.message)) state.blueprintRequestKey = null;
   } finally {
     state.blueprintJobId = null;
     $("generateBlueprint").disabled = false;
@@ -930,10 +964,10 @@ async function pollBlueprintJob(jobId) {
     $("blueprintProgress").querySelector("small").textContent =
       `${job.message || job.status} · ${percent}% · 已用时 ${elapsed} 秒`;
     if (job.status === "completed") return job;
-    if (job.status === "cancelled") throw new Error("蓝图生成已取消");
-    if (job.status === "failed") throw new Error(job.error || "蓝图生成失败");
-    if (job.status === "dead_letter") {
-      throw new Error(job.error || "蓝图生成多次重试后仍失败");
+    if (["cancelled", "failed", "dead_letter"].includes(job.status)) {
+      const error = new Error(job.error || (job.status === "cancelled" ? "蓝图生成已取消" : "蓝图生成失败"));
+      error.jobTerminal = true;
+      throw error;
     }
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
@@ -1130,7 +1164,7 @@ async function showReport() {
       <strong>${escapeHtml(item.question_id || "问题")}</strong><small>第 ${escapeHtml(item.source_page || "?")} 页 · 得分 ${escapeHtml(item.score)}</small>
       <p>${escapeHtml(item.source_excerpt || "未记录来源片段")}</p>
     </article>`).join("") || "<p>暂无页面证据。</p>"}</div></div>
-    <p>${escapeHtml(report.disclaimer)}</p>`;
+    <p>${escapeHtml(productDisplayCopy(report.disclaimer))}</p>`;
   $("reportPanel").scrollIntoView({behavior: "smooth"});
 }
 
@@ -1341,18 +1375,89 @@ $("deleteMemory").onclick = async () => {
   } catch (error) { setStatus("memoryStatus", error.message, "error"); }
 };
 
+const evidencePreviewState = {controller: null, urls: new Set()};
+
+function clearEvidencePreviews() {
+  evidencePreviewState.controller?.abort();
+  for (const url of evidencePreviewState.urls) URL.revokeObjectURL(url);
+  evidencePreviewState.urls.clear();
+  $("evidenceGallery").replaceChildren();
+}
+
+async function loadEvidenceImage(asset, image, status, organizationId, signal) {
+  let objectUrl;
+  try {
+    const path = organizationId ? (asset.authorized_file_url || asset.file_url) : asset.file_url;
+    if (!path) throw new Error("此页尚未生成预览文件");
+    const url = new URL(path, window.location.origin);
+    if (url.origin !== window.location.origin || !/^\/api\/(v1\/)?evidence\//.test(url.pathname)) {
+      throw new Error("预览文件地址无效");
+    }
+    const headers = organizationId ? {"X-AI-Examiner-Organization": organizationId} : {};
+    const response = await fetch(url.href, {headers, credentials: "same-origin", cache: "no-store", signal});
+    if (!response.ok) {
+      if (response.status === 401) throw new Error("登录已过期，请重新登录后加载证据");
+      if (response.status === 403) throw new Error("没有查看此页证据的权限");
+      if (response.status === 404) throw new Error("预览文件不存在，请重新解析材料");
+      throw new Error(`预览下载失败（HTTP ${response.status}），请重试`);
+    }
+    const blob = await response.blob();
+    if (signal.aborted) return false;
+    if (!blob.type.startsWith("image/") || !blob.size) throw new Error("服务器未返回有效的预览图片");
+    objectUrl = URL.createObjectURL(blob);
+    evidencePreviewState.urls.add(objectUrl);
+    image.src = objectUrl;
+    await image.decode();
+    if (signal.aborted) return false;
+    image.hidden = false;
+    status.hidden = true;
+    return true;
+  } catch (error) {
+    if (!signal.aborted) {
+      image.hidden = true;
+      status.hidden = false;
+      status.textContent = error.message || "预览加载失败，请重试";
+      status.className = "status error";
+    }
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+      evidencePreviewState.urls.delete(objectUrl);
+    }
+    return false;
+  }
+}
+
 async function loadEvidence() {
   if (!state.documentId) return;
+  clearEvidencePreviews();
+  const controller = new AbortController();
+  evidencePreviewState.controller = controller;
+  const organizationId = state.organizationId;
+  const documentId = state.documentId;
   setStatus("evidenceStatus", "正在读取页面与区域证据…");
   try {
-    const result = await api(`/api/documents/${state.documentId}/evidence`);
+    const result = await api(`/api/documents/${documentId}/evidence`, {signal: controller.signal});
+    if (controller.signal.aborted) return;
     const pages = result.assets.filter((asset) => asset.kind === "page");
     $("evidenceGallery").innerHTML = pages.map((asset) => `<article class="evidence-card">
-      <img loading="lazy" src="${asset.file_url}" alt="${escapeHtml(asset.label)}" />
-      <div class="content"><strong>${escapeHtml(asset.label)}</strong><small>第 ${asset.page_number} 页 · ${escapeHtml(asset.metadata.format || asset.kind)}</small></div>
+      <img hidden alt="${escapeHtml(asset.label)}" />
+      <div class="content"><strong>${escapeHtml(asset.label)}</strong><small>第 ${escapeHtml(asset.page_number)} 页 · ${escapeHtml(asset.metadata?.format || asset.kind)}</small><p class="status" role="status">正在加载预览…</p></div>
     </article>`).join("") || `<div class="empty compact">没有可显示的页面预览。</div>`;
-    setStatus("evidenceStatus", `已加载 ${result.assets.length} 个证据对象，其中 ${pages.length} 个页面/幻灯片。`, "success");
-  } catch (error) { setStatus("evidenceStatus", error.message, "error"); }
+    const cards = [...$("evidenceGallery").querySelectorAll("article")];
+    let nextPage = 0;
+    let loaded = 0;
+    // Bound downloads to avoid flooding storage for long documents.
+    await Promise.all(Array.from({length: Math.min(3, pages.length)}, async () => {
+      while (!controller.signal.aborted && nextPage < pages.length) {
+        const index = nextPage++;
+        if (await loadEvidenceImage(pages[index], cards[index].querySelector("img"), cards[index].querySelector("[role=status]"), organizationId, controller.signal)) loaded++;
+      }
+    }));
+    if (controller.signal.aborted) return;
+    setStatus("evidenceStatus", `已读取 ${result.assets.length} 个证据对象；预览成功 ${loaded}/${pages.length} 页。${loaded < pages.length ? "部分预览加载失败，可点击加载证据重试。" : ""}`, loaded < pages.length ? "error" : "success");
+  } catch (error) {
+    if (!controller.signal.aborted) setStatus("evidenceStatus", error.message, "error");
+  }
 }
 
 async function pollJob(jobId) {

@@ -1,7 +1,7 @@
 const api = require('../../lib/api');
 Page({
   data:{busy:false, consent:false, error:'',checking:false,loginAvailable:false,registrationMode:'',serviceStatus:'正在连接服务'},
-  onLoad() { if (wx.getStorageSync(api.TOKEN)) {wx.redirectTo({url:'/pages/work/index'});return;} this.checkService(); },
+  onLoad() { if (wx.getStorageSync(api.TOKEN)) {wx.redirectTo({url:'/pages/school/index'});return;} this.checkService(); },
   async checkService() {
     if(this.data.checking)return;
     this.setData({checking:true,error:'',loginAvailable:false,registrationMode:'',serviceStatus:'正在连接服务'});
@@ -24,7 +24,7 @@ Page({
       const result = await api.request('/api/v1/wechat/login','POST',{code},{auth:false});
       if (!result.access_token || !result.access_token.startsWith('wxmp_')) throw new Error('登录响应无效');
       wx.setStorageSync(api.TOKEN,result.access_token);
-      wx.redirectTo({url:'/pages/work/index'});
+      wx.redirectTo({url:'/pages/school/index'});
     } catch(e) {this.setData({error:e.message});}
     finally {this.setData({busy:false});}
   }

@@ -1,5 +1,5 @@
 <view class="page">
-  <view class="title">答辩工作台</view>
+  <view class="title">{{teacherMode ? '考试准备' : '答辩工作台'}}</view>
   <view wx:if="{{error}}" class="error">{{error}}</view>
   <view wx:if="{{!organizations.length}}" class="section muted">暂无可用空间，请重新登录或联系管理员。</view>
   <block wx:else>
@@ -28,7 +28,16 @@
       <block wx:if="{{blueprint}}">
         <view class="body">{{blueprint.data.summary}}</view>
         <view wx:for="{{blueprint.data.questions}}" wx:key="id" class="item body">{{index + 1}}. {{item.text}}</view>
-        <button class="primary" bindtap="start" disabled="{{busy}}">开始文字答辩</button>
+        <button wx:if="{{!teacherMode}}" class="primary" bindtap="start" disabled="{{busy}}">开始文字答辩</button>
+        <view wx:if="{{teacherMode}}" class="section">
+          <view class="heading">03 · 发布考试</view>
+          <input class="field" placeholder="考试名称" maxlength="200" value="{{examTitle}}" data-field="examTitle" bindinput="examField" disabled="{{busy}}"/>
+          <input class="field" placeholder="教师署名" maxlength="100" value="{{teacherName}}" data-field="teacherName" bindinput="examField" disabled="{{busy}}"/>
+          <input class="field" placeholder="题数（1–20，不超过蓝图题数）" type="number" value="{{questionCount}}" data-field="questionCount" bindinput="examField" disabled="{{busy}}"/>
+          <textarea class="field" placeholder="考试要求" maxlength="3000" value="{{examInstructions}}" data-field="examInstructions" bindinput="examField" disabled="{{busy}}"/>
+          <checkbox-group bindchange="share"><label class="muted"><checkbox value="yes" checked="{{shareConfirmed}}" disabled="{{busy}}"/>确认材料可供所有已登录学生查看，且不含未授权公开内容</label></checkbox-group>
+          <button class="primary" bindtap="publish" disabled="{{busy || !shareConfirmed}}" loading="{{busy}}">发布考试</button>
+        </view>
       </block>
     </view>
   </block>

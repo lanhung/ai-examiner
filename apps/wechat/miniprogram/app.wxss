@@ -17,3 +17,5 @@ button[disabled] { opacity:0.55; }
 .body { line-height:1.75; white-space:pre-wrap; word-break:break-word; }
 textarea.field { height:250rpx; }
 .badge { color:#147563; font-size:24rpx; margin-bottom:12rpx; }
+.tabs button { flex:1; min-width:180rpx; }
+.material { height:520rpx; background:white; padding:20rpx; }

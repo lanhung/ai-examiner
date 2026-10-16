@@ -1,0 +1,39 @@
+<view class="page">
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <block wx:if="{{exam}}">
+    <view class="title">{{exam.title}}</view>
+    <view class="muted">{{exam.teacher_name}} · {{exam.question_count}} 题 · {{exam.statusLabel}}</view>
+    <view class="body section">{{exam.instructions}}</view>
+    <view class="section">
+      <view class="heading">考试材料 · {{exam.material_name}}</view>
+      <button bindtap="material" disabled="{{busy}}">打开原文件</button>
+      <scroll-view scroll-y class="material"><view class="body" user-select>{{exam.material_text}}</view></scroll-view>
+    </view>
+    <view wx:if="{{exam.is_owner}}" class="section">
+      <view class="heading">教师试答 · 不计入学生成绩</view>
+      <view wx:if="{{preview}}" class="muted">{{preview.statusLabel}} · {{preview.position}} / {{preview.question_count}} 题</view>
+      <view wx:if="{{preview && preview.final_score !== null}}">试答评分：{{preview.final_score}} / 100</view>
+      <button class="primary" bindtap="preview" disabled="{{busy}}">{{!preview?'开始试答':preview.status==='completed'?'查看试答结果':'继续试答'}}</button>
+    </view>
+    <block wx:if="{{teacher}}">
+      <view class="section"><view class="heading">学生成绩 · 100 分制</view>
+        <view wx:if="{{!grades.length}}" class="muted">暂未收到答卷</view>
+        <view wx:for="{{grades}}" wx:key="id" class="item">
+          <view>{{item.student_name}} · {{item.student_number}}</view>
+          <view class="muted">{{item.statusLabel}} · 已答 {{item.answered}} 题</view>
+          <view wx:if="{{item.final_score !== null}}">{{item.final_score}} 分 · {{item.reviewed?'教师复核':'AI 初评'}}</view>
+          <button bindtap="grade" data-id="{{item.id}}">查看答卷</button>
+        </view>
+        <button wx:if="{{more}}" bindtap="more" disabled="{{busy}}">加载更多</button>
+      </view>
+      <button wx:if="{{exam.status==='published'}}" bindtap="close" disabled="{{busy}}">关闭报名</button>
+    </block>
+    <block wx:elif="{{!exam.is_owner}}">
+      <input class="field" placeholder="姓名（本人填写）" maxlength="100" value="{{name}}" data-field="name" bindinput="field"/>
+      <input class="field" placeholder="学号（选填）" maxlength="100" value="{{number}}" data-field="number" bindinput="field"/>
+      <checkbox-group bindchange="consent"><label class="muted"><checkbox value="yes" checked="{{consent}}"/>同意将本次姓名、学号、答卷和成绩提交给发布教师</label></checkbox-group>
+      <button class="primary" bindtap="join" disabled="{{busy || !consent || !name}}" loading="{{busy}}">参加 / 继续考试</button>
+    </block>
+  </block>
+  <button bindtap="refresh" disabled="{{busy}}">刷新状态</button>
+</view>

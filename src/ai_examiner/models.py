@@ -147,6 +147,115 @@ class OrganizationMembership(Base):
     principal: Mapped[Principal] = relationship(back_populates="memberships")
 
 
+class TeachingGrant(Base):
+    __tablename__ = "teaching_grants"
+    principal_id: Mapped[str] = mapped_column(
+        ForeignKey("principals.id", ondelete="CASCADE"), primary_key=True
+    )
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT")
+    )
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PublishedExam(Base):
+    __tablename__ = "published_exams"
+    __table_args__ = (
+        UniqueConstraint("teacher_id", "publish_key", name="uq_exam_publish_key"),
+        Index("ix_published_exam_catalog", "status", "created_at"),
+        Index("ix_published_exam_teacher", "teacher_id", "created_at"),
+        CheckConstraint("status IN ('published', 'closed')", name="ck_published_exam_status"),
+        CheckConstraint("question_count BETWEEN 1 AND 20", name="ck_published_exam_questions"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    teacher_id: Mapped[str] = mapped_column(ForeignKey("principals.id", ondelete="RESTRICT"))
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT")
+    )
+    publish_key: Mapped[str] = mapped_column(String(36))
+    request_digest: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(200))
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    teacher_name: Mapped[str] = mapped_column(String(100))
+    material_name: Mapped[str] = mapped_column(String(255))
+    material_text: Mapped[str] = mapped_column(Text)
+    question_count: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20), default="published")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ExamPaper(Base):
+    __tablename__ = "exam_papers"
+    exam_id: Mapped[str] = mapped_column(
+        ForeignKey("published_exams.id", ondelete="CASCADE"), primary_key=True
+    )
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT")
+    )
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="RESTRICT"))
+    blueprint_id: Mapped[str] = mapped_column(String(36))
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="RESTRICT"))
+    questions: Mapped[list] = mapped_column(JSON)
+    profile: Mapped[str] = mapped_column(String(200))
+
+
+class ExamAnswerStateMixin:
+    status: Mapped[str] = mapped_column(String(30), default="active")
+    answers: Mapped[list] = mapped_column(JSON, default=list)
+    pending: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reviewed_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    review_version: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SchoolAttempt(ExamAnswerStateMixin, Base):
+    __tablename__ = "school_attempts"
+    __table_args__ = (
+        UniqueConstraint("exam_id", "student_id", name="uq_school_attempt_student"),
+        Index("ix_school_attempt_student", "student_id", "exam_id"),
+        Index("ix_school_attempt_teacher", "teacher_id", "exam_id"),
+        CheckConstraint(
+            "status IN ('active', 'grading', 'needs_review', 'completed')",
+            name="ck_school_attempt_status",
+        ),
+        CheckConstraint("score IS NULL OR (score >= 0 AND score <= 100)", name="ck_school_score"),
+        CheckConstraint("reviewed_score IS NULL OR (reviewed_score >= 0 AND reviewed_score <= 100)", name="ck_school_review_score"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    exam_id: Mapped[str] = mapped_column(ForeignKey("published_exams.id", ondelete="RESTRICT"))
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT")
+    )
+    teacher_id: Mapped[str] = mapped_column(ForeignKey("principals.id", ondelete="RESTRICT"))
+    student_id: Mapped[str] = mapped_column(ForeignKey("principals.id", ondelete="RESTRICT"))
+    student_name: Mapped[str] = mapped_column(String(100))
+    student_number: Mapped[str] = mapped_column(String(100), default="")
+
+
+class TeacherExamPreview(ExamAnswerStateMixin, Base):
+    """Real-model rehearsals never enter the student grade table."""
+
+    __tablename__ = "teacher_exam_previews"
+    __table_args__ = (
+        UniqueConstraint("exam_id", "teacher_id", name="uq_teacher_exam_preview"),
+        CheckConstraint(
+            "status IN ('active', 'grading', 'needs_review', 'completed')",
+            name="ck_teacher_preview_status",
+        ),
+        CheckConstraint("score IS NULL OR (score >= 0 AND score <= 100)", name="ck_teacher_preview_score"),
+        CheckConstraint("reviewed_score IS NULL OR (reviewed_score >= 0 AND reviewed_score <= 100)", name="ck_teacher_preview_review_score"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    exam_id: Mapped[str] = mapped_column(ForeignKey("published_exams.id", ondelete="RESTRICT"))
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="RESTRICT"))
+    teacher_id: Mapped[str] = mapped_column(ForeignKey("principals.id", ondelete="RESTRICT"))
+
+
 class OIDCLoginTransaction(Base):
     __tablename__ = "oidc_login_transactions"
     __table_args__ = (

@@ -149,6 +149,7 @@ from .schemas import (
     VoiceSessionComplete,
     VoiceSessionCreate,
 )
+from .school_api import register_routes as register_school_routes
 from .services.agreement import agreement_summary
 from .services.audit import (
     AuditFilters,
@@ -469,6 +470,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_name, version=__version__, lifespan=lifespan)
 register_wechat_routes(app)
+register_school_routes(app)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 instrument_sqlalchemy_engine(engine, settings)
 instrument_httpx(settings)
@@ -3471,9 +3473,13 @@ def metrics(db: Annotated[Session, Depends(get_db)]):
     dependencies=[Depends(require_workbench_capability("project.delete"))],
 )
 def delete_project(project_id: str, db: Annotated[Session, Depends(get_db)]):
+    from .models import ExamPaper
+
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
+    if db.scalar(select(ExamPaper.exam_id).where(ExamPaper.project_id == project_id).limit(1)):
+        raise HTTPException(409, "Project has published exams; preserve exam materials and grades.")
     holds = active_legal_holds(
         db,
         organization_id=project.organization_id,
