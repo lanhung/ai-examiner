@@ -19,6 +19,10 @@
   persistence and isolated backup/restore in GitHub CI. PostgreSQL suite and
   full release gate require a rerun after these fixes; this is not device or
   real-model acceptance. See the dated appendix in the project review report.
+- Post-upload dependency audit is not green: the installed/locked AnyIO 4.14.1,
+  Certifi 2026.6.17, Pillow 12.3.0 and urllib3 2.7.0 have advisory findings.
+  Keep the release gate failing until reviewed upgrades and regression checks;
+  do not ignore advisories or silently upgrade production dependencies.
 
 ## Unreleased - Review Correctness and Durable Receipts (2026-10-27)
 
