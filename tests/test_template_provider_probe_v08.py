@@ -84,6 +84,12 @@ def test_planner_retries_once_when_provider_violates_template_contract():
 def test_planner_retries_stacked_questions_until_single_issue():
     class StackedQuestionRepairProvider(RepairingPlannerProvider):
         def complete_json(self, **kwargs):
+            if "wording_repair_targets" in kwargs["payload"]:
+                self.calls += 1
+                return ProviderResult(provider=self.name, model=self.model, data={
+                    "repairs": [{"target_id": "q0.text", "text": "请解释核心概念。",
+                                 "additional_followups": ["它为什么重要？"]}]
+                })
             result = super().complete_json(**kwargs)
             if self.calls < 3:
                 result.data["questions"][0]["text"] = (
@@ -137,12 +143,19 @@ def test_two_english_interrogative_tasks_are_stacked():
 def test_planner_repairs_semantically_stacked_main_question_and_followup():
     class SemanticStackRepairProvider(RepairingPlannerProvider):
         def complete_json(self, **kwargs):
+            if "wording_repair_targets" in kwargs["payload"]:
+                self.calls += 1
+                return ProviderResult(provider=self.name, model=self.model, data={
+                    "repairs": [{"target_id": "q0.followups.0", "text": "哪项证据最关键？",
+                                 "additional_followups": []}]
+                })
             result = super().complete_json(**kwargs)
             if self.calls == 1:
                 result.data["questions"][0]["text"] = (
                     "请说明核心依据，并据此判断方案是否成立？"
                 )
             elif self.calls == 2:
+                result.data["questions"][0]["text"] = "请说明核心依据？"
                 result.data["questions"][0]["followups"] = [
                     "请选择一个替代方案，并解释原因？"
                 ]

@@ -171,7 +171,7 @@ def _generate_blueprint(
         envelope,
         lease_token,
         progress=0.08,
-        message="Preparing document and scenario policy",
+        message="正在准备材料与考核要求",
     )
     heartbeat.checkpoint()
     with _tenant_session(
@@ -190,12 +190,19 @@ def _generate_blueprint(
             or document.project_id != project.id
         ):
             raise ValueError("Project or document not found")
-        _progress(
-            envelope,
-            lease_token,
-            progress=0.2,
-            message="Planner is generating a grounded blueprint",
-        )
+        def planner_stage(stage: str) -> None:
+            heartbeat.checkpoint()
+            messages = {
+                "generating": (0.2, "正在阅读材料并生成题目"),
+                "repairing_language": (0.6, "正在校正题目语言"),
+                "validating": (0.85, "正在核对题目与材料依据"),
+            }
+            value, message = messages.get(stage, (0.65, "正在校验并修订题目"))
+            if stage.startswith("repairing_questions_"):
+                attempt = int(stage.rsplit("_", 1)[1])
+                value, message = 0.65 + attempt * 0.05, f"正在修订题目（第 {attempt} 轮）"
+            _progress(envelope, lease_token, progress=value, message=message)
+
         prepared = BlueprintGenerationService(db, settings).prepare(
             project=project,
             document=document,
@@ -203,13 +210,14 @@ def _generate_blueprint(
             mode=str(payload.get("mode") or "defense"),
             template_version_id=payload.get("template_version_id"),
             template_overrides=payload.get("template_overrides") or {},
+            on_stage=planner_stage,
         )
         heartbeat.checkpoint()
         _progress(
             envelope,
             lease_token,
             progress=0.88,
-            message="Linking evidence and saving the blueprint",
+            message="正在关联页面证据并保存蓝图",
         )
         blueprint = BlueprintGenerationService(db, settings).persist(
             project=project,
@@ -500,6 +508,22 @@ TASK_HANDLERS: dict[str, TaskHandler] = {
 }
 
 
+def _interactive_job(envelope: TaskEnvelope, lease_token: str, heartbeat: JobHeartbeat) -> TaskResult:
+    with _tenant_session(envelope.organization_id, envelope.actor_principal_id) as db:
+        job = _job_or_error(db, envelope, lease_token)
+        if envelope.kind == "document_ingestion":
+            from .services.document_ingestion import execute_document_ingestion
+            return execute_document_ingestion(db, job, heartbeat)
+        if envelope.kind == "school_grading":
+            from .school_api import execute_grading_job
+            return execute_grading_job(db, job, heartbeat)
+        from .services.session_operations import execute_session_operation
+        return execute_session_operation(db, job, heartbeat)
+
+
+TASK_HANDLERS.update(session_operation=_interactive_job, school_grading=_interactive_job, document_ingestion=_interactive_job)
+
+
 def execute_job_delivery(task, envelope_data: dict) -> dict:
     envelope = TaskEnvelope.from_dict(envelope_data)
     with worker_delivery_span(envelope):
@@ -588,11 +612,12 @@ def _execute_job_delivery(task, envelope: TaskEnvelope) -> dict:
                 lease_token,
                 exc,
             )
+            maximum = db.get(BackgroundJob, envelope.job_id).max_attempts
         if disposition.retry:
             raise task.retry(
                 exc=exc,
                 countdown=disposition.countdown,
-                max_retries=settings.job_max_attempts - 1,
+                max_retries=maximum - 1,
             ) from exc
         if isinstance(exc, JobCancelled):
             return {
@@ -609,6 +634,11 @@ def generate_golden_dataset_task(task, envelope: dict) -> dict:
 
 @celery_app.task(bind=True, name="ai_examiner.generate_blueprint")
 def generate_blueprint_task(task, envelope: dict) -> dict:
+    return execute_job_delivery(task, envelope)
+
+
+@celery_app.task(bind=True, name="ai_examiner.interactive_operation")
+def interactive_operation_task(task, envelope: dict) -> dict:
     return execute_job_delivery(task, envelope)
 
 

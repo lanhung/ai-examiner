@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import hashlib
-import multiprocessing
+import json
 import re
+import subprocess
+import sys
 import zipfile
-from concurrent.futures import ProcessPoolExecutor
-from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import BoundedSemaphore
@@ -44,21 +44,50 @@ _PDF_SLOTS = BoundedSemaphore(2)
 
 
 def parse_uploaded_document(
-    path: Path, raw: bytes, max_chars: int, *, evidence_output_dir: Path
+    path: Path, raw: bytes, max_chars: int, *, evidence_output_dir: Path,
+    max_pdf_pages: int = 500, timeout_seconds: int = 180,
 ) -> ParsedDocument:
-    if path.suffix.lower() != ".pdf":
+    if path.suffix.lower() not in {".pdf", ".docx", ".pptx"}:
         return parse_document(path, raw, max_chars, evidence_output_dir=evidence_output_dir)
-    # PyMuPDF is not thread-safe. Each upload owns a short-lived spawned process;
-    # no database handles or authorization context are passed to that process.
-    with _PDF_SLOTS, ProcessPoolExecutor(
-        max_workers=1, mp_context=multiprocessing.get_context("spawn")
-    ) as pool:
+    # A subprocess also works inside Celery's daemonic prefork workers, unlike
+    # multiprocessing pools. Keep PyMuPDF isolated from ASGI/worker threads.
+    evidence_output_dir.mkdir(parents=True, exist_ok=True)
+    result_path = evidence_output_dir / "parsed.json"
+    if not _PDF_SLOTS.acquire(timeout=min(timeout_seconds, 10)):
+        raise ValueError("材料解析繁忙，请稍后重试；文件尚未解析")
+    try:
         try:
-            return pool.submit(
-                parse_document, path, raw, max_chars, evidence_output_dir=evidence_output_dir
-            ).result()
-        except BrokenProcessPool as exc:
-            raise ValueError("PDF 解析进程失败，请检查文件完整性后重试") from exc
+            result = subprocess.run(
+                [sys.executable, "-m", "ai_examiner.document_parser", str(path.resolve()),
+                 str(evidence_output_dir.resolve()), str(max_chars), str(max_pdf_pages)],
+                capture_output=True, timeout=timeout_seconds, check=False,
+            )
+            if not result_path.is_file():
+                raise ValueError("材料解析进程失败，请检查文件完整性后重试")
+            data = json.loads(result_path.read_text(encoding="utf-8"))
+            if result.returncode or "error" in data:
+                raise ValueError(data.get("error") or "材料解析失败")
+            data["evidence"] = [EvidenceDraft(**item) for item in data["evidence"]]
+            return ParsedDocument(**data)
+        except subprocess.TimeoutExpired as exc:
+            raise ValueError(f"材料解析超过 {timeout_seconds} 秒，请按章节拆分后上传") from exc
+        finally:
+            result_path.unlink(missing_ok=True)
+    finally:
+        _PDF_SLOTS.release()
+
+
+def validate_office_archive(path: Path) -> None:
+    """Bound decompression before handing an OOXML archive to a document library."""
+    try:
+        with zipfile.ZipFile(path) as archive:
+            members = archive.infolist()
+            if len(members) > 10000 or sum(item.file_size for item in members) > 200 * 1024 * 1024:
+                raise ValueError("Office 文件解压后过大，请拆分材料或压缩内嵌图片")
+            if any(item.file_size > 100 * 1024 * 1024 or item.flag_bits & 1 for item in members):
+                raise ValueError("Office 文件包含过大的资源或加密内容")
+    except zipfile.BadZipFile as exc:
+        raise ValueError("Office 文件损坏或不是有效的 DOCX/PPTX 文件") from exc
 
 CJK_FONT_CANDIDATES = (
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
@@ -139,10 +168,16 @@ def _text_preview(lines: list[str], output: Path, title: str, width: int = 1280)
     image.save(output, "PNG")
 
 
-def _parse_pdf(path: Path, evidence_dir: Path, warnings: list[str]) -> tuple[list[str], list[dict], list[EvidenceDraft]]:
+def _parse_pdf(path: Path, evidence_dir: Path, warnings: list[str], max_pages: int = 500) -> tuple[list[str], list[dict], list[EvidenceDraft]]:
     import fitz
 
     document = fitz.open(path)
+    if document.needs_pass:
+        document.close()
+        raise ValueError("PDF 已加密，请先解除密码保护后上传")
+    if len(document) > max_pages:
+        document.close()
+        raise ValueError(f"PDF 超过 {max_pages} 页限制，请按章节拆分后上传")
     chunks: list[str] = []
     pages: list[dict] = []
     evidence: list[EvidenceDraft] = []
@@ -154,7 +189,9 @@ def _parse_pdf(path: Path, evidence_dir: Path, warnings: list[str]) -> tuple[lis
         page_header = f"\n--- PAGE {page_index} ---\n"
         chunks.append(page_header + page_text)
         page_path = evidence_dir / f"page-{page_index:04d}.png"
-        matrix = fitz.Matrix(2, 2)
+        # Bound unusually large page dimensions while preserving ordinary 144-dpi pages.
+        scale = min(2.0, (4_000_000 / max(page.rect.width * page.rect.height, 1)) ** 0.5)
+        matrix = fitz.Matrix(scale, scale)
         pix = page.get_pixmap(matrix=matrix, alpha=False)
         pix.save(page_path)
         page_width, page_height = float(page.rect.width), float(page.rect.height)
@@ -237,6 +274,7 @@ def _parse_pdf(path: Path, evidence_dir: Path, warnings: list[str]) -> tuple[lis
             }
         )
         char_cursor = pages[-1]["end_char"]
+    document.close()
     if sum(len(chunk) for chunk in chunks) < 300:
         warnings.append("PDF 可提取文本很少，可能是扫描件；已生成页面截图，但尚未启用 OCR。")
     return chunks, pages, evidence
@@ -370,12 +408,26 @@ def _parse_pptx(path: Path, evidence_dir: Path, warnings: list[str]) -> tuple[li
 
 def _parse_docx(path: Path, evidence_dir: Path, warnings: list[str]) -> tuple[list[str], list[dict], list[EvidenceDraft]]:
     from docx import Document as DocxDocument
+    from docx.table import Table
 
     document = DocxDocument(path)
     lines: list[str] = []
     evidence: list[EvidenceDraft] = []
     sequence = 1
-    for paragraph in document.paragraphs:
+    table_index = 0
+    for paragraph in document.iter_inner_content():
+        if isinstance(paragraph, Table):
+            table_index += 1
+            rows = [" | ".join(cell.text.strip() for cell in row.cells) for row in paragraph.rows]
+            table_text = "\n".join(rows)
+            lines.append(f"Table {table_index}:\n{table_text}")
+            evidence.append(EvidenceDraft(
+                kind="table", page_number=1, sequence=sequence,
+                label=f"Table {table_index}", text=table_text,
+                metadata={"source": "docx_table"},
+            ))
+            sequence += 1
+            continue
         text = paragraph.text.strip()
         if not text:
             continue
@@ -389,21 +441,6 @@ def _parse_docx(path: Path, evidence_dir: Path, warnings: list[str]) -> tuple[li
                 label=text[:120],
                 text=text,
                 metadata={"source": "docx_paragraph", "style": style_name},
-            )
-        )
-        sequence += 1
-    for table_index, table in enumerate(document.tables, start=1):
-        rows = [" | ".join(cell.text.strip() for cell in row.cells) for row in table.rows]
-        table_text = "\n".join(rows)
-        lines.append(f"Table {table_index}:\n{table_text}")
-        evidence.append(
-            EvidenceDraft(
-                kind="table",
-                page_number=1,
-                sequence=sequence,
-                label=f"Table {table_index}",
-                text=table_text,
-                metadata={"source": "docx_table"},
             )
         )
         sequence += 1
@@ -430,6 +467,7 @@ def _parse_docx(path: Path, evidence_dir: Path, warnings: list[str]) -> tuple[li
     except Exception as exc:  # pragma: no cover
         warnings.append(f"DOCX 图片提取失败：{exc}")
     text = "\n".join(lines)
+    warnings.append("Word 为逻辑预览，不代表 Word 原始分页；表格按正文顺序解析。")
     preview = evidence_dir / "document-page-0001.png"
     _text_preview(lines, preview, path.name)
     evidence.insert(
@@ -488,14 +526,18 @@ def parse_document(
     raw: bytes,
     max_chars: int,
     evidence_output_dir: Path | None = None,
+    max_pdf_pages: int = 500,
 ) -> ParsedDocument:
     suffix = path.suffix.lower()
     warnings: list[str] = []
     evidence_dir = evidence_output_dir or path.parent / f"{path.stem}_evidence"
     evidence_dir.mkdir(parents=True, exist_ok=True)
 
+    if suffix in {".docx", ".pptx"}:
+        validate_office_archive(path)
+
     if suffix == ".pdf":
-        chunks, pages, evidence = _parse_pdf(path, evidence_dir, warnings)
+        chunks, pages, evidence = _parse_pdf(path, evidence_dir, warnings, max_pdf_pages)
         kind = "pdf"
     elif suffix == ".pptx":
         chunks, pages, evidence = _parse_pptx(path, evidence_dir, warnings)

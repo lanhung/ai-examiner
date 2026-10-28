@@ -102,6 +102,18 @@ def test_correctness_aliases_share_one_numeric_contract():
         normalize_correctness("mostly_fine")
 
 
+@pytest.mark.parametrize("language", ["zh-CN", "en"])
+def test_analyzer_receives_session_language_without_extra_call(language):
+    provider = RecordedAssessmentProvider([_response()])
+    AnswerAnalyzer(AgentContext(provider=provider)).analyze(
+        question={"text": "Who owns the decision?", "expected_points": ["Engine authority"]},
+        answer="The cognitive engine remains authoritative.", history=[], language=language,
+    )
+    assert provider.calls == 1
+    assert provider.last_payload["response_language"] == language
+    assert "response_language" in provider.last_instructions
+
+
 def test_pipe_delimited_schema_hint_becomes_enum():
     schema = hint_to_json_schema(
         {"correctness": "supported|partially_supported|unsupported|insufficient"}

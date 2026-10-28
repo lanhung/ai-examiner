@@ -15,6 +15,7 @@ from ..jobs import (
     export_organization_task,
     generate_blueprint_task,
     generate_golden_dataset_task,
+    interactive_operation_task,
     run_benchmark_task,
 )
 from ..models import BackgroundJob, Project
@@ -30,6 +31,9 @@ from .job_control import (
 from .tenancy import current_tenant_context, tenant_organization_or_legacy
 
 TASKS = {
+    "document_ingestion": interactive_operation_task,
+    "session_operation": interactive_operation_task,
+    "school_grading": interactive_operation_task,
     "blueprint_generation": generate_blueprint_task,
     "golden_dataset": generate_golden_dataset_task,
     "visual_document": analyze_visual_document_task,
@@ -192,10 +196,13 @@ def enqueue_job(
     return job
 
 
-def dispatch_job_by_id(job_id: str) -> None:
+def dispatch_job_by_id(job_id: str, organization_id: str | None = None, actor_principal_id: str | None = None) -> None:
     from ..db import SessionLocal
 
     with SessionLocal() as db:
+        if organization_id:
+            from .tenancy import set_tenant_context
+            set_tenant_context(db, organization_id=organization_id, principal_id=actor_principal_id)
         job = db.get(BackgroundJob, job_id)
         if job is None:
             return

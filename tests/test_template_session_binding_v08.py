@@ -52,6 +52,7 @@ def test_legacy_text_session_resolves_latest_published_template_snapshot(client)
     assert session["template_version_id"] == _latest_builtin(client)["version_id"]
     assert session["template_fingerprint"].startswith("sha256:")
     assert session["config"]["template_resolution_source"] == "legacy"
+    assert session["config"]["language"] == "zh-CN"
 
     inspected = client.get(f"/api/sessions/{session['id']}/template")
     assert inspected.status_code == 200
@@ -60,6 +61,45 @@ def test_legacy_text_session_resolves_latest_published_template_snapshot(client)
     assert template["integrity"] == "verified"
     assert template["resolution_source"] == "legacy"
     assert template["snapshot"]["legacy"]["question_limit"] == 6
+
+
+def test_legacy_session_filters_english_followup_before_persisting(client, monkeypatch):
+    from ai_examiner.agents.analyzer import AnswerAnalyzer
+
+    project, blueprint = _project_and_blueprint(client)
+    session = client.post("/api/sessions", json={
+        "project_id": project["id"], "blueprint_id": blueprint["id"],
+        "profile": "mock:heuristic-v2",
+    }).json()
+    with SessionLocal() as db:
+        saved = db.get(ExamSession, session["id"])
+        saved.config = {key: value for key, value in saved.config.items() if key != "language"}
+        db.commit()
+    original = AnswerAnalyzer.analyze
+    languages = []
+
+    def wrong_language(self, **kwargs):
+        languages.append(kwargs["language"])
+        result = original(self, **kwargs)
+        return {**result, "answered": True, "coverage": 0.2,
+                "followup_candidates": ["What evidence supports this conclusion?"]}
+
+    monkeypatch.setattr(AnswerAnalyzer, "analyze", wrong_language)
+    assert client.post(f"/api/sessions/{session['id']}/start").status_code == 200
+    response = client.post(f"/api/sessions/{session['id']}/answers", json={
+        "answer": "目前证据来自独立测试集，样本较少，结论还需要更多验证。",
+    })
+    assert response.status_code == 200
+    result = response.json()
+    assert languages == ["zh-CN"]
+    decision = result["decision"]
+    assert decision["action"] == "ASK_FOLLOWUP"
+    assert decision["policy_audit"]["rejected_followup_language_count"] == 1
+    assistant = next(turn for turn in result["turns"] if turn["role"] == "assistant")
+    assert "What evidence" not in assistant["content"]
+    assert decision["followup"] in assistant["content"]
+    stored = client.get(f"/api/sessions/{session['id']}").json()
+    assert any(turn["content"] == assistant["content"] for turn in stored["turns"])
 
 
 def test_project_binding_defaults_and_request_overrides_have_clear_precedence(client):

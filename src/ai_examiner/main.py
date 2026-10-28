@@ -11,7 +11,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Annotated
 from urllib.parse import urlencode
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import websockets
@@ -210,6 +210,7 @@ from .services.enterprise_identity import (
 )
 from .services.evidence import create_highlighted_crop, persist_evidence, serialize_asset
 from .services.golden import GoldenDatasetService
+from .services.job_control import reconcile_blueprint_job
 from .services.jobs import (
     JobIdempotencyConflict,
     JobQueueUnavailable,
@@ -257,6 +258,11 @@ from .services.policy_benchmark import PolicyBenchmarkService
 from .services.preferences import PreferencePolicyError, PreferenceService
 from .services.prompts import activate_prompt, create_prompt_version, prompt_manifest
 from .services.retest import RetestLifecycleError, RetestLifecycleService
+from .services.session_operations import (
+    SessionOperation,
+    operation_receipt,
+    queue_session_operation,
+)
 from .services.session_templates import (
     SessionTemplateService,
     serialize_project_template_binding,
@@ -300,12 +306,15 @@ from .services.voice import (
     record_voice_event,
     voice_provider_ready,
 )
+from .services.voice_access import authorized_qwen_voice, qwen_connection_error
 from .template_engine.compiler import (
     TemplateCompiler,
     TemplateOverrideError,
     TemplateValidationError,
 )
 from .wechat_api import register_routes as register_wechat_routes
+from .wechat_realtime import register_routes as register_wechat_realtime_routes
+from .wechat_speech_api import register_routes as register_wechat_speech_routes
 
 logger = logging.getLogger(__name__)
 
@@ -471,6 +480,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=settings.app_name, version=__version__, lifespan=lifespan)
 register_wechat_routes(app)
 register_school_routes(app)
+register_wechat_speech_routes(app)
+register_wechat_realtime_routes(app)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 instrument_sqlalchemy_engine(engine, settings)
 instrument_httpx(settings)
@@ -1778,6 +1789,62 @@ def list_projects(
     ]
 
 
+@app.get("/api/projects/{project_id}/document-task",
+         dependencies=[Depends(require_workbench_capability("document.create"))])
+def get_document_task(project_id: str, request_id: UUID, db: Annotated[Session, Depends(get_db)]):
+    from .services.document_ingestion import ingestion_receipt
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    job = ingestion_receipt(db, project, str(request_id))
+    return {"job": serialize_job(job, include_internal=False) if job else None}
+
+
+@app.post("/api/projects/{project_id}/document-task/{request_id}/retry", status_code=202,
+          dependencies=[Depends(require_workbench_capability("document.create"))])
+def retry_document_task(project_id: str, request_id: UUID, background_tasks: BackgroundTasks,
+                        db: Annotated[Session, Depends(get_db)]):
+    from .services.document_ingestion import ingestion_receipt
+    from .services.job_control import reset_job_for_retry
+    from .services.jobs import dispatch_persisted_job
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    job = ingestion_receipt(db, project, str(request_id))
+    if not job:
+        raise HTTPException(404, "Upload receipt not found")
+    if job.status in {"failed", "dead_letter", "cancelled"}:
+        try:
+            reset_job_for_retry(db, job, reason="User requested parsing retry")
+        except ValueError as exc:
+            raise HTTPException(409, "任务状态已变化，请刷新后查看") from exc
+        if settings.celery_always_eager:
+            background_tasks.add_task(dispatch_job_by_id, job.id, job.organization_id, job.actor_principal_id)
+        else:
+            dispatch_persisted_job(db, job)
+    return serialize_job(job, include_internal=False)
+
+
+@app.post("/api/projects/{project_id}/documents/async", status_code=202,
+          dependencies=[Depends(require_workbench_capability("document.create"))])
+def upload_document_async(project_id: str, file: Annotated[UploadFile, File()],
+                          request_id: Annotated[UUID, Form()], background_tasks: BackgroundTasks,
+                          db: Annotated[Session, Depends(get_db)],
+                          original_filename: Annotated[str | None, Form(max_length=255)] = None):
+    from .services.document_ingestion import queue_document
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    with TemporaryDirectory(prefix="upload-") as staging:
+        try:
+            _, raw = save_upload(file, Path(staging), settings.max_upload_bytes, original_filename=original_filename)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+    return queue_document(db, project, raw=raw, filename=safe_filename(original_filename or file.filename or "upload"),
+                          content_type=file.content_type or "application/octet-stream",
+                          request_id=str(request_id), tasks=background_tasks)
+
+
 @app.post("/api/projects/{project_id}/documents", status_code=201)
 def upload_document(
     project_id: str,
@@ -1803,6 +1870,8 @@ def upload_document(
             parsed = parse_uploaded_document(
                 path, raw, settings.max_document_chars,
                 evidence_output_dir=Path(staging) / "evidence",
+                max_pdf_pages=settings.max_pdf_pages,
+                timeout_seconds=settings.document_parse_timeout_seconds,
             )
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
@@ -1917,6 +1986,35 @@ def generate_blueprint(
         db.rollback()
         raise HTTPException(502, f"Blueprint generation failed: {exc}") from exc
     return serialize_blueprint(blueprint, grounding=prepared.grounding)
+
+
+@app.get("/api/projects/{project_id}/blueprint-task")
+def find_blueprint_task(
+    project_id: str,
+    document_id: str,
+    context: WorkbenchBlueprintCreateAccess,
+    db: Annotated[Session, Depends(get_db)],
+    request_id: Annotated[str | None, Query(min_length=1, max_length=160)] = None,
+):
+    project = db.get(Project, project_id)
+    document = db.get(Document, document_id)
+    if not project or not document or document.project_id != project_id:
+        raise HTTPException(404, "Project or document not found")
+    authorize_workbench_resource(context, project.organization_id)
+    query = select(BackgroundJob).where(
+        BackgroundJob.organization_id == project.organization_id,
+        BackgroundJob.project_id == project.id,
+        BackgroundJob.kind == "blueprint_generation",
+        BackgroundJob.payload["document_id"].as_string() == document.id,
+        BackgroundJob.actor_principal_id == current_tenant_context(db).principal_id,
+    )
+    if request_id:
+        query = query.where(BackgroundJob.idempotency_key == request_id)
+    job = db.scalar(query.order_by(BackgroundJob.created_at.desc(), BackgroundJob.id.desc()).limit(1))
+    return {
+        "job": serialize_job(reconcile_blueprint_job(db, job), include_internal=False)
+        if job else None
+    }
 
 
 @app.post("/api/projects/{project_id}/blueprints/async", status_code=202)
@@ -2246,6 +2344,7 @@ def create_session(payload: SessionCreate, db: Annotated[Session, Depends(get_db
         }
     )
     config["profile"] = profile
+    config["language"] = blueprint.data.get("response_language") or project.language or "zh-CN"
     session = ExamSession(
         project_id=project.id,
         blueprint_id=blueprint.id,
@@ -2324,6 +2423,26 @@ def run_policy_benchmark(
         raise HTTPException(400, str(exc)) from exc
 
 
+@app.post("/api/sessions/{session_id}/operations", status_code=202,
+          dependencies=[Depends(require_workbench_capability("session.conduct"))])
+def queue_session_turn(session_id: str, payload: SessionOperation, background_tasks: BackgroundTasks,
+                       db: Annotated[Session, Depends(get_db)]):
+    session = db.get(ExamSession, session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+    return queue_session_operation(db, session, payload, background_tasks)
+
+
+@app.get("/api/sessions/{session_id}/operations/{request_id}",
+         dependencies=[Depends(require_workbench_capability("session.conduct"))])
+def get_session_operation(session_id: str, request_id: UUID, db: Annotated[Session, Depends(get_db)]):
+    session = db.get(ExamSession, session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+    job = operation_receipt(db, session, str(request_id))
+    return {"job": serialize_job(job, include_internal=False) if job else None}
+
+
 @app.post(
     "/api/sessions/{session_id}/start",
     dependencies=[Depends(require_workbench_capability("session.conduct"))],
@@ -2332,6 +2451,8 @@ def start_session(session_id: str, db: Annotated[Session, Depends(get_db)]):
     session = db.get(ExamSession, session_id)
     if not session:
         raise HTTPException(404, "Session not found")
+    if session.state == "OPERATION_QUEUED":
+        raise HTTPException(409, "Session operation pending; refresh its receipt")
     blueprint = db.get(Blueprint, session.blueprint_id)
     provider = provider_or_503(
         session.config.get("profile"),
@@ -2361,6 +2482,8 @@ def submit_answer(
     session = db.get(ExamSession, session_id)
     if not session:
         raise HTTPException(404, "Session not found")
+    if session.state == "OPERATION_QUEUED":
+        raise HTTPException(409, "Session operation pending; refresh its receipt")
     blueprint = db.get(Blueprint, session.blueprint_id)
     provider = provider_or_503(
         session.config.get("profile"),
@@ -4084,7 +4207,7 @@ def get_job(job_id: str, db: Annotated[Session, Depends(get_db)]):
     job = db.get(BackgroundJob, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
-    return serialize_job(job)
+    return serialize_job(reconcile_blueprint_job(db, job))
 
 
 @app.post(
@@ -4148,7 +4271,7 @@ def get_enterprise_job(
     db: Annotated[Session, Depends(get_db)],
 ):
     return serialize_job(
-        _authorized_job_or_404(db, context, job_id),
+        reconcile_blueprint_job(db, _authorized_job_or_404(db, context, job_id)),
         include_internal=False,
     )
 
@@ -5663,27 +5786,26 @@ async def create_voice_sdp(
 
 @app.websocket("/api/voice/sessions/{voice_session_id}/qwen-ws")
 async def qwen_voice_websocket(websocket: WebSocket, voice_session_id: str):
-    await websocket.accept()
     governance = None
     reservation = None
-    with SessionLocal() as db:
-        voice = db.get(VoiceSession, voice_session_id)
-        if not voice or voice.provider != "qwen":
-            await websocket.close(code=1008, reason="Qwen voice session not found")
-            return
-        if not settings.dashscope_api_key:
-            await websocket.close(code=1011, reason="Qwen realtime voice is not configured")
-            return
-        model = voice.model
-        try:
+    initialized = False
+    tasks = set()
+    try:
+        with SessionLocal() as db:
+            voice = authorized_qwen_voice(websocket, db, voice_session_id, settings)
+            binding = current_tenant_context(db)
+            model = voice.model
+            if not settings.dashscope_api_key:
+                raise HTTPException(503, "Qwen realtime voice is not configured")
             governance, reservation = _reserve_voice_connection(db, voice)
-        except ModelGovernanceError as exc:
-            await websocket.close(code=1008, reason=exc.public_message)
-            return
+    except (HTTPException, ModelGovernanceError):
+        await websocket.close(code=1008, reason="Voice connection is not authorized or available")
+        return
 
     upstream_url = f"{settings.qwen_realtime_ws_url}?{urlencode({'model': model})}"
     started = time.perf_counter()
     try:
+        await websocket.accept()
         async with websockets.connect(
             upstream_url,
             additional_headers={"Authorization": f"Bearer {settings.dashscope_api_key}"},
@@ -5691,41 +5813,60 @@ async def qwen_voice_websocket(websocket: WebSocket, voice_session_id: str):
             close_timeout=5,
             max_size=8 * 1024 * 1024,
         ) as upstream:
-            governance.settle(
-                reservation,
-                ProviderResult(
-                    data="realtime_connection_established",
-                    provider="qwen",
-                    model=model,
-                    latency_ms=int((time.perf_counter() - started) * 1000),
-                ),
-            )
-            reservation = None
-            with SessionLocal() as db:
-                voice = db.get(VoiceSession, voice_session_id)
-                if voice:
-                    voice.status = "connected"
-                    voice.started_at = voice.started_at or datetime.now(UTC)
-                    exam = db.get(ExamSession, voice.exam_session_id)
-                    if exam:
-                        exam.status = "voice_active"
-                        exam.state = "VOICE_ACTIVE"
-                        exam.started_at = exam.started_at or voice.started_at
-                    db.commit()
-
             async def browser_to_qwen() -> None:
                 while True:
                     await upstream.send(await websocket.receive_text())
 
             async def qwen_to_browser() -> None:
+                nonlocal initialized, reservation
                 async for message in upstream:
                     if isinstance(message, bytes):
                         message = message.decode("utf-8")
+                    event = json.loads(message)
+                    if event.get("type") == "error":
+                        await websocket.send_json({
+                            "type": "error",
+                            "error": qwen_connection_error(str(event.get("error", {}))),
+                        })
+                        return
+                    if event.get("type") == "session.updated" and not initialized:
+                        # The transport handshake alone does not confirm that
+                        # DashScope accepts the requested model/configuration.
+                        with SessionLocal() as db:
+                            voice = authorized_qwen_voice(websocket, db, voice_session_id, settings)
+                            if current_tenant_context(db) != binding:
+                                raise HTTPException(403, "Voice authorization changed")
+                            voice.status = "connected"
+                            voice.started_at = voice.started_at or datetime.now(UTC)
+                            exam = db.get(ExamSession, voice.exam_session_id)
+                            if exam:
+                                exam.status = "voice_active"
+                                exam.state = "VOICE_ACTIVE"
+                                exam.started_at = exam.started_at or voice.started_at
+                            db.commit()
+                        governance.settle(reservation, ProviderResult(
+                            data="realtime_session_initialized", provider="qwen", model=model,
+                            latency_ms=int((time.perf_counter() - started) * 1000),
+                        ))
+                        reservation = None
+                        initialized = True
                     await websocket.send_text(message)
+
+            async def monitor_access() -> None:
+                while True:
+                    await asyncio.sleep(5)
+                    elapsed = time.perf_counter() - started
+                    if (not initialized and elapsed > 20) or elapsed > settings.realtime_session_max_minutes * 60:
+                        raise TimeoutError("Voice session timed out")
+                    with SessionLocal() as db:
+                        authorized_qwen_voice(websocket, db, voice_session_id, settings)
+                        if current_tenant_context(db) != binding:
+                            raise HTTPException(403, "Voice authorization changed")
 
             tasks = {
                 asyncio.create_task(browser_to_qwen()),
                 asyncio.create_task(qwen_to_browser()),
+                asyncio.create_task(monitor_access()),
             }
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in pending:
@@ -5734,17 +5875,25 @@ async def qwen_voice_websocket(websocket: WebSocket, voice_session_id: str):
             await asyncio.gather(*done)
     except WebSocketDisconnect:
         return
+    except HTTPException:
+        await websocket.send_json({"type": "error", "error": {
+            "code": "voice_access_expired",
+            "message": "语音会话已结束，或登录/组织权限已失效。请刷新页面重新登录。",
+        }})
     except Exception as exc:
-        if reservation is not None:
-            governance.fail(reservation)
-            reservation = None
         try:
             await websocket.send_json(
-                {"type": "error", "error": {"message": f"Qwen realtime connection failed: {exc}"}}
+                {"type": "error", "error": qwen_connection_error(str(exc))}
             )
         except Exception:
             pass
     finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        if reservation is not None:
+            governance.fail(reservation)
         try:
             await websocket.close()
         except RuntimeError:

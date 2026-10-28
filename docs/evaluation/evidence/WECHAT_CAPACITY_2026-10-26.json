@@ -1,0 +1,657 @@
+{
+  "run_id": "capacity-740dba644d9d",
+  "organization_id": "7e27189d-64b3-409f-8bb0-76ab7633202f",
+  "limits": {
+    "users": 30,
+    "blueprint_jobs": 3,
+    "real_answer_submissions": 3
+  },
+  "wechat_login_tested": false,
+  "phases": [
+    {
+      "name": "read",
+      "users": 1,
+      "requests": 9,
+      "statuses": {
+        "200": 9
+      },
+      "successful": 9,
+      "semantic_failures": 0,
+      "p50_seconds": 0.062,
+      "p95_seconds": 0.272,
+      "p99_seconds": 0.272,
+      "max_seconds": 0.2717,
+      "elapsed_seconds": 3.909,
+      "requests_per_second": 2.302
+    },
+    {
+      "name": "read",
+      "users": 5,
+      "requests": 45,
+      "statuses": {
+        "200": 45
+      },
+      "successful": 45,
+      "semantic_failures": 0,
+      "p50_seconds": 0.684,
+      "p95_seconds": 1.005,
+      "p99_seconds": 1.065,
+      "max_seconds": 1.0649,
+      "elapsed_seconds": 9.153,
+      "requests_per_second": 4.916
+    },
+    {
+      "name": "read",
+      "users": 10,
+      "requests": 90,
+      "statuses": {
+        "200": 90
+      },
+      "successful": 90,
+      "semantic_failures": 0,
+      "p50_seconds": 1.685,
+      "p95_seconds": 2.695,
+      "p99_seconds": 2.912,
+      "max_seconds": 2.9118,
+      "elapsed_seconds": 19.317,
+      "requests_per_second": 4.659
+    },
+    {
+      "name": "read",
+      "users": 20,
+      "requests": 180,
+      "statuses": {
+        "200": 180
+      },
+      "successful": 180,
+      "semantic_failures": 0,
+      "p50_seconds": 3.304,
+      "p95_seconds": 4.18,
+      "p99_seconds": 4.274,
+      "max_seconds": 4.2823,
+      "elapsed_seconds": 34.774,
+      "requests_per_second": 5.176
+    },
+    {
+      "name": "read",
+      "users": 30,
+      "requests": 270,
+      "statuses": {
+        "200": 270
+      },
+      "successful": 270,
+      "semantic_failures": 0,
+      "p50_seconds": 4.479,
+      "p95_seconds": 6.019,
+      "p99_seconds": 6.229,
+      "max_seconds": 6.8047,
+      "elapsed_seconds": 48.012,
+      "requests_per_second": 5.624
+    },
+    {
+      "name": "qwen_plus_answers",
+      "users": 3,
+      "requests": 3,
+      "statuses": {
+        "200": 3
+      },
+      "successful": 3,
+      "semantic_failures": 0,
+      "p50_seconds": 15.205,
+      "p95_seconds": 15.534,
+      "p99_seconds": 15.534,
+      "max_seconds": 15.5335,
+      "elapsed_seconds": 15.536,
+      "requests_per_second": 0.193,
+      "result_statuses": [
+        "completed",
+        "completed",
+        "completed"
+      ]
+    },
+    {
+      "name": "read_while_blueprint_running",
+      "users": 30,
+      "requests": 180,
+      "statuses": {
+        "200": 180
+      },
+      "successful": 180,
+      "semantic_failures": 0,
+      "p50_seconds": 4.208,
+      "p95_seconds": 5.599,
+      "p99_seconds": 6.696,
+      "max_seconds": 6.6976,
+      "elapsed_seconds": 31.103,
+      "requests_per_second": 5.787
+    }
+  ],
+  "resources": [
+    {
+      "monotonic": 20985930.41516662,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1095389184",
+      "cpu.stat": "usage_usec 10769038995\nuser_usec 8039087667\nsystem_usec 2729951327\nnr_periods 2648627\nnr_throttled 14275\nthrottled_usec 10190470602"
+    },
+    {
+      "monotonic": 20985937.245326474,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1164886016",
+      "cpu.stat": "usage_usec 10771248308\nuser_usec 8041151824\nsystem_usec 2730096484\nnr_periods 2648695\nnr_throttled 14314\nthrottled_usec 10195141899"
+    },
+    {
+      "monotonic": 20985948.40268816,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1185198080",
+      "cpu.stat": "usage_usec 10775070517\nuser_usec 8044417990\nsystem_usec 2730652526\nnr_periods 2648807\nnr_throttled 14386\nthrottled_usec 10214152195"
+    },
+    {
+      "monotonic": 20985969.724747896,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1186410496",
+      "cpu.stat": "usage_usec 10784558369\nuser_usec 8052148672\nsystem_usec 2732409696\nnr_periods 2649020\nnr_throttled 14574\nthrottled_usec 10283665602"
+    },
+    {
+      "monotonic": 20986006.503529616,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1197371392",
+      "cpu.stat": "usage_usec 10802034304\nuser_usec 8066581983\nsystem_usec 2735452321\nnr_periods 2649388\nnr_throttled 14922\nthrottled_usec 10423432620"
+    },
+    {
+      "monotonic": 20986056.519933265,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1218498560",
+      "cpu.stat": "usage_usec 10826991079\nuser_usec 8087450992\nsystem_usec 2739540087\nnr_periods 2649888\nnr_throttled 15420\nthrottled_usec 10588881190"
+    },
+    {
+      "monotonic": 20986106.4136477,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1224122368",
+      "cpu.stat": "usage_usec 10845716206\nuser_usec 8103075264\nsystem_usec 2742640942\nnr_periods 2650387\nnr_throttled 15782\nthrottled_usec 10693274473"
+    },
+    {
+      "monotonic": 20986106.92078659,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1224450048",
+      "cpu.stat": "usage_usec 10845975124\nuser_usec 8103306990\nsystem_usec 2742668134\nnr_periods 2650392\nnr_throttled 15787\nthrottled_usec 10693964619"
+    },
+    {
+      "monotonic": 20986112.137458205,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1218822144",
+      "cpu.stat": "usage_usec 10847198661\nuser_usec 8104188423\nsystem_usec 2743010238\nnr_periods 2650444\nnr_throttled 15808\nthrottled_usec 10696091880"
+    },
+    {
+      "monotonic": 20986117.513548948,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1217163264",
+      "cpu.stat": "usage_usec 10847875365\nuser_usec 8104710333\nsystem_usec 2743165032\nnr_periods 2650498\nnr_throttled 15818\nthrottled_usec 10697077391"
+    },
+    {
+      "monotonic": 20986122.737863384,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1217593344",
+      "cpu.stat": "usage_usec 10848244545\nuser_usec 8105010444\nsystem_usec 2743234100\nnr_periods 2650550\nnr_throttled 15820\nthrottled_usec 10697282377"
+    },
+    {
+      "monotonic": 20986128.107730735,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1217982464",
+      "cpu.stat": "usage_usec 10848767722\nuser_usec 8105498166\nsystem_usec 2743269555\nnr_periods 2650604\nnr_throttled 15827\nthrottled_usec 10700960800"
+    },
+    {
+      "monotonic": 20986133.401035927,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1218531328",
+      "cpu.stat": "usage_usec 10849267914\nuser_usec 8105907264\nsystem_usec 2743360649\nnr_periods 2650657\nnr_throttled 15831\nthrottled_usec 10701738525"
+    },
+    {
+      "monotonic": 20986138.618815016,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1219309568",
+      "cpu.stat": "usage_usec 10849655963\nuser_usec 8106209304\nsystem_usec 2743446659\nnr_periods 2650709\nnr_throttled 15833\nthrottled_usec 10701922159"
+    },
+    {
+      "monotonic": 20986143.837621342,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1219895296",
+      "cpu.stat": "usage_usec 10850085819\nuser_usec 8106561491\nsystem_usec 2743524327\nnr_periods 2650761\nnr_throttled 15835\nthrottled_usec 10702013786"
+    },
+    {
+      "monotonic": 20986149.13241559,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1219309568",
+      "cpu.stat": "usage_usec 10850469461\nuser_usec 8106846954\nsystem_usec 2743622506\nnr_periods 2650814\nnr_throttled 15838\nthrottled_usec 10702470914"
+    },
+    {
+      "monotonic": 20986154.324619997,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1217187840",
+      "cpu.stat": "usage_usec 10850916653\nuser_usec 8107198759\nsystem_usec 2743717893\nnr_periods 2650866\nnr_throttled 15840\nthrottled_usec 10702528290"
+    },
+    {
+      "monotonic": 20986159.545148026,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1217347584",
+      "cpu.stat": "usage_usec 10851291867\nuser_usec 8107522088\nsystem_usec 2743769778\nnr_periods 2650918\nnr_throttled 15842\nthrottled_usec 10702656543"
+    },
+    {
+      "monotonic": 20986164.92872606,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1218166784",
+      "cpu.stat": "usage_usec 10851727292\nuser_usec 8107876205\nsystem_usec 2743851086\nnr_periods 2650972\nnr_throttled 15846\nthrottled_usec 10703158945"
+    },
+    {
+      "monotonic": 20986170.31182864,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1218183168",
+      "cpu.stat": "usage_usec 10852215922\nuser_usec 8108269261\nsystem_usec 2743946660\nnr_periods 2651026\nnr_throttled 15850\nthrottled_usec 10703764600"
+    },
+    {
+      "monotonic": 20986175.50785233,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1218011136",
+      "cpu.stat": "usage_usec 10852562941\nuser_usec 8108544856\nsystem_usec 2744018085\nnr_periods 2651078\nnr_throttled 15852\nthrottled_usec 10703994218"
+    },
+    {
+      "monotonic": 20986180.719543006,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1218883584",
+      "cpu.stat": "usage_usec 10853099909\nuser_usec 8109002725\nsystem_usec 2744097183\nnr_periods 2651130\nnr_throttled 15858\nthrottled_usec 10704585243"
+    },
+    {
+      "monotonic": 20986185.93679545,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1219260416",
+      "cpu.stat": "usage_usec 10853518182\nuser_usec 8109336271\nsystem_usec 2744181911\nnr_periods 2651182\nnr_throttled 15860\nthrottled_usec 10704700476"
+    },
+    {
+      "monotonic": 20986191.041685704,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1219010560",
+      "cpu.stat": "usage_usec 10853848400\nuser_usec 8109591606\nsystem_usec 2744256794\nnr_periods 2651233\nnr_throttled 15862\nthrottled_usec 10704864490"
+    },
+    {
+      "monotonic": 20986196.316699725,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1215557632",
+      "cpu.stat": "usage_usec 10854213424\nuser_usec 8109880753\nsystem_usec 2744332670\nnr_periods 2651286\nnr_throttled 15865\nthrottled_usec 10705147419"
+    },
+    {
+      "monotonic": 20986201.532301422,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1216118784",
+      "cpu.stat": "usage_usec 10854565441\nuser_usec 8110172301\nsystem_usec 2744393139\nnr_periods 2651338\nnr_throttled 15867\nthrottled_usec 10705393083"
+    },
+    {
+      "monotonic": 20986206.715583857,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1216610304",
+      "cpu.stat": "usage_usec 10854918335\nuser_usec 8110461209\nsystem_usec 2744457126\nnr_periods 2651390\nnr_throttled 15870\nthrottled_usec 10705499380"
+    },
+    {
+      "monotonic": 20986211.9292365,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1215823872",
+      "cpu.stat": "usage_usec 10855290951\nuser_usec 8110745176\nsystem_usec 2744545775\nnr_periods 2651442\nnr_throttled 15872\nthrottled_usec 10705659101"
+    },
+    {
+      "monotonic": 20986217.127937056,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1215848448",
+      "cpu.stat": "usage_usec 10855709553\nuser_usec 8111081197\nsystem_usec 2744628356\nnr_periods 2651494\nnr_throttled 15874\nthrottled_usec 10705809063"
+    },
+    {
+      "monotonic": 20986222.325574446,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1216532480",
+      "cpu.stat": "usage_usec 10856090845\nuser_usec 8111373777\nsystem_usec 2744717067\nnr_periods 2651546\nnr_throttled 15876\nthrottled_usec 10705986985"
+    },
+    {
+      "monotonic": 20986227.445071474,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1216344064",
+      "cpu.stat": "usage_usec 10856449153\nuser_usec 8111676667\nsystem_usec 2744772485\nnr_periods 2651597\nnr_throttled 15877\nthrottled_usec 10705998234"
+    },
+    {
+      "monotonic": 20986232.735244684,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1216503808",
+      "cpu.stat": "usage_usec 10856839151\nuser_usec 8111983659\nsystem_usec 2744855491\nnr_periods 2651650\nnr_throttled 15880\nthrottled_usec 10706327331"
+    },
+    {
+      "monotonic": 20986238.023420144,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1214730240",
+      "cpu.stat": "usage_usec 10857257322\nuser_usec 8112337053\nsystem_usec 2744920268\nnr_periods 2651703\nnr_throttled 15883\nthrottled_usec 10707026819"
+    },
+    {
+      "monotonic": 20986243.21089062,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1217314816",
+      "cpu.stat": "usage_usec 10857835161\nuser_usec 8112849945\nsystem_usec 2744985215\nnr_periods 2651755\nnr_throttled 15888\nthrottled_usec 10707609121"
+    },
+    {
+      "monotonic": 20986248.547753554,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1215832064",
+      "cpu.stat": "usage_usec 10858451764\nuser_usec 8113389079\nsystem_usec 2745062685\nnr_periods 2651808\nnr_throttled 15894\nthrottled_usec 10712433728"
+    },
+    {
+      "monotonic": 20986253.82419942,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1211981824",
+      "cpu.stat": "usage_usec 10858871361\nuser_usec 8113746655\nsystem_usec 2745124705\nnr_periods 2651861\nnr_throttled 15898\nthrottled_usec 10712952024"
+    },
+    {
+      "monotonic": 20986259.01021392,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1211961344",
+      "cpu.stat": "usage_usec 10859253278\nuser_usec 8114098116\nsystem_usec 2745155162\nnr_periods 2651913\nnr_throttled 15900\nthrottled_usec 10713048046"
+    },
+    {
+      "monotonic": 20986264.232171647,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1211691008",
+      "cpu.stat": "usage_usec 10859598653\nuser_usec 8114381796\nsystem_usec 2745216857\nnr_periods 2651965\nnr_throttled 15902\nthrottled_usec 10713181993"
+    },
+    {
+      "monotonic": 20986269.42363116,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1211711488",
+      "cpu.stat": "usage_usec 10859950826\nuser_usec 8114640352\nsystem_usec 2745310474\nnr_periods 2652017\nnr_throttled 15903\nthrottled_usec 10713302464"
+    },
+    {
+      "monotonic": 20986274.628848087,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1211375616",
+      "cpu.stat": "usage_usec 10860335889\nuser_usec 8114940210\nsystem_usec 2745395678\nnr_periods 2652069\nnr_throttled 15905\nthrottled_usec 10713566227"
+    },
+    {
+      "monotonic": 20986279.822560616,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1214287872",
+      "cpu.stat": "usage_usec 10860725238\nuser_usec 8115241090\nsystem_usec 2745484148\nnr_periods 2652121\nnr_throttled 15907\nthrottled_usec 10713685530"
+    },
+    {
+      "monotonic": 20986285.040086776,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1211801600",
+      "cpu.stat": "usage_usec 10861127081\nuser_usec 8115552421\nsystem_usec 2745574660\nnr_periods 2652173\nnr_throttled 15909\nthrottled_usec 10713874704"
+    },
+    {
+      "monotonic": 20986290.340113327,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1212235776",
+      "cpu.stat": "usage_usec 10861583886\nuser_usec 8115918200\nsystem_usec 2745665686\nnr_periods 2652226\nnr_throttled 15912\nthrottled_usec 10714158234"
+    },
+    {
+      "monotonic": 20986295.634443544,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1212112896",
+      "cpu.stat": "usage_usec 10861965129\nuser_usec 8116250492\nsystem_usec 2745714637\nnr_periods 2652279\nnr_throttled 15915\nthrottled_usec 10714573621"
+    },
+    {
+      "monotonic": 20986300.80620852,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1212198912",
+      "cpu.stat": "usage_usec 10862297639\nuser_usec 8116472300\nsystem_usec 2745825338\nnr_periods 2652331\nnr_throttled 15917\nthrottled_usec 10714732776"
+    },
+    {
+      "monotonic": 20986306.11227984,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1212424192",
+      "cpu.stat": "usage_usec 10862786893\nuser_usec 8116876773\nsystem_usec 2745910119\nnr_periods 2652384\nnr_throttled 15921\nthrottled_usec 10715238351"
+    },
+    {
+      "monotonic": 20986311.417982597,
+      "cpu.max": "50000 100000",
+      "memory.max": "2147483648",
+      "memory.current": "1213034496",
+      "cpu.stat": "usage_usec 10863297336\nuser_usec 8117307015\nsystem_usec 2745990321\nnr_periods 2652437\nnr_throttled 15925\nthrottled_usec 10715589848"
+    }
+  ],
+  "model_limits": {
+    "max_concurrent_calls": 3,
+    "organization_requests_per_minute": 120,
+    "monthly_budget_usd": 2.0
+  },
+  "fixture": {
+    "project_id": "5977c43d-5d76-43ba-8293-eafc2e37fd4b",
+    "document_id": "4acebf71-df33-4628-b015-3f02b9c3e10b",
+    "exam_id": "247f8518-5769-49f0-a50e-80e237bca8ad",
+    "exam_status": "closed"
+  },
+  "cross_student_read_status": 404,
+  "jobs": [
+    "090e4df4-54fd-4a05-8aaa-22a23759ee40",
+    "04adb586-c0ad-4701-bb15-c8d2bcdc7f9d",
+    "8a648a20-4b5c-4536-acde-c4abaec5974e"
+  ],
+  "job_progress": {
+    "090e4df4-54fd-4a05-8aaa-22a23759ee40": {
+      "status": "completed",
+      "progress": 1.0,
+      "attempt_count": 1
+    },
+    "04adb586-c0ad-4701-bb15-c8d2bcdc7f9d": {
+      "status": "completed",
+      "progress": 1.0,
+      "attempt_count": 1
+    },
+    "8a648a20-4b5c-4536-acde-c4abaec5974e": {
+      "status": "completed",
+      "progress": 1.0,
+      "attempt_count": 1
+    }
+  },
+  "blueprint_batch_seconds": 237.177,
+  "job_details": [
+    {
+      "id": "8a648a20-4b5c-4536-acde-c4abaec5974e",
+      "status": "completed",
+      "attempt_count": 1,
+      "created_at": "2026-10-26 14:53:54.267759+08:00",
+      "started_at": "2026-10-26 14:56:40.540002+08:00",
+      "completed_at": "2026-10-26 14:57:49.344742+08:00",
+      "error_code": null
+    },
+    {
+      "id": "04adb586-c0ad-4701-bb15-c8d2bcdc7f9d",
+      "status": "completed",
+      "attempt_count": 1,
+      "created_at": "2026-10-26 14:53:53.939200+08:00",
+      "started_at": "2026-10-26 14:55:38.577204+08:00",
+      "completed_at": "2026-10-26 14:56:40.462540+08:00",
+      "error_code": null
+    },
+    {
+      "id": "090e4df4-54fd-4a05-8aaa-22a23759ee40",
+      "status": "completed",
+      "attempt_count": 1,
+      "created_at": "2026-10-26 14:53:53.455628+08:00",
+      "started_at": "2026-10-26 14:53:53.638950+08:00",
+      "completed_at": "2026-10-26 14:55:38.542913+08:00",
+      "error_code": null
+    }
+  ],
+  "model_calls": [
+    {
+      "status": "completed",
+      "task_type": "answer_analyzer",
+      "actual_model": "qwen-plus",
+      "latency_ms": 14869,
+      "input_tokens": 1688,
+      "output_tokens": 653,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.0003689
+    },
+    {
+      "status": "completed",
+      "task_type": "answer_analyzer",
+      "actual_model": "qwen-plus",
+      "latency_ms": 13878,
+      "input_tokens": 1688,
+      "output_tokens": 592,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.00035194
+    },
+    {
+      "status": "completed",
+      "task_type": "answer_analyzer",
+      "actual_model": "qwen-plus",
+      "latency_ms": 14311,
+      "input_tokens": 1688,
+      "output_tokens": 627,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.00036167
+    },
+    {
+      "status": "completed",
+      "task_type": "session_planner",
+      "actual_model": "qwen-plus",
+      "latency_ms": 64702,
+      "input_tokens": 2270,
+      "output_tokens": 2921,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.00106401
+    },
+    {
+      "status": "completed",
+      "task_type": "session_planner",
+      "actual_model": "qwen-plus",
+      "latency_ms": 14020,
+      "input_tokens": 3520,
+      "output_tokens": 618,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.00056252
+    },
+    {
+      "status": "completed",
+      "task_type": "session_planner",
+      "actual_model": "qwen-plus",
+      "latency_ms": 13145,
+      "input_tokens": 4098,
+      "output_tokens": 557,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.00060972
+    },
+    {
+      "status": "completed",
+      "task_type": "session_planner",
+      "actual_model": "qwen-plus",
+      "latency_ms": 12343,
+      "input_tokens": 4098,
+      "output_tokens": 540,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.000605
+    },
+    {
+      "status": "completed",
+      "task_type": "session_planner",
+      "actual_model": "qwen-plus",
+      "latency_ms": 57614,
+      "input_tokens": 2270,
+      "output_tokens": 2595,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.00097338
+    },
+    {
+      "status": "completed",
+      "task_type": "session_planner",
+      "actual_model": "qwen-plus",
+      "latency_ms": 3974,
+      "input_tokens": 2142,
+      "output_tokens": 162,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.0002828
+    },
+    {
+      "status": "completed",
+      "task_type": "session_planner",
+      "actual_model": "qwen-plus",
+      "latency_ms": 61183,
+      "input_tokens": 2270,
+      "output_tokens": 2765,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.00102064
+    },
+    {
+      "status": "completed",
+      "task_type": "session_planner",
+      "actual_model": "qwen-plus",
+      "latency_ms": 3680,
+      "input_tokens": 2196,
+      "output_tokens": 144,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.00028379
+    },
+    {
+      "status": "completed",
+      "task_type": "session_planner",
+      "actual_model": "qwen-plus",
+      "latency_ms": 3564,
+      "input_tokens": 2366,
+      "output_tokens": 145,
+      "actual_cost_usd": null,
+      "estimated_cost_usd": 0.00030294
+    }
+  ],
+  "answer_states": {
+    "completed": 3,
+    "active": 27
+  },
+  "cleanup": {
+    "credentials_revoked": true,
+    "test_accounts_disabled": 31,
+    "test_organization_disabled": true,
+    "closed_fixture_retained": true
+  },
+  "finished": true
+}

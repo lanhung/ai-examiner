@@ -440,7 +440,9 @@ def test_qwen_realtime_session_includes_safe_client_config(client, monkeypatch):
 
     upstream = FakeQwenConnection()
     monkeypatch.setattr("ai_examiner.main.websockets.connect", lambda *_args, **_kwargs: upstream)
-    with client.websocket_connect(f"/api/voice/sessions/{data['id']}/qwen-ws") as socket:
+    with client.websocket_connect(
+        f"/api/voice/sessions/{data['id']}/qwen-ws", headers={"Origin": "http://testserver"},
+    ) as socket:
         assert socket.receive_json()["type"] == "session.created"
         socket.send_json(data["client_config"])
         assert socket.receive_json()["type"] == "session.updated"

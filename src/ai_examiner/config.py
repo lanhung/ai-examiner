@@ -38,6 +38,18 @@ class Settings(BaseSettings):
     wechat_login_limit_per_minute: int = Field(default=30, ge=1, le=10000)
     wechat_app_id: str = Field(default="", max_length=64)
     wechat_app_secret: SecretStr | None = None
+    wechat_speech_enabled: bool = False
+    wechat_realtime_enabled: bool = False
+    wechat_realtime_organizations: str = ""
+    wechat_realtime_max_seconds: int = Field(default=180, ge=30, le=240)
+    wechat_realtime_budget_usd: float = Field(default=0.5, gt=0, le=10)
+    wechat_asr_model: str = "qwen3-asr-flash"
+    wechat_tts_model: str = "qwen3-tts-flash"
+    wechat_tts_voice: str = "Cherry"
+    wechat_tts_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
+    wechat_speech_timeout_seconds: float = Field(default=40, ge=5, le=45)
+    # Conservative admission/accounting estimate, not a provider invoice.
+    wechat_speech_call_budget_usd: float = Field(default=0.05, gt=0, le=10)
     oidc_session_cookie_name: str = Field(
         default="axe_session",
         pattern=r"^[A-Za-z][A-Za-z0-9_-]{2,63}$",
@@ -122,6 +134,8 @@ class Settings(BaseSettings):
     backup_dir: Path = Path("./data/backups")
     prompt_dir: Path = Path("./prompts")
     max_upload_mb: int = 50
+    max_pdf_pages: int = Field(default=500, ge=1, le=5000)
+    document_parse_timeout_seconds: int = Field(default=180, ge=10, le=1800)
     max_document_chars: int = 180_000
     max_questions: int = 12
     render_dpi: int = Field(default=144, ge=72, le=240)

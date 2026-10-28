@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from typing import Any
@@ -19,6 +20,7 @@ from .base import AgentContext
 from .evaluator import Evaluator
 from .grounding import GroundingChecker
 from .interviewer import Interviewer
+from .language import resolve_session_language
 from .planner import SessionPlanner
 from .policy import PolicyController
 from .reporter import ReportGenerator
@@ -82,12 +84,14 @@ class ExamOrchestrator:
         filename: str,
         language: str,
         template_contract: dict[str, Any] | None = None,
+        on_stage: Callable[[str], None] | None = None,
     ) -> tuple[dict, dict]:
         blueprint = self.planner.plan(
             document_text=document_text,
             filename=filename,
             language=language,
             template_contract=template_contract,
+            **({"on_stage": on_stage} if on_stage else {}),
         )
         grounding = self.grounding.check_blueprint(blueprint, document_text)
         blueprint["grounding_check"] = grounding
@@ -99,7 +103,7 @@ class ExamOrchestrator:
             int(session.config.get("question_limit", 6)), len(blueprint.get("questions", []))
         )
 
-    def start_session(self, session: ExamSession, blueprint: Blueprint) -> Turn:
+    def start_session(self, session: ExamSession, blueprint: Blueprint, *, before_commit=None) -> Turn:
         if session.status not in {"created", "ready"}:
             raise ValueError("Session has already started")
         questions = blueprint.data.get("questions", [])
@@ -139,7 +143,9 @@ class ExamOrchestrator:
             role="assistant",
             kind="question",
             question_id=selected["id"],
-            content=self.interviewer.opening(selected),
+            content=self.interviewer.opening(
+                selected, language=resolve_session_language(session, blueprint)
+            ),
         )
         self.db.add(turn)
         self.db.flush()
@@ -157,12 +163,14 @@ class ExamOrchestrator:
                 else {}
             ),
         )
+        if before_commit:
+            before_commit()
         self.db.commit()
         self.db.refresh(turn)
         return turn
 
     def submit_answer(
-        self, session: ExamSession, blueprint: Blueprint, answer: str
+        self, session: ExamSession, blueprint: Blueprint, answer: str, *, before_commit=None
     ) -> dict[str, Any]:
         if session.status != "active":
             raise ValueError("Session is not active")
@@ -171,13 +179,14 @@ class ExamOrchestrator:
         index = session.current_question_index
         question = questions[index]
         analysis_question = self._analysis_question(session, question)
+        language = resolve_session_language(session, blueprint)
         history = [
             {"role": t.role, "content": t.content, "question_id": t.question_id}
             for t in session.turns[-6:]
         ]
         session.state = "ANALYZING"
         analysis = self.analyzer.analyze(
-            question=analysis_question, answer=answer, history=history
+            question=analysis_question, answer=answer, history=history, language=language
         )
         analysis["active_question_text"] = str(analysis_question.get("text", ""))
         analysis["question_context"] = str(
@@ -188,7 +197,7 @@ class ExamOrchestrator:
             answer=answer,
             analysis=analysis,
             assessment_policy=self._template_assessment_policy(session),
-            language=str(session.config.get("language") or "zh-CN"),
+            language=language,
         )
         user_turn = Turn(
             session_id=session.id,
@@ -225,7 +234,7 @@ class ExamOrchestrator:
             analysis=analysis,
             attempts=session.current_question_attempts,
             question=question,
-            config=session.config,
+            config={**session.config, "language": language},
             is_last_question=is_last,
             policy_contract=session.config.get("conversation_policy"),
         )
@@ -298,6 +307,7 @@ class ExamOrchestrator:
             analysis=analysis,
             question=question,
             next_question=next_question,
+            language=language,
         )
         assistant_turn = Turn(
             session_id=session.id,
@@ -325,6 +335,8 @@ class ExamOrchestrator:
                 else {}
             ),
         )
+        if before_commit:
+            before_commit()
         self.db.commit()
         self.db.refresh(user_turn)
         self.db.refresh(assistant_turn)
@@ -367,6 +379,7 @@ class ExamOrchestrator:
         questions = blueprint.data.get("questions", [])
         if not questions:
             return []
+        language = resolve_session_language(session, blueprint)
         transcript_turns = [turn for turn in session.turns if turn.kind == "voice_transcript"]
         finalized = []
         last_assistant_text = ""
@@ -391,14 +404,14 @@ class ExamOrchestrator:
                 for item in transcript_turns[max(0, position - 6) : position]
             ]
             analysis = self.analyzer.analyze(
-                question=question, answer=turn.content, history=history
+                question=question, answer=turn.content, history=history, language=language
             )
             evaluation = self.evaluator.evaluate(
                 question=question,
                 answer=turn.content,
                 analysis=analysis,
                 assessment_policy=self._template_assessment_policy(session),
-                language=str(session.config.get("language") or "zh-CN"),
+                language=language,
             )
             turn.question_id = str(question["id"])
             turn.analysis = {

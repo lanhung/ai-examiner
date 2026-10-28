@@ -11,20 +11,22 @@ from typing import Annotated
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import or_, select, update
+from sqlalchemy import or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .agents.analyzer import AnswerAnalyzer
 from .agents.base import AgentContext
 from .agents.evaluator import Evaluator
+from .agents.grounding import GroundingChecker
 from .config import get_settings
 from .db import get_db
 from .model_catalog import estimate_cost
 from .models import (
+    BackgroundJob,
     Blueprint,
     Document,
     ExamPaper,
@@ -174,6 +176,7 @@ def own_attempt(db: Session, user: Principal, attempt_id: str) -> SchoolAttempt:
 
 
 def attempt_payload(db: Session, attempt: SchoolAttempt | TeacherExamPreview, *, teacher=False) -> dict:
+    grading = grading_receipt(db, attempt)
     exam = db.get(PublishedExam, attempt.exam_id)
     paper = db.get(ExamPaper, attempt.exam_id)
     position = len(attempt.answers)
@@ -193,6 +196,7 @@ def attempt_payload(db: Session, attempt: SchoolAttempt | TeacherExamPreview, *,
         "review_note": attempt.review_note, "review_version": attempt.review_version,
         "completed_at": attempt.completed_at.isoformat() if attempt.completed_at else None,
         "question": None,
+        "grading": grading,
         "answers": attempt.answers if teacher or preview or finished else [
             {"position": a["position"], "question": a["question"], "answer": a["answer"]}
             for a in attempt.answers
@@ -357,6 +361,11 @@ def publish_exam(payload: PublishExam, user: User, db: Db):
         not q.get("text") or not q.get("expected_points") for q in questions
     ):
         raise HTTPException(422, "蓝图题目或评分要点不足，请先检查蓝图")
+    grounding = GroundingChecker().check_blueprint(
+        {"questions": questions}, document.content_text, document.page_map or None,
+    )
+    if not grounding["passed"]:
+        raise HTTPException(422, "题目来源校验未通过，不能发布；请检查或重新生成蓝图：" + "; ".join(grounding["issues"][:5]))
     try:
         provider, _ = parse_profile(payload.profile)
         ready = provider != "mock" and profile_ready(get_settings(), payload.profile)
@@ -393,10 +402,20 @@ def publish_exam(payload: PublishExam, user: User, db: Db):
 
 def close_exam(exam_id: UUID, user: User, db: Db):
     exam = owned_exam(db, user, str(exam_id))
+    lock_exam_admission(db, exam.id)
     exam.status = "closed"
     audit(db, user, exam.organization_id, "school.exam.close", exam.id)
     db.commit()
     return exam_payload(exam)
+
+
+def lock_exam_admission(db: Session, exam_id: str) -> None:
+    # Students may read publications, not UPDATE them. A shared admission lock
+    # serializes join/close without weakening PostgreSQL's teacher-only RLS policy.
+    if db.get_bind().dialect.name == "postgresql":
+        digest = hashlib.sha256(f"school.exam.admission:{exam_id}".encode()).digest()
+        key = int.from_bytes(digest[:8], "big", signed=True)
+        db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": key})
 
 
 def join_exam(exam_id: UUID, payload: JoinExam, user: User, db: Db):
@@ -408,8 +427,12 @@ def join_exam(exam_id: UUID, payload: JoinExam, user: User, db: Db):
     ))
     if existing:
         return attempt_payload(db, existing)
-    db.refresh(exam, with_for_update=True)
-    if exam.status != "published":
+    lock_exam_admission(db, exam.id)
+    exam = db.scalar(select(PublishedExam).where(
+        PublishedExam.id == exam.id,
+    ).execution_options(populate_existing=True))
+    # A concurrent close can also make the row invisible under the SELECT policy.
+    if not exam or exam.status != "published":
         raise HTTPException(409, "考试已停止接收新答卷")
     attempt = SchoolAttempt(
         exam_id=exam.id, organization_id=exam.organization_id, teacher_id=exam.teacher_id,
@@ -439,8 +462,103 @@ def submit_answer(attempt_id: UUID, payload: ExamAnswer, user: User, db: Db):
     return score_answer(own_attempt(db, user, str(attempt_id)), payload, user, db)
 
 
+def grading_receipt(db: Session, attempt: SchoolAttempt | TeacherExamPreview) -> dict | None:
+    from .services.job_control import TERMINAL_JOB_STATUSES, reconcile_blueprint_job
+    if not attempt.pending or attempt.status != "grading":
+        return None
+    job = db.scalar(select(BackgroundJob).where(
+        BackgroundJob.organization_id == attempt.organization_id,
+        BackgroundJob.kind == "school_grading",
+        BackgroundJob.idempotency_key == f"{attempt.id}:{attempt.pending['request_id']}",
+    ))
+    if not job:
+        return None
+    reconcile_blueprint_job(db, job)
+    if job.status in TERMINAL_JOB_STATUSES and attempt.status == "grading":
+        retain_failed_answer(db, type(attempt), attempt.id, attempt.updated_at)
+        db.refresh(attempt)
+    return {"id": job.id, "status": job.status, "error": job.error, "attempt_count": job.attempt_count}
+
+
+def authorize_grading_job(db: Session, job: BackgroundJob):
+    from .services.job_control import JobAuthorizationError
+    user = db.get(Principal, job.actor_principal_id)
+    if not user or user.status != "active":
+        raise JobAuthorizationError("Grading actor is unavailable")
+    try:
+        attempt = (own_preview if job.payload.get("preview") else own_attempt)(
+            db, user, job.payload["attempt_id"],
+        )
+        paper = db.get(ExamPaper, attempt.exam_id)
+        if attempt.organization_id != job.organization_id or paper.project_id != job.project_id:
+            raise JobAuthorizationError("Grading scope mismatch")
+        return user, attempt
+    except (HTTPException, KeyError) as exc:
+        raise JobAuthorizationError("Grading is no longer authorized") from exc
+
+
+def queue_school_answer(attempt, payload: ExamAnswer, user: Principal, db: Session, tasks: BackgroundTasks):
+    from .services.jobs import JobQueueUnavailable, dispatch_job_by_id, enqueue_job
+    key = f"{attempt.id}:{payload.request_id}"
+    existing = db.scalar(select(BackgroundJob).where(
+        BackgroundJob.kind == "school_grading", BackgroundJob.organization_id == attempt.organization_id,
+        BackgroundJob.idempotency_key == key,
+    ))
+    if existing:
+        if existing.actor_principal_id != user.id or existing.payload.get("answer") != payload.model_dump(mode="json"):
+            raise HTTPException(409, "同一提交编号不能更改答案")
+        return attempt_payload(db, attempt)
+    previous = next((a for a in attempt.answers if a["request_id"] == str(payload.request_id)), None)
+    if previous:
+        if previous["answer"] != payload.answer or previous["position"] != payload.position:
+            raise HTTPException(409, "同一提交编号不能更改答案")
+        return attempt_payload(db, attempt)
+    if attempt.status != "active" or payload.position != len(attempt.answers):
+        raise HTTPException(409, "答卷状态已变化，请刷新")
+    model = type(attempt)
+    paper = db.get(ExamPaper, attempt.exam_id)
+    changed = db.execute(update(model).where(
+        model.id == attempt.id, model.status == "active", model.updated_at == attempt.updated_at,
+    ).values(status="grading", pending=payload.model_dump(mode="json"), updated_at=utcnow()))
+    if changed.rowcount != 1:
+        db.rollback()
+        raise HTTPException(409, "已有提交正在处理，请刷新")
+    settings = get_settings()
+    try:
+        job = enqueue_job(db, kind="school_grading", project_id=paper.project_id,
+                          organization_id=attempt.organization_id, actor_principal_id=user.id,
+                          idempotency_key=key, max_attempts=30, dispatch=not settings.celery_always_eager,
+                          payload={"attempt_id": attempt.id, "preview": isinstance(attempt, TeacherExamPreview),
+                                   "answer": payload.model_dump(mode="json")})
+    except JobQueueUnavailable:
+        db.refresh(attempt)
+        return attempt_payload(db, attempt)
+    if settings.celery_always_eager:
+        tasks.add_task(dispatch_job_by_id, job.id, job.organization_id, job.actor_principal_id)
+    db.refresh(attempt)
+    return attempt_payload(db, attempt)
+
+
+def submit_answer_async(attempt_id: UUID, payload: ExamAnswer, user: User, db: Db, background_tasks: BackgroundTasks):
+    return queue_school_answer(own_attempt(db, user, str(attempt_id)), payload, user, db, background_tasks)
+
+
+def submit_preview_async(preview_id: UUID, payload: ExamAnswer, user: User, db: Db, background_tasks: BackgroundTasks):
+    return queue_school_answer(own_preview(db, user, str(preview_id)), payload, user, db, background_tasks)
+
+
+def execute_grading_job(db: Session, job: BackgroundJob, heartbeat):
+    from .services.session_operations import fence_job
+    user, attempt = authorize_grading_job(db, job)
+    payload = ExamAnswer.model_validate(job.payload["answer"])
+    heartbeat.checkpoint()
+    score_answer(attempt, payload, user, db, reserved=True,
+                 before_commit=lambda: fence_job(db, job))
+    return {"attempt_id": attempt.id}, "评分已完成"
+
+
 def score_answer(attempt: SchoolAttempt | TeacherExamPreview, payload: ExamAnswer,
-                 user: Principal, db: Session):
+                 user: Principal, db: Session, *, reserved=False, before_commit=None):
     model = type(attempt)
     is_preview = isinstance(attempt, TeacherExamPreview)
     previous = next((a for a in attempt.answers if a["request_id"] == str(payload.request_id)), None)
@@ -448,26 +566,31 @@ def score_answer(attempt: SchoolAttempt | TeacherExamPreview, payload: ExamAnswe
         if previous["answer"] != payload.answer or previous["position"] != payload.position:
             raise HTTPException(409, "同一提交编号不能更改答案")
         return attempt_payload(db, attempt)
-    if attempt.status != "active" or payload.position != len(attempt.answers):
+    if attempt.status != ("grading" if reserved else "active") or payload.position != len(attempt.answers):
         raise HTTPException(409, "答卷状态已变化，请刷新；评分中请勿重复提交")
     paper = db.get(ExamPaper, attempt.exam_id)
     question = copy.deepcopy(paper.questions[payload.position])
     pending = payload.model_dump(mode="json")
     # Commit the reservation before network IO. A lost response must not bill twice.
-    reserved_at = utcnow()
-    result = db.execute(update(model).where(
-        model.id == attempt.id, model.status == "active",
-        model.updated_at == attempt.updated_at,
-    ).values(status="grading", pending=pending, updated_at=reserved_at))
-    if result.rowcount != 1:
-        db.rollback()
-        raise HTTPException(409, "已有提交正在处理，请刷新答卷")
-    db.commit()
+    if reserved:
+        if attempt.pending != pending:
+            raise ValueError("Grading reservation changed")
+        reserved_at = attempt.updated_at
+    else:
+        reserved_at = utcnow()
+        result = db.execute(update(model).where(
+            model.id == attempt.id, model.status == "active",
+            model.updated_at == attempt.updated_at,
+        ).values(status="grading", pending=pending, updated_at=reserved_at))
+        if result.rowcount != 1:
+            db.rollback()
+            raise HTTPException(409, "已有提交正在处理，请刷新答卷")
+        db.commit()
     settings = get_settings()
+    usage = []
     try:
         assert_budget(db, settings, paper.project_id)
         provider = governed_provider(db, settings, paper.profile, project_id=paper.project_id)
-        usage = []
         analyzer = AnswerAnalyzer(AgentContext(
             provider=provider, record_usage=lambda agent, value: usage.append((agent, value)),
             prompt_overrides=prompt_contents(db),
@@ -502,11 +625,20 @@ def score_answer(attempt: SchoolAttempt | TeacherExamPreview, payload: ExamAnswe
             ))
         action = "school.preview.answer.submit" if is_preview else "school.answer.submit"
         audit(db, user, attempt.organization_id, action, attempt.id)
+        if before_commit:
+            before_commit()
         db.commit()
     except HTTPException:
         retain_failed_answer(db, model, attempt.id, reserved_at)
         raise
-    except Exception:
+    except Exception as exc:
+        from .services.model_governance import ModelGovernanceError
+        if reserved and not usage and isinstance(exc, ModelGovernanceError) and exc.code in {
+            "organization_concurrency_limited", "organization_rate_limited",
+            "principal_rate_limited", "organization_token_rate_limited",
+        }:
+            db.rollback()
+            raise
         retain_failed_answer(db, model, attempt.id, reserved_at)
         raise HTTPException(503, "答案已保留，自动评分未完成；请联系教师复核，不要重复提交") from None
     return attempt_payload(db, attempt)
@@ -608,6 +740,8 @@ def recover_answer(attempt: SchoolAttempt | TeacherExamPreview, payload: ReviewA
 
 
 ROUTES = (
+    ("POST", "/api/v1/school/attempts/{attempt_id}/answers/async", submit_answer_async),
+    ("POST", "/api/v1/school/teacher/previews/{preview_id}/answers/async", submit_preview_async),
     ("GET", "/api/v1/school/me", school_me),
     ("GET", "/api/v1/school/exams", list_exams),
     ("GET", "/api/v1/school/exams/{exam_id}", get_exam),

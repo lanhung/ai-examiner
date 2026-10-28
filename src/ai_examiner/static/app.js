@@ -1743,6 +1743,7 @@ function handleRealtimeEvent(event) {
     setVoiceVisual("connected", "千问语音通道已连接，正在载入答辩蓝图…");
     if (state.voiceClientConfig) sendRealtimeEvent(state.voiceClientConfig);
   } else if (type === "session.updated" && state.voiceProvider === "qwen") {
+    setStatus("voiceStatus", "千问实时模型已就绪。系统使用服务端 VAD 自动判断何时轮到 AI 回答。", "success");
     if (state.voiceInitialResponseSent) {
       setVoiceVisual("connected", "千问语音设置已更新。");
     } else {
@@ -1817,25 +1818,40 @@ async function connectQwenVoice(voiceSession, stream) {
   state.voicePlaybackTime = context.currentTime;
 
   const protocol = location.protocol === "https:" ? "wss" : "ws";
-  const socket = new WebSocket(`${protocol}://${location.host}/api/voice/sessions/${voiceSession.id}/qwen-ws`);
+  const socketUrl = new URL(`${protocol}://${location.host}/api/voice/sessions/${voiceSession.id}/qwen-ws`);
+  if (state.organizationId) socketUrl.searchParams.set("organization_id", state.organizationId);
+  const socket = new WebSocket(socketUrl.href);
   state.voiceSocket = socket;
-  socket.onmessage = handleRealtimeEvent;
-  socket.onclose = () => {
-    if (state.voiceSocket === socket && state.voiceSessionId) {
-      setVoiceVisual("", "千问语音连接已关闭。");
-    }
-  };
   await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("连接千问实时语音超时")), 20000);
+    let ready = false;
+    const fail = (message) => {
+      clearTimeout(timeout);
+      if (state.voiceSocket !== socket) return;
+      if (!ready) reject(new Error(message));
+      else void endVoice("connection_failed").finally(() => {
+        setStatus("voiceStatus", message, "error");
+        setVoiceVisual("", "语音已断开，麦克风已关闭。");
+      });
+    };
+    const timeout = setTimeout(() => fail("千问模型初始化超时，请检查模型权限和网络连接。"), 25000);
+    socket.onmessage = (event) => {
+      if (state.voiceSocket !== socket) return;
+      let data;
+      try { data = JSON.parse(event.data); } catch { return; }
+      handleRealtimeEvent(event);
+      if (data.type === "error") {
+        fail(data.error?.message || data.message || "千问实时语音初始化失败");
+      } else if (data.type === "session.updated" && !ready) {
+        ready = true;
+        clearTimeout(timeout);
+        resolve();
+      }
+    };
     socket.onopen = () => {
-      clearTimeout(timeout);
-      setVoiceVisual("connected", "已连接千问实时语音，正在初始化…");
-      resolve();
+      setVoiceVisual("", "代理通道已打开，正在验证千问模型并载入答辩蓝图…");
     };
-    socket.onerror = () => {
-      clearTimeout(timeout);
-      reject(new Error("无法连接千问实时语音代理"));
-    };
+    socket.onerror = () => fail("无法连接千问语音代理，请检查登录状态、当前组织和网络。");
+    socket.onclose = () => fail(ready ? "千问语音连接已断开。" : "千问模型尚未就绪，连接已关闭。请检查登录和模型权限。");
   });
 
   const source = context.createMediaStreamSource(stream);
@@ -1918,7 +1934,6 @@ async function connectVoice() {
     $("voiceProvider").disabled = true;
     $("voiceSelect").disabled = true;
     $("vadSelect").disabled = true;
-    setStatus("voiceStatus", `${provider.label} 已连接。系统使用服务端 VAD 自动判断何时轮到 AI 回答。`, "success");
     return;
   }
 
@@ -2075,8 +2090,9 @@ $("startVoice").onclick = async () => {
   setStatus("voiceStatus", "正在申请麦克风权限并建立 WebRTC 连接…");
   try { await connectVoice(); }
   catch (error) {
-    setStatus("voiceStatus", error.message, "error");
     await endVoice("connection_failed");
+    setStatus("voiceStatus", error.message, "error");
+    setVoiceVisual("", "连接未成功，麦克风已关闭。 ");
   }
 };
 

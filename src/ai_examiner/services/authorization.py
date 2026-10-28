@@ -7,6 +7,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.routing import APIRoute
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.requests import HTTPConnection
 
 from ..config import get_settings
 from ..db import get_db
@@ -474,12 +475,16 @@ def require_workbench_capability(capability: str):
         raise RuntimeError(f"Unknown capability: {capability}")
 
     def dependency(
-        request: Request,
+        request: HTTPConnection,
         authentication: CurrentAuthentication,
         db: Annotated[Session, Depends(get_db)],
     ) -> AuthorizationContext | None:
         settings = get_settings()
         organization_id = request.headers.get("X-AI-Examiner-Organization")
+        if request.scope["type"] == "websocket":
+            # Browsers cannot attach the workbench organization header to a WS.
+            # This is only a selection hint; membership is still verified below.
+            organization_id = organization_id or request.query_params.get("organization_id")
         disabled_principal_id = request.headers.get("X-AI-Examiner-Principal")
         if (
             settings.auth_mode == "disabled"

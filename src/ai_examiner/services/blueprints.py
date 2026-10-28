@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ..agents.grounding import GroundingChecker
 from ..agents.orchestrator import ExamOrchestrator
+from ..agents.planner import PlannerRepairExhausted
 from ..config import Settings
 from ..models import Blueprint, Document, EvidenceAsset, Project
 from ..providers.base import ModelOutputValidationError
@@ -36,6 +39,7 @@ class BlueprintGenerationService:
         mode: str,
         template_version_id: str | None,
         template_overrides: dict[str, Any],
+        on_stage: Callable[[str], None] | None = None,
     ) -> PreparedBlueprint:
         resolved_template = SessionTemplateService(self.db).resolve(
             project,
@@ -62,7 +66,12 @@ class BlueprintGenerationService:
                 template_contract=(
                     resolved_template.snapshot if resolved_template else None
                 ),
+                **({"on_stage": on_stage} if on_stage else {}),
             )
+        except PlannerRepairExhausted as exc:
+            # The planner has already used its bounded repair budget. A queue
+            # retry would discard that work and repeat every paid model call.
+            raise ModelOutputValidationError(str(exc), retryable=False) from exc
         except ValueError as exc:
             raise ModelOutputValidationError(str(exc)) from exc
         if resolved_template:
@@ -75,6 +84,8 @@ class BlueprintGenerationService:
                 }
             )
         self._attach_page_evidence(document, data)
+        grounding = GroundingChecker().check_blueprint(data, document.content_text, document.page_map or None)
+        data["grounding_check"] = grounding
         return PreparedBlueprint(
             data=data,
             grounding=grounding,

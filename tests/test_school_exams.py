@@ -153,6 +153,58 @@ def test_auth_student_cannot_elevate_publish_or_read_other_grades(client, classr
     assert join(client, c, exam["id"], "teacher").status_code == 409
 
 
+def test_admission_never_requests_student_update_lock(client, classroom, monkeypatch):
+    from sqlalchemy.orm import Session
+
+    original = Session.refresh
+
+    def refresh(db, instance, *args, **kwargs):
+        if isinstance(instance, PublishedExam) and kwargs.get("with_for_update"):
+            raise AssertionError("Student read permission cannot authorize FOR UPDATE")
+        return original(db, instance, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "refresh", refresh)
+    c = classroom
+    exam = publish(client, c, question_count=1).json()
+    locks = []
+    monkeypatch.setattr(school_api, "lock_exam_admission", lambda db, exam_id: locks.append(exam_id))
+    assert join(client, c, exam["id"]).status_code == 200
+    assert client.post(f"{ROOT}/teacher/exams/{exam['id']}/close", headers=headers(c, "teacher")).status_code == 200
+    assert locks == [exam["id"], exam["id"]]
+
+
+def test_close_winning_admission_lock_blocks_new_attempt(client, classroom, monkeypatch):
+    from sqlalchemy import update
+
+    c = classroom
+    exam = publish(client, c, question_count=1).json()
+
+    def close_before_lock_returns(db, exam_id):
+        db.execute(update(PublishedExam).where(PublishedExam.id == exam_id).values(status="closed"))
+
+    monkeypatch.setattr(school_api, "lock_exam_admission", close_before_lock_returns)
+    assert join(client, c, exam["id"]).status_code == 409
+    with SessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(SchoolAttempt)) == 0
+
+
+def test_postgres_admission_lock_is_stable_and_transaction_scoped():
+    from types import SimpleNamespace
+
+    statements = []
+    db = SimpleNamespace(
+        get_bind=lambda: SimpleNamespace(dialect=SimpleNamespace(name="postgresql")),
+        execute=lambda statement, parameters: statements.append((str(statement), parameters)),
+    )
+    first, second = str(uuid4()), str(uuid4())
+    for exam_id in (first, first, second):
+        school_api.lock_exam_admission(db, exam_id)
+    assert all(sql == "SELECT pg_advisory_xact_lock(:lock_key)" for sql, _ in statements)
+    keys = [params["lock_key"] for _, params in statements]
+    assert keys[0] == keys[1] and keys[0] != keys[2]
+    assert all(-(2**63) <= key < 2**63 for key in keys)
+
+
 def test_frozen_questions_publish_idempotency_close_and_scope(client, classroom):
     c = classroom
     key = str(uuid4())

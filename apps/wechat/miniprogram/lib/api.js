@@ -67,16 +67,16 @@ function request(path, method = 'GET', data, options = {}) {
       fail:e => reject(networkError(e, method === 'GET' ? '网络连接失败，请检查设备网络及服务域名配置' : '网络中断，操作结果尚未确认，请刷新状态，不要重复提交'))});
   });
 }
-function upload(projectId, filePath, options = {}) {
+function uploadFile(path, filePath, options = {}) {
   return new Promise((resolve, reject) => {
     let endpoint, header;
-    try {endpoint=url(`/api/projects/${projectId}/documents`); header=headers();}
+    try {endpoint=url(path); header=headers();}
     catch(e) {reject(e); return;}
     const task=wx.uploadFile({url:endpoint, header, filePath, name:'file', timeout:60000,
-      formData:options.filename ? {original_filename:options.filename} : {},
+      formData:options.formData || (options.filename ? {original_filename:options.filename} : {}),
       success:r => {try {
         const document=decode(r);
-        if(!document.id) throw new Error('服务器未返回材料编号，请刷新已上传材料');
+        if(!options.speech && !document.id) throw new Error('服务器未返回材料编号，请刷新已上传材料');
         resolve(document);
       } catch(e) {e.uncertain=!e.status || e.status>=500;reject(e);}},
       fail:e => {
@@ -85,6 +85,21 @@ function upload(projectId, filePath, options = {}) {
       }});
     if(task && task.onProgressUpdate && options.onProgress) task.onProgressUpdate(options.onProgress);
   });
+}
+function upload(projectId, filePath, options = {}) {
+  const asynchronous=!!options.requestId;
+  return uploadFile(`/api/projects/${projectId}/documents${asynchronous?'/async':''}`, filePath,
+    asynchronous?{...options,formData:{original_filename:options.filename,request_id:options.requestId}}:options);
+}
+function transcribe(path, filePath, questionKey) {
+  return uploadFile(path, filePath, {speech:true, formData:{question_key:questionKey}});
+}
+function connectVoice(path) {
+  if (!/^\/api\/v1\/wechat\/voice\/(attempt|preview|session)\/[a-f0-9-]+\/realtime$/.test(path)) {
+    throw new Error('无效的语音连接');
+  }
+  return wx.connectSocket({url:url(path).replace(/^https:/, 'wss:'), header:headers(),
+    timeout:20000, fail:()=>{}});
 }
 function openDocument(path, fileType) {
   return new Promise((resolve,reject)=>{
@@ -98,4 +113,4 @@ function openDocument(path, fileType) {
     },fail:e=>reject(networkError(e,'材料下载失败，请刷新后重试'))});
   });
 }
-module.exports = {request, upload, openDocument, clear, url, decode, TOKEN, ORG};
+module.exports = {request, upload, transcribe, connectVoice, openDocument, clear, url, decode, TOKEN, ORG};

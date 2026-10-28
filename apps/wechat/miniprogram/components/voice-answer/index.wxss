@@ -1,0 +1,7 @@
+.voice { border-top:1rpx solid #dbe1e3; padding:16rpx 0; }
+.controls { display:flex; gap:12rpx; flex-wrap:wrap; }
+button { margin:0; padding:16rpx 20rpx; min-height:80rpx; font-size:28rpx; line-height:1.5; border-radius:8rpx; color:#147563; background:#e8f4ef; }
+button[disabled] { color:#73827d; background:#edf0ef; }
+.status { margin-top:12rpx; color:#556266; font-size:26rpx; }
+.error { margin-top:12rpx; color:#a12c3b; font-size:26rpx; word-break:break-word; }
+.settings { margin-top:12rpx; background:transparent; font-size:24rpx; }

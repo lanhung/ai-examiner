@@ -10,25 +10,31 @@
       <picker disabled="{{busy}}" range="{{projects}}" range-key="name" value="{{projectIndex}}" bindchange="project"><view class="field">{{projects.length ? projects[projectIndex].name : '暂无项目'}} ▾</view></picker>
       <input class="field" placeholder="新项目名称" maxlength="200" value="{{name}}" bindinput="name" disabled="{{busy}}"/>
       <button bindtap="create" disabled="{{busy || !name}}">创建项目</button>
-      <button bindtap="upload" disabled="{{busy || !projects.length || job || uploadUncertain}}">选择论文文件</button>
+      <button bindtap="upload" disabled="{{busy || !projects.length || job || generationUncertain || uploadUncertain}}">选择论文文件</button>
       <progress wx:if="{{uploadProgress >= 0}}" percent="{{uploadProgress}}" show-info activeColor="#16836a"/>
       <view wx:if="{{uploadMessage}}" class="muted">{{uploadMessage}}</view>
+      <button wx:if="{{uploadMessage === '解析未完成'}}" bindtap="retryParsing" disabled="{{busy}}">重试解析（不重新上传）</button>
       <button bindtap="refreshDocuments" disabled="{{busy || !projects.length}}">刷新已上传材料</button>
-      <picker wx:if="{{documents.length}}" disabled="{{busy || job}}" range="{{documents}}" range-key="filename" value="{{documentIndex}}" bindchange="document"><view class="field">选择已上传材料（{{documents.length}} 份） ▾</view></picker>
-      <button wx:if="{{documents.length && !job}}" bindtap="selectDocument" disabled="{{busy}}">使用所选材料</button>
+      <picker wx:if="{{documents.length}}" disabled="{{busy || job || generationUncertain}}" range="{{documents}}" range-key="filename" value="{{documentIndex}}" bindchange="document"><view class="field">选择已上传材料（{{documents.length}} 份） ▾</view></picker>
+      <button wx:if="{{documents.length && !job}}" bindtap="selectDocument" disabled="{{busy || generationUncertain}}">使用所选材料</button>
       <button wx:if="{{uploadUncertain}}" bindtap="retryUpload" disabled="{{busy || job}}">确认未保存，重新选择文件</button>
       <view wx:if="{{document}}" class="muted">{{document.filename}} · {{document.page_count}} 页</view>
+      <view wx:if="{{document}}" class="muted">可用于分析的文本：{{document.char_count}} 字符</view>
+      <view wx:for="{{document.warnings}}" wx:key="*this" class="error">{{item}}</view>
     </view>
     <view class="section">
       <view class="heading">02 · 答辩蓝图</view>
-      <picker disabled="{{busy || job}}" range="{{providers}}" range-key="label" value="{{providerIndex}}" bindchange="provider"><view class="field">{{providers.length ? providers[providerIndex].label : '暂无已配置的真实模型'}} ▾</view></picker>
-      <button class="primary" bindtap="generate" loading="{{busy}}" disabled="{{busy || !document || !providers.length || job || uploadUncertain}}">生成答辩蓝图</button>
-      <view wx:if="{{job}}" class="muted">任务状态：{{job.status}} · {{job.message}}</view>
+      <picker disabled="{{busy || job || generationUncertain || !providers.length}}" range="{{providers}}" range-key="label" value="{{providerIndex}}" bindchange="provider"><view class="field">{{providers.length ? providers[providerIndex].label : '暂无可用模型'}} ▾</view></picker>
+      <button class="primary" bindtap="generate" loading="{{busy}}" disabled="{{busy || recoveringBlueprint || !document || !providers.length || job || uploadUncertain}}">{{generationUncertain ? '用原编号确认提交' : '生成答辩蓝图'}}</button>
+      <view wx:if="{{job}}" class="muted">{{jobStage}} · 已等待 {{jobElapsed || '片刻'}}</view>
+      <view wx:if="{{jobNotice}}" class="muted">{{jobNotice}}</view>
       <button wx:if="{{job && !blueprint}}" bindtap="refreshJob">刷新任务状态</button>
+      <button wx:if="{{document && !job}}" bindtap="recoverBlueprint" loading="{{recoveringBlueprint}}" disabled="{{busy || recoveringBlueprint}}">找回蓝图结果</button>
       <block wx:if="{{blueprint}}">
+        <view wx:if="{{blueprint.grounding.passed === false}}" class="error">部分题目的材料引用未通过精确匹配检查，使用前请核对原文。</view>
         <view class="body">{{blueprint.data.summary}}</view>
         <view wx:for="{{blueprint.data.questions}}" wx:key="id" class="item body">{{index + 1}}. {{item.text}}</view>
-        <button wx:if="{{!teacherMode}}" class="primary" bindtap="start" disabled="{{busy}}">开始文字答辩</button>
+        <button wx:if="{{!teacherMode}}" class="primary" bindtap="start" disabled="{{busy || !providers.length}}">开始文字答辩</button>
         <view wx:if="{{teacherMode}}" class="section">
           <view class="heading">03 · 发布考试</view>
           <input class="field" placeholder="考试名称" maxlength="200" value="{{examTitle}}" data-field="examTitle" bindinput="examField" disabled="{{busy}}"/>
@@ -36,7 +42,7 @@
           <input class="field" placeholder="题数（1–20，不超过蓝图题数）" type="number" value="{{questionCount}}" data-field="questionCount" bindinput="examField" disabled="{{busy}}"/>
           <textarea class="field" placeholder="考试要求" maxlength="3000" value="{{examInstructions}}" data-field="examInstructions" bindinput="examField" disabled="{{busy}}"/>
           <checkbox-group bindchange="share"><label class="muted"><checkbox value="yes" checked="{{shareConfirmed}}" disabled="{{busy}}"/>确认材料可供所有已登录学生查看，且不含未授权公开内容</label></checkbox-group>
-          <button class="primary" bindtap="publish" disabled="{{busy || !shareConfirmed}}" loading="{{busy}}">发布考试</button>
+          <button class="primary" bindtap="publish" disabled="{{busy || !shareConfirmed || !providers.length}}" loading="{{busy}}">发布考试</button>
         </view>
       </block>
     </view>

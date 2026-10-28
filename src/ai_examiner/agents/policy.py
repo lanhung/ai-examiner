@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..services.conversation_policy import DEFAULT_ALLOWED_ACTIONS
+from .language import matches_question_language
 
 
 class PolicyController:
@@ -35,7 +36,27 @@ class PolicyController:
         )
         coverage = float(analysis.get("coverage", 0.0))
         errors = analysis.get("errors") or []
-        candidates = analysis.get("followup_candidates") or question.get("followups") or []
+        language = str(config.get("language") or "zh-CN")
+        raw_candidates = analysis.get("followup_candidates") or []
+        candidates = [
+            text for text in raw_candidates
+            if isinstance(text, str) and matches_question_language(text, language)
+        ]
+        rejected_count = len(raw_candidates) - len(candidates)
+        followup_source = "analyzer"
+        if not candidates:
+            candidates = [
+                text for text in question.get("followups") or []
+                if isinstance(text, str) and matches_question_language(text, language)
+            ]
+            followup_source = "blueprint"
+        if not candidates:
+            candidates = [
+                "针对刚才的问题，你的判断依据是什么？"
+                if language.lower().startswith("zh")
+                else "What evidence supports your answer to the current question?"
+            ]
+            followup_source = "localized_fallback"
 
         if not analysis.get("answered", True) and hints_allowed and attempts == 0:
             requested = {"action": "GIVE_HINT", "reason": "answer_insufficient"}
@@ -49,7 +70,7 @@ class PolicyController:
             requested = {"action": "END", "reason": "question_limit_reached"}
         else:
             requested = {"action": "MOVE_ON", "reason": "sufficient_evidence"}
-        return self._authorize(
+        decision = self._authorize(
             requested,
             allowed=allowed,
             is_last_question=is_last_question,
@@ -58,6 +79,12 @@ class PolicyController:
             followup_candidates=candidates,
             policy=policy,
         )
+        decision["policy_audit"].update({
+            "response_language": language,
+            "rejected_followup_language_count": rejected_count,
+            "followup_source": followup_source,
+        })
+        return decision
 
     @staticmethod
     def _authorize(

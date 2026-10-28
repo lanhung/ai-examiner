@@ -3,8 +3,9 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
+from starlette.requests import HTTPConnection
 
 from ..config import get_settings
 from ..db import get_db
@@ -35,7 +36,7 @@ def authentication_http_error(exc: OIDCError) -> HTTPException:
 
 
 def current_authentication(
-    request: Request,
+    request: HTTPConnection,
     db: Annotated[Session, Depends(get_db)],
 ) -> AuthenticationContext:
     settings = get_settings()

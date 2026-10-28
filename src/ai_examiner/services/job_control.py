@@ -31,6 +31,9 @@ TERMINAL_JOB_STATUSES = frozenset(
 RETRYABLE_JOB_STATUSES = frozenset({"queued", "retry_scheduled"})
 
 JOB_CAPABILITIES: dict[str, str] = {
+    "document_ingestion": "document.create",
+    "session_operation": "session.conduct",
+    "school_grading": "session.conduct",
     "blueprint_generation": "blueprint.create",
     "golden_dataset": "dataset.manage",
     "visual_document": "document.read",
@@ -279,6 +282,10 @@ def authorize_job_execution(
         return
     if not job.actor_principal_id:
         raise JobAuthorizationError("Job actor is missing")
+    if job.kind == "school_grading":
+        from ..school_api import authorize_grading_job
+        authorize_grading_job(db, job)
+        return
     organization = db.get(Organization, job.organization_id)
     principal = db.get(Principal, job.actor_principal_id)
     membership = db.scalar(
@@ -307,6 +314,69 @@ class JobClaim:
     result: dict
 
 
+def reconcile_blueprint_job(db: Session, job: BackgroundJob) -> BackgroundJob:
+    """Settle an abandoned blueprint without silently repeating a paid request."""
+    if (
+        job.kind not in {"blueprint_generation", "session_operation", "school_grading"}
+        or job.status not in {"running", "cancelling"}
+        or job.lease_expires_at is None
+    ):
+        return job
+    now = utcnow()
+    expires_at = job.lease_expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if expires_at > now:
+        return job
+    cancelled = job.cancel_requested_at is not None or job.status == "cancelling"
+    status = "cancelled" if cancelled else "failed"
+    reason = "cancel_requested" if cancelled else "worker_lease_expired"
+    # A concurrent heartbeat, cancellation or completion must win over this snapshot.
+    changed = db.execute(
+        update(BackgroundJob)
+        .where(
+            BackgroundJob.id == job.id,
+            BackgroundJob.organization_id == job.organization_id,
+            BackgroundJob.kind == job.kind,
+            BackgroundJob.status == job.status,
+            BackgroundJob.lease_token == job.lease_token,
+            BackgroundJob.lease_expires_at == job.lease_expires_at,
+            BackgroundJob.lease_expires_at <= now,
+            BackgroundJob.cancel_requested_at == job.cancel_requested_at,
+        )
+        .values(
+            status=status,
+            progress=1.0,
+            message=(
+                "Job cancelled after worker lease expired"
+                if cancelled
+                else "Execution interrupted; explicit recovery required"
+            ),
+            error="" if cancelled else "worker_lease_expired",
+            retry_class="worker_lost",
+            terminal_reason=reason,
+            lease_owner=None,
+            lease_token=None,
+            lease_expires_at=None,
+            next_attempt_at=None,
+            completed_at=now,
+            updated_at=now,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    db.refresh(job)
+    if changed.rowcount == 1:
+        append_job_audit(
+            db,
+            job,
+            status=status,
+            reason_code=reason,
+            outcome="succeeded" if cancelled else "failed",
+        )
+    db.commit()
+    return job
+
+
 def claim_job(
     db: Session,
     settings: Settings,
@@ -318,6 +388,7 @@ def claim_job(
     if job is None or job.organization_id != envelope.organization_id:
         raise JobEnvelopeError("Background job is unavailable")
     verify_job_envelope(job, envelope)
+    job = reconcile_blueprint_job(db, job)
     if job.status in TERMINAL_JOB_STATUSES:
         return JobClaim(False, None, job.status, job.result)
     now = utcnow()
@@ -391,8 +462,10 @@ def claim_job(
             error="",
             updated_at=now,
         )
+        .execution_options(synchronize_session=False)
     )
     db.commit()
+    db.expire(job)
     if claimed.rowcount != 1:
         db.expire_all()
         current = db.get(BackgroundJob, job.id)
@@ -586,7 +659,7 @@ def classify_job_exception(exc: Exception) -> str:
     if isinstance(exc, JobCancelled):
         return "cancelled"
     if isinstance(exc, ModelOutputValidationError):
-        return "transient"
+        return "transient" if exc.retryable else "permanent"
     if isinstance(exc, (JobEnvelopeError, JobAuthorizationError, KeyError, ValueError)):
         return "permanent"
     if isinstance(exc, (TimeoutError, ConnectionError, OSError)):
@@ -624,6 +697,14 @@ def fail_job(
         raise JobLeaseLost("Job lease is no longer owned by this delivery")
     now = utcnow()
     retry_class = classify_job_exception(exc)
+    if job.kind in {"school_grading", "session_operation"}:
+        from .model_governance import ModelGovernanceError
+        # Admission denial happens before network IO. Unknown paid outcomes are
+        # never automatically replayed, even when they look like a timeout.
+        retry_class = "transient" if isinstance(exc, ModelGovernanceError) and exc.code in {
+            "organization_concurrency_limited", "organization_rate_limited",
+            "principal_rate_limited", "organization_token_rate_limited",
+        } else "cancelled" if isinstance(exc, JobCancelled) else "permanent"
     error_code = getattr(exc, "code", type(exc).__name__)[:120]
     common = {
         "progress": 1.0,
@@ -655,6 +736,8 @@ def fail_job(
             settings.job_retry_base_seconds * (2 ** max(0, job.attempt_count - 1)),
             3600,
         )
+        if job.kind in {"school_grading", "session_operation"}:
+            countdown = min(countdown, 30)
         job.status = "retry_scheduled"
         job.progress = min(job.progress, 0.95)
         job.message = "Transient failure; retry scheduled"
@@ -676,6 +759,8 @@ def fail_job(
         if job.status == "dead_letter"
         else "Job failed permanently"
     )
+    if job.kind == "document_ingestion" and isinstance(exc, ValueError):
+        job.message = str(exc)[:500]
     job.completed_at = now
     job.dead_lettered_at = now if job.status == "dead_letter" else None
     job.terminal_reason = (
@@ -736,22 +821,22 @@ def reset_job_for_retry(
     if job.status not in {"failed", "dead_letter", "cancelled"}:
         raise ValueError("Only terminal unsuccessful jobs can be retried")
     now = utcnow()
-    job.status = "queued"
-    job.progress = 0.0
-    job.message = reason[:120]
-    job.error = ""
-    job.retry_class = ""
-    job.next_attempt_at = None
-    job.lease_owner = None
-    job.lease_token = None
-    job.lease_expires_at = None
-    job.cancel_requested_at = None
-    job.cancel_requested_by = None
-    job.dead_lettered_at = None
-    job.terminal_reason = ""
-    job.completed_at = None
-    job.attempt_count = 0
-    job.updated_at = now
+    changed = db.execute(
+        update(BackgroundJob).where(
+            BackgroundJob.id == job.id,
+            BackgroundJob.organization_id == job.organization_id,
+            BackgroundJob.status == job.status,
+            BackgroundJob.updated_at == job.updated_at,
+        ).values(
+            status="queued", progress=0.0, message=reason[:120], error="", retry_class="",
+            next_attempt_at=None, lease_owner=None, lease_token=None, lease_expires_at=None,
+            cancel_requested_at=None, cancel_requested_by=None, dead_lettered_at=None,
+            terminal_reason="", completed_at=None, attempt_count=0, updated_at=now,
+        ).execution_options(synchronize_session=False)
+    ).rowcount
+    if changed != 1:
+        db.rollback()
+        raise ValueError("Job changed while retrying; refresh its status")
     db.commit()
     db.refresh(job)
     return job
@@ -776,6 +861,9 @@ def recover_stale_jobs(
         .limit(settings.job_recovery_batch_size)
     ).all()
     for job in stale:
+        if job.kind in {"blueprint_generation", "session_operation", "school_grading"}:
+            reconcile_blueprint_job(db, job)
+            continue
         job.lease_owner = None
         job.lease_token = None
         job.lease_expires_at = None

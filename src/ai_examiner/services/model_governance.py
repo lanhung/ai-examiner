@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import threading
 import time
 from dataclasses import dataclass
@@ -532,7 +533,12 @@ class ModelGovernanceService:
         classification: str,
         token_units: int,
         request_id: str,
+        cost_estimate_usd: float | None = None,
     ) -> UsageReservation:
+        if cost_estimate_usd is not None and (
+            not math.isfinite(cost_estimate_usd) or cost_estimate_usd <= 0
+        ):
+            raise ValueError("Cost estimate must be finite and positive")
         with _organization_quota_lock(organization_id):
             return self._reserve_locked(
                 organization_id=organization_id,
@@ -546,6 +552,7 @@ class ModelGovernanceService:
                 classification=classification,
                 token_units=token_units,
                 request_id=request_id,
+                cost_estimate_usd=cost_estimate_usd,
             )
 
     def _reserve_locked(
@@ -562,10 +569,12 @@ class ModelGovernanceService:
         classification: str,
         token_units: int,
         request_id: str,
+        cost_estimate_usd: float | None = None,
     ) -> UsageReservation:
         now = datetime.now(UTC)
         provider, model = parse_profile(candidate_profile)
         reservation_cost = max(
+            cost_estimate_usd or 0,
             estimate_cost(
                 provider,
                 model,
@@ -953,7 +962,13 @@ class ModelGovernanceService:
         self,
         reservation: UsageReservation,
         result: ProviderResult,
+        *,
+        cost_estimate_usd: float | None = None,
     ) -> None:
+        if cost_estimate_usd is not None and (
+            not math.isfinite(cost_estimate_usd) or cost_estimate_usd <= 0
+        ):
+            raise ValueError("Cost estimate must be finite and positive")
         try:
             with self.session_factory() as db:
                 set_tenant_context(
@@ -973,6 +988,10 @@ class ModelGovernanceService:
                     result.input_tokens,
                     result.output_tokens,
                 )
+                if cost_estimate_usd is not None:
+                    ledger.estimated_cost_usd = max(
+                        ledger.estimated_cost_usd, cost_estimate_usd
+                    )
                 ledger.input_tokens = result.input_tokens
                 ledger.output_tokens = result.output_tokens
                 ledger.latency_ms = result.latency_ms

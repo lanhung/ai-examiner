@@ -2,6 +2,8 @@
   "pages": ["pages/login/index", "pages/school/index", "pages/work/index", "pages/exam/index", "pages/exam-answer/index", "pages/session/index", "pages/report/index"],
   "window": {"navigationBarTitleText": "AI Examiner", "navigationBarBackgroundColor": "#ffffff", "navigationBarTextStyle": "black", "backgroundColor": "#f3f5f6"},
   "style": "v2",
+  "lazyCodeLoading": "requiredComponents",
+  "permission": {"scope.record": {"desc": "用于语音回答当前题目，识别后的文字经你确认后提交"}},
   "networkTimeout": {"request": 60000, "uploadFile": 60000, "downloadFile": 60000},
   "sitemapLocation": "sitemap.json"
 }

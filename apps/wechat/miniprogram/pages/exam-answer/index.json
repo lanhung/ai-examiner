@@ -1,0 +1,5 @@
+{
+  "usingComponents": {
+    "voice-answer": "/components/voice-answer/index"
+  }
+}

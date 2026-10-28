@@ -1,5 +1,278 @@
 # Changelog
 
+## Unreleased - Review Correctness and Durable Receipts (2026-10-27)
+
+- Bind exam publication retries to the exact blueprint, model and settings.
+  Revalidate every selected source quote and page at publication; empty or
+  invented short quotes no longer pass, and a cached passed flag is not trusted.
+- Add durable personal-session operation receipts, turn-count reservations and
+  lease-fenced result commits. Recover an uncertain submission by its request ID.
+  Preserve drafts on failure and never automatically replay unknown model outcomes.
+- Queue student and isolated teacher-preview grading. Preserve answers while
+  waiting for governance admission, poll on page resume, and retain reviewable
+  failures after a lost worker. Only confirmed pre-call capacity/rate denials retry.
+- Add asynchronous document ingestion with source persistence, actor-scoped
+  receipts, idempotent completion and explicit parsing retry without re-upload.
+  Bound PDF/DOCX/PPTX parsing and parser-slot waits; validate Office archive limits.
+- Preserve DOCX paragraph/table reading order; display parsed character counts,
+  truncation warnings and logical-page limitations in the mini-program.
+- Guard stale retry requests and duplicate-upload races. Keep legacy synchronous
+  endpoints for compatibility; deploy API and workers before the updated mini-program.
+- Keep application version 0.9.0. These changes are local and not deployed or
+  pushed. See `docs/evaluation/PROJECT_REVIEW_2026-10-27.md` for regression evidence,
+  deployment order and outstanding PostgreSQL/real-device/real-model acceptance.
+
+## Unreleased - Blueprint Wait Recovery (2026-10-27)
+
+- Trace the reported PDF wait to Planner wording validation and slow Qwen output,
+  not upload size. Recover the existing six-question result through WeChat DevTools.
+- Add a tenant-, project-, document- and principal-scoped blueprint task lookup.
+  Preserve the request ID before submission, recover uncertain receipts without
+  creating another paid job, and fix polling after page hide/show races.
+- Show actual generation/wording-repair stages, elapsed time, terminal errors and
+  failed source-match warnings. Prevent generation while recovery is in progress.
+- Use concise Planner v10 output instructions without reducing question count or
+  material input. A single real qwen-plus run took 98.51 seconds versus the previous
+  completed job's 140.28 seconds; two calls versus four. This is not a latency SLA.
+  Three source quotes still failed matching; semantic quality is not fully accepted.
+- Bound PDF parsing in a child process with configurable timeout/page limits and
+  a rendering pixel cap. Do not raise upload limits or introduce async ingestion.
+- Pass 76 isolated Linux backend tests and 99 client/speech/startup tests. Deploy
+  the reviewed backend changes with backups and healthy API/worker restart. Keep 0.9.
+- See `docs/wechat/BLUEPRINT_WAIT_RECOVERY_2026-10-27.md` for evidence and limits.
+
+## Unreleased - School Exam Admission and Grade Acceptance (2026-10-26)
+
+- Reproduce a real PostgreSQL RLS failure when a student joins a published exam:
+  `FOR UPDATE` requires permissions not granted by the student SELECT policy.
+- Serialize PostgreSQL exam admission and closure with a transaction advisory
+  lock, then re-read publication state without requesting student UPDATE rights.
+  Preserve teacher-only mutation, tenant isolation and existing idempotency.
+- Add three regression cases; pass all 18 school exam tests and Ruff. Deploy only
+  the school API module with backup, hash checks and healthy API restart. Keep 0.9.
+- Publish one synthetic exam through WeChat DevTools; a distinct temporary student
+  completes it through authenticated HTTP with real qwen-plus (24.146 s model call).
+  Verify the teacher UI displays the matching student, 98/100 and answer evidence.
+- Close the test exam, retain its synthetic grade, and revoke both temporary test
+  identities and sessions. This does not verify a second physical WeChat login.
+- See `docs/wechat/EXAM_PUBLISH_ACCEPTANCE_2026-10-26.md` for scope and limitations.
+
+## Unreleased - Question Language Guard (2026-10-26)
+
+- Trace the reported method-rule question to matching uploaded source content;
+  preserve legitimate source-based questions rather than stripping policy-like words.
+- Snapshot session language, resolve it for old sessions, and pass it to answer
+  analysis and transcript evaluation. Validate every Chinese blueprint question
+  and follow-up, preserving source titles, quotes and technical terms.
+- Reject wrong-language follow-up candidates before display; use a validated
+  blueprint/localized fallback and persist that exact question for subsequent
+  assessment. Record fallback provenance without an extra translation-model call.
+- Pass 122 focused regression tests and Ruff; deploy seven backend files with
+  reviewed diffs, hash guards, backup and healthy API/worker restart. Keep 0.9.
+- Verify real qwen-plus with a synthetic Chinese question and English history:
+  all three follow-ups are Chinese; 22.58 seconds including one normalization
+  repair. This is a backend probe, not a phone latency guarantee.
+- See `docs/wechat/QUESTION_LANGUAGE_2026-10-26.md` for evidence and limitations.
+
+## Unreleased - Blueprint Retry Amplification Fix (2026-10-23)
+
+- Trace a 726-character document's 363-second job to three task attempts and twelve
+  Qwen Plus calls, not queue delay. Failed-attempt usage remains in the governance
+  ledger even when the blueprint transaction rolls back.
+- Mark exhausted local Planner repairs as non-retryable by the background queue;
+  keep retries for transient provider failures and un-repaired output errors.
+- Normalize only Chinese yes/no judgments followed by a bare request for reasons
+  into a single reasoning question. Preserve context, polarity, evidence, answer
+  points and knowledge units; leave independent or ambiguous probes to the model.
+- Give bounded wording repairs the exact rejected field and prior patch, while
+  preserving atomic validation and preventing unauthorized assessment-field changes.
+- Record Planner prompt v8 without changing the 0.9 application version or model.
+- Pass 78 focused regression/API/provider tests and Ruff. Final real Qwen Plus probes completed
+  in 139.13 and 75.85 seconds; the slower run still needed a full structural repair.
+  These are small synthetic Planner samples, not phone latency or a p95 guarantee.
+- Deploy four modules with hash checks, backup, graceful restart and health/readiness
+  checks. A deployed Celery task completed in 86 seconds plus 0.97 seconds queue time,
+  with one delivery attempt and six questions. This does not include phone round trips.
+  See `docs/wechat/BLUEPRINT_RETRY_AMPLIFICATION.md` for remaining quality limits.
+
+## Unreleased - WeChat Phone Page Registration (2026-10-23)
+
+- Read the Android device debugger: `rootCompPath=pages/login/index not found`,
+  followed by `Component is not found in path "wx://not-found"`.
+- Add missing page JSON configurations for login, school, work, exam and report.
+  Keep required-component lazy injection and page-local speech declarations.
+- Correct the route regression test: it previously checked only JS and WXML despite
+  its title. Require valid page JSON and local component declarations on every route.
+- Render the login shell before loading business modules or navigating; display
+  bounded navigation/module/storage failures without exposing tokens or erasing data.
+- Pass 102 client regressions and rebuild an official phone preview. The user confirms
+  the Android page now renders after scanning the repaired package. Full feature/device
+  acceptance and replacement of the uploaded development package remain separate steps.
+- Keep application/client versions, backend, model selection and permissions unchanged.
+
+## Unreleased - WeChat Recorder Stop Ownership (2026-10-23)
+
+- Reproduce queued stop taps and cancel/re-record resetting the UI to idle before
+  native recorder release. Ignore duplicate busy actions and keep cancellation
+  in stopping until native Stop/Error confirms release.
+- Reconcile wall-clock start/stop/duration deadlines on page show, including
+  suspended background timers. Bound cross-page release waits and explicit retries.
+- Quarantine timed-out recorder callbacks instead of assigning untagged late audio
+  to a new recording. Restore text controls with a recovery message; never upload
+  unconfirmed audio or retry a paid transcription automatically.
+- Pass 91 client regressions, JS syntax checks and relevant WXML compilation.
+  Back up and sync the two runtime files to D:\wechat; phone capture remains to
+  be verified from a newly compiled preview. No backend/version/grade changes.
+
+## Unreleased - Bounded Blueprint Wording Repair (2026-10-23)
+
+- Keep Qwen Plus, the full source document and the existing initial planning prompt.
+  Do not reduce question count, coverage or expected reasoning to save time.
+- Batch wording-only repairs for all stacked questions/follow-ups in one compact
+  response instead of regenerating the entire blueprint. Preserve answer points,
+  quotes, pages, knowledge units and all already-valid wording.
+- Validate patches atomically, reject extra fields/indices and retain the bounded
+  repair budget and structural/language checks. Keep full repair for structural errors.
+- Record Planner prompt revision v7 without changing the application version.
+  Historical seven-template v6 acceptance evidence is not v7 acceptance evidence.
+- Add seven-template contract tests and malformed-patch regression cases.
+- Pass 89 local regressions. In the small synthetic Qwen Plus probe, observed
+  Planner means fell from 151.43 to 83.64 seconds; this excludes queue/phone time.
+  Deploy the single module with hash checks, backup and healthy API/worker restart.
+  Document failed experiments and remaining quotation/semantic-quality findings in
+  `docs/wechat/BLUEPRINT_GENERATION_PERFORMANCE.md`; do not claim full v7 acceptance.
+
+## Unreleased - Interrupted Blueprint Recovery (2026-10-23)
+
+- Settle expired blueprint worker leases on authorized status reads and duplicate
+  deliveries; preserve source materials and require an explicit retry instead of
+  silently repeating a paid model call. Fence late workers and audit each transition.
+- Handle dead-letter and cancelled mini-program tasks, bound transient polling
+  retries, preserve uncertain task IDs and block duplicate generation while pending.
+- Add lease-race, tenant-isolation, terminal-state and polling regression coverage.
+  Keep version numbers and scoring/model behavior unchanged.
+
+## Unreleased - WeChat Component Lazy Injection (2026-10-23)
+
+- Enable `lazyCodeLoading: requiredComponents` in the mini-program app configuration.
+- Register the speech component only on personal and exam answer pages, not globally.
+  Preserve microphone permission and existing speech behavior; keep versions unchanged.
+- Check page-local component paths, required files and lazy injection in client regression tests.
+- Re-scan code quality in WeChat DevTools: component lazy injection is marked passed.
+- Reopen the project after a stale compiler-helper error during hot reload; verify
+  the student hall, workbench and existing answer page render with speech controls.
+  No model request or answer submission is part of this UI verification.
+
+## Unreleased - WeChat Model Selector (2026-10-23)
+
+- Remove OpenAI options from the personal and teacher mini-program model selector.
+  Keep other ready real providers, web options and server configuration unchanged.
+- Ignore cached OpenAI selections when restoring the picker, preserve session history,
+  and disable model-dependent actions when no eligible provider is available.
+- Add selector, restore and empty-provider regression coverage; keep versions unchanged.
+
+## Unreleased - WeChat Synthetic Speech Upload Acceptance (2026-10-23)
+
+- Verify a generated 6.41-second MP3 via native WeChat upload and real Qwen ASR:
+  HTTP 200, exact transcript, editable draft filled, no answer submission or grade changes.
+- Record the remaining DevTools recorder-format rejection (HTTP 422) separately;
+  synthetic upload acceptance does not certify microphone capture or phone compatibility.
+- Keep application version, production code, access rules and budgets unchanged.
+
+## Unreleased - WeChat Recorder Callback Timeouts (2026-10-22)
+
+- Reproduce a recorder stuck in stopping, followed by a persistent global recorder lock.
+  Bound start/stop callbacks to five seconds and add a recording-duration watchdog.
+  Timeout recovery discards unconfirmed audio and does not upload or submit answers.
+- Guard cleanup and late stop callbacks so an old recording cannot remove a newer
+  recording's listeners or apply a stale transcript. Preserve explicit user confirmation.
+- Fix the observed `manager.offStart is not a function` failure with single native
+  event dispatchers on runtimes without off methods. Repeated recordings do not
+  accumulate listeners. Cancel only on changed component context and deduplicate busy events.
+- Verify real Qwen TTS and ASR with synthetic speech through existing governance;
+  distinguish this from microphone capture, audible playback and UI draft acceptance.
+- User confirmed audible question playback in DevTools; real microphone transcription
+  still requires a new acceptance attempt after the recorder compatibility fix.
+- Sync the client fix to D:\wechat; keep server configuration, grades and version unchanged.
+
+## Unreleased - Pause WeChat Realtime Entry (2026-10-22)
+
+- Temporarily remove realtime voice controls and controller initialization from the shared
+  mini-program component used by personal sessions, student answers and teacher previews.
+- Preserve per-turn recording/transcription, question playback, editable drafts and explicit
+  answer submission. Retain the realtime implementation for later acceptance testing.
+- Keep web voice, server settings, model permissions, budgets, grades and version 0.9.0 unchanged.
+
+## Unreleased - WeChat Voice Consent Dialog (2026-10-22)
+
+- Fix the voice consent button exceeding WeChat's four-character limit, which prevented
+  the modal from opening before microphone authorization. Use the four-character label.
+- Distinguish consent modal, privacy authorization and microphone authorization failures;
+  preserve bounded native error details instead of misreporting every failure as mic denial.
+- Add native modal length validation to the speech test double and failure-path regressions.
+  Keep application version 0.9.0 and all permissions, model settings and grades unchanged.
+
+## Unreleased - WeChat Voice Finalization (2026-10-22)
+
+- Ignore stale socket send failures after reconnect, validate and copy PCM frames,
+  bound recorder startup and final upload, and keep playback stopped during finalization.
+- Drain recorded frames before waiting for the last transcript. Replace the fixed four-second
+  cutoff with bounded server confirmation and explicit unconfirmed/failure feedback.
+  Reserve finalization time within the session lease; never submit answers automatically.
+- Run the official DashScope 2.0.1 SDK against the approved snapshot using synthetic speech.
+  Session configuration succeeds but no VAD, input transcript or automatic reply arrives in
+  35 seconds. Restore the temporary policy rule and keep the live realtime feature disabled.
+- Keep application version 0.9.0, the existing model configuration, budgets and grades unchanged.
+
+## Verification - Qwen Realtime Snapshot (2026-10-22)
+
+- With user approval, authorize inference for the exact dated snapshot in the supplied
+  Beijing workspace, keeping all other provider authorization unchanged. Readback confirms it.
+- Real output succeeds (468ms server-side first audio), but VAD/transcription and automatic
+  second-turn acceptance remain unconfirmed after synthetic loopback, independent speech,
+  manual commit and same-region endpoint comparisons. Do not enable realtime based on output alone.
+- Restore the teacher organization's temporary exact model rule after each probe. Keep live
+  model settings, budgets, members and grades unchanged. Record reproducible provider session IDs.
+- Rerun 60 isolated backend tests, web voice lifecycle checks and six mini-program lifecycle tests.
+  These checks use test doubles and are distinct from live model and real-device acceptance.
+
+## Unreleased - Qwen Web Voice Isolation Fix (2026-10-22)
+
+- Bind authenticated browser identity and validated organization membership before
+  every Qwen WebSocket session lookup; enforce Origin and `session.conduct`, and
+  recheck live access every five seconds without bypassing PostgreSQL RLS.
+- Distinguish proxy connection from model initialization. Settle the connection
+  ledger only after `session.updated`; fail unsuccessful initialization, sanitize
+  provider errors, and stop microphone/playback on disconnect.
+- Verify 87 web/auth tests, 32 mini-program speech/realtime tests, browser lifecycle
+  unit checks, and an isolated FORCE-RLS PostgreSQL schema clone. Deploy five
+  scoped files with backup; keep version 0.9.0 and all provider settings unchanged.
+- The supplied Beijing workspace returns no exact undated model permission entry.
+  Its dated realtime snapshot is listed as authorizable but `inference=false`.
+  Do not enable or substitute that model without approval; see the realtime report.
+
+## Unreleased - WeChat Qwen Realtime (2026-10-21)
+
+- Add native 16 kHz PCM streaming and 24 kHz WebAudio playback through an authenticated
+  WebSocket relay. Include interruption, final-transcript grace period and lifecycle cleanup.
+- Keep exam submission explicit, teacher previews isolated, and model credentials server-only.
+  Enforce question ownership, organization opt-in, model governance and bounded connection leases.
+- Preserve turn-based speech and text as explicit alternatives. Product version stays 0.9.0.
+- Requested `qwen3-omni-flash-realtime` currently fails the real provider probe with
+  `Model not exist`; do not treat configuration or WebSocket handshake as model acceptance.
+  See `docs/wechat/REALTIME_VOICE.md` before enabling production traffic.
+
+## Unreleased - WeChat Turn-Based Voice (2026-10-20)
+
+- Add native recording, editable ASR drafts and current-question TTS for personal sessions,
+  student attempts and isolated teacher previews. Keep text submission and grading contracts.
+- Bind speech to authorized resources and question fingerprints; enforce audio limits,
+  model admission, conservative per-call budget estimates and sanitized provider errors.
+- Stop recording/playback on cancellation or page changes; discard stale responses and
+  clean temporary audio. Require explicit microphone/privacy consent.
+- Keep voice disabled until server configuration and organization voice-model rules are
+  approved. No database migration or product-version bump; not full-duplex realtime.
+
 ## Unreleased WeChat teacher exam preview - 2026-10-15
 
 - Add owner-only, real-model teacher rehearsals in a separate table with forced

@@ -8,7 +8,7 @@ function key(){
 function read(){return wx.getStorageSync(key()) || {};}
 function save(data){
   const next={...read()};
-  for(const field of ['projectId','documentId','jobId','sessionId','profile','pending','beforeSend','uploadUncertain']) {
+  for(const field of ['projectId','documentId','jobId','sessionId','profile','pending','beforeSend','uploadUncertain','blueprintRequestId','blueprintPending','operationRequestId','uploadRequestId']) {
     if(Object.prototype.hasOwnProperty.call(data,field)) next[field]=data[field];
   }
   wx.setStorageSync(key(),next);

@@ -15,6 +15,7 @@ from ai_examiner.db import SessionLocal
 from ai_examiner.enterprise_constants import LEGACY_ORGANIZATION_ID
 from ai_examiner.jobs import TASK_HANDLERS, execute_job_delivery
 from ai_examiner.models import (
+    AuditEvent,
     BackgroundJob,
     Organization,
     OrganizationMembership,
@@ -26,10 +27,14 @@ from ai_examiner.services import jobs as job_service
 from ai_examiner.services.job_control import (
     JobAuthorizationError,
     JobEnvelopeError,
+    JobLeaseLost,
     TaskEnvelope,
     claim_job,
     classify_job_exception,
+    complete_job,
     fail_job,
+    heartbeat_job,
+    reconcile_blueprint_job,
     recover_orphaned_queued_jobs,
     recover_stale_jobs,
     request_job_cancellation,
@@ -71,6 +76,9 @@ def test_model_output_contract_failures_are_retryable_without_retrying_bad_input
         == "transient"
     )
     assert classify_job_exception(ValueError("Project or document not found")) == "permanent"
+    assert classify_job_exception(
+        ModelOutputValidationError("Planner repair budget exhausted", retryable=False)
+    ) == "permanent"
 
 
 def _tenant(
@@ -282,6 +290,29 @@ def test_worker_rechecks_current_capability_before_resource_access(monkeypatch):
     assert calls == []
 
 
+def test_exhausted_planner_repairs_do_not_schedule_a_fresh_paid_task(monkeypatch):
+    job, organization, principal, _ = _queued_job(
+        monkeypatch, slug="planner-repair-exhausted", kind="blueprint_generation",
+        max_attempts=3,
+    )
+    envelope = TaskEnvelope.from_dict(job.envelope_json)
+    with SessionLocal() as db:
+        set_tenant_context(db, organization_id=organization.id, principal_id=principal.id)
+        claim = claim_job(db, get_settings(), envelope, delivery_id="one-planner-run")
+        disposition = fail_job(
+            db, get_settings(), envelope, str(claim.lease_token),
+            ModelOutputValidationError("Planner repair budget exhausted", retryable=False),
+        )
+        assert disposition.retry is False
+        assert disposition.status == "failed"
+        persisted = db.get(BackgroundJob, job.id)
+        assert persisted.attempt_count == 1
+        assert persisted.next_attempt_at is None
+        assert persisted.lease_token is None
+        duplicate = claim_job(db, get_settings(), envelope, delivery_id="duplicate")
+        assert duplicate.execute is False
+
+
 def test_transient_failure_retries_then_dead_letters(monkeypatch):
     job, organization, principal, _membership = _queued_job(
         monkeypatch,
@@ -358,6 +389,113 @@ def test_cancellation_and_stale_worker_recovery(monkeypatch):
         )
         assert db.get(BackgroundJob, job.id).status == "cancelled"
         assert claim.execute is True
+
+
+@pytest.mark.parametrize("route", ["/api/jobs/", "/api/v1/jobs/"])
+def test_expired_blueprint_poll_fails_once_without_paid_retry(client, monkeypatch, route):
+    job, organization, principal, _ = _queued_job(
+        monkeypatch, slug="expired-blueprint", kind="blueprint_generation",
+    )
+    envelope = TaskEnvelope.from_dict(job.envelope_json)
+    with SessionLocal() as db:
+        claim = claim_job(db, get_settings(), envelope, delivery_id="abandoned")
+        persisted = db.get(BackgroundJob, job.id)
+        persisted.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+    headers = {
+        "X-AI-Examiner-Organization": organization.id,
+        "X-AI-Examiner-Principal": principal.id,
+    }
+    for _ in range(2):
+        response = client.get(f"{route}{job.id}", headers=headers)
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "failed"
+        assert response.json()["error"] == "worker_lease_expired"
+        assert response.json()["completed_at"]
+    with SessionLocal() as db:
+        persisted = db.get(BackgroundJob, job.id)
+        assert persisted.lease_token is None
+        assert persisted.attempt_count == 1
+        assert db.query(AuditEvent).filter_by(
+            resource_id=job.id, action="job.failed",
+        ).count() == 1
+        assert not heartbeat_job(db, get_settings(), envelope, str(claim.lease_token))
+        with pytest.raises(JobLeaseLost):
+            complete_job(db, envelope, str(claim.lease_token), result={}, message="Late")
+    assert len(StubTask.calls) == 1
+
+
+def test_expired_blueprint_redelivery_does_not_repeat_model_call(monkeypatch):
+    job, _, _, _ = _queued_job(
+        monkeypatch, slug="expired-redelivery", kind="blueprint_generation",
+    )
+    envelope = TaskEnvelope.from_dict(job.envelope_json)
+    with SessionLocal() as db:
+        claim_job(db, get_settings(), envelope, delivery_id="old-worker")
+        db.get(BackgroundJob, job.id).lease_expires_at = (
+            datetime.now(UTC) - timedelta(seconds=1)
+        )
+        db.commit()
+    calls = []
+    monkeypatch.setitem(TASK_HANDLERS, "blueprint_generation", lambda *_: calls.append(True))
+    result = execute_job_delivery(Delivery("new-worker"), job.envelope_json)
+    assert result["status"] == "failed"
+    assert result["duplicate_delivery"] is True
+    assert not calls
+
+
+def test_blueprint_reconciliation_preserves_active_and_cancelled_work(monkeypatch):
+    job, _, principal, _ = _queued_job(
+        monkeypatch, slug="active-blueprint", kind="blueprint_generation",
+    )
+    with SessionLocal() as db:
+        claim = claim_job(
+            db, get_settings(), TaskEnvelope.from_dict(job.envelope_json), delivery_id="live",
+        )
+        persisted = db.get(BackgroundJob, job.id)
+        assert reconcile_blueprint_job(db, persisted).status == "running"
+        assert persisted.lease_token == claim.lease_token
+        request_job_cancellation(db, persisted, principal_id=principal.id, reason="Cancel")
+        persisted.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+        assert reconcile_blueprint_job(db, persisted).status == "cancelled"
+        assert persisted.terminal_reason == "cancel_requested"
+
+
+def test_blueprint_reconciliation_does_not_overwrite_renewed_lease(monkeypatch):
+    job, _, _, _ = _queued_job(
+        monkeypatch, slug="heartbeat-race", kind="blueprint_generation",
+    )
+    with SessionLocal() as db:
+        claim_job(db, get_settings(), TaskEnvelope.from_dict(job.envelope_json), delivery_id="live")
+        persisted = db.get(BackgroundJob, job.id)
+        persisted.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+        with SessionLocal() as other:
+            other.get(BackgroundJob, job.id).lease_expires_at = (
+                datetime.now(UTC) + timedelta(minutes=5)
+            )
+            other.commit()
+        assert reconcile_blueprint_job(db, persisted).status == "running"
+        assert db.query(AuditEvent).filter_by(resource_id=job.id, action="job.failed").count() == 0
+
+
+def test_foreign_poll_cannot_settle_expired_blueprint(client, monkeypatch):
+    job, _, _, _ = _queued_job(
+        monkeypatch, slug="expired-owner", kind="blueprint_generation",
+    )
+    other, principal, _, _ = _tenant(slug="foreign-reader")
+    with SessionLocal() as db:
+        claim_job(db, get_settings(), TaskEnvelope.from_dict(job.envelope_json), delivery_id="old")
+        db.get(BackgroundJob, job.id).lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+    response = client.get(f"/api/v1/jobs/{job.id}", headers={
+        "X-AI-Examiner-Organization": other.id,
+        "X-AI-Examiner-Principal": principal.id,
+    })
+    assert response.status_code == 404
+    with SessionLocal() as db:
+        assert db.get(BackgroundJob, job.id).status == "running"
 
 
 def test_orphaned_queued_job_recovery_is_bounded_and_dispatch_safe(monkeypatch):

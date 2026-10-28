@@ -1,0 +1,12 @@
+<view class="voice">
+  <view class="controls">
+    <button bindtap="play" disabled="{{disabled || state !== 'idle'}}">朗读题目</button>
+    <button bindtap="record" disabled="{{disabled || (state !== 'idle' && state !== 'recording' && state !== 'playing')}}">
+      {{state === 'recording' ? '结束录音' : state === 'playing' ? '停止朗读并回答' : '语音回答'}}
+    </button>
+    <button wx:if="{{state !== 'idle'}}" bindtap="stop">取消</button>
+  </view>
+  <view wx:if="{{status}}" class="status">{{status}}</view>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <button wx:if="{{error}}" class="settings" bindtap="settings">麦克风权限设置</button>
+</view>

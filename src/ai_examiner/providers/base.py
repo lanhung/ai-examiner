@@ -9,6 +9,10 @@ from typing import Any
 class ModelOutputValidationError(RuntimeError):
     """The provider responded, but its generated output violated the agent contract."""
 
+    def __init__(self, message: str, *, retryable: bool = True) -> None:
+        super().__init__(message)
+        self.retryable = retryable
+
 
 @dataclass
 class ProviderResult:
