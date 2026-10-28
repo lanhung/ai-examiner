@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased - Upload Verification (2026-10-28)
+
+- Preserve the complete source snapshot at `df30fc3` on
+  `feature/wechat-miniapp` using a normal fast-forward Git push through AutoDL.
+  Do not change main, product version, production files or the WeChat preview package.
+- Classify billable speech POST operations as administrative audit events; keep
+  the public WeChat capability preflight read-only and free of login/session writes.
+- Align homepage assertions with the requested removal of enterprise branding.
+- Drop known PostgreSQL test tables together with RESTRICT so cross-table RLS
+  dependencies do not prevent isolated fixture cleanup. Preserve the explicit
+  test-database guard and do not relax production RLS or use CASCADE.
+- Identify the CI artifact glob omitting the full release-gate JSON report.
+  The workflow correction remains local because the publishing credential lacks
+  GitHub's workflow permission; do not expand credential scopes automatically.
+- Pass 567 isolated SQLite backend tests, 118 mini-program logic tests and Ruff.
+  The first uploaded snapshot also passed enterprise Compose startup, restart
+  persistence and isolated backup/restore in GitHub CI. PostgreSQL suite and
+  full release gate require a rerun after these fixes; this is not device or
+  real-model acceptance. See the dated appendix in the project review report.
+
 ## Unreleased - Review Correctness and Durable Receipts (2026-10-27)
 
 - Bind exam publication retries to the exact blueprint, model and settings.
@@ -18,8 +38,8 @@
   truncation warnings and logical-page limitations in the mini-program.
 - Guard stale retry requests and duplicate-upload races. Keep legacy synchronous
   endpoints for compatibility; deploy API and workers before the updated mini-program.
-- Keep application version 0.9.0. These changes are local and not deployed or
-  pushed. See `docs/evaluation/PROJECT_REVIEW_2026-10-27.md` for regression evidence,
+- Keep application version 0.9.0. Initially local on October 27; uploaded on
+  October 28, not deployed. See `docs/evaluation/PROJECT_REVIEW_2026-10-27.md` for regression evidence,
   deployment order and outstanding PostgreSQL/real-device/real-model acceptance.
 
 ## Unreleased - Blueprint Wait Recovery (2026-10-27)

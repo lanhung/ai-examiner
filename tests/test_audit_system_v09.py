@@ -140,9 +140,15 @@ def test_audit_configuration_fails_closed_in_production():
 def test_sensitive_route_policy_inventory_has_audit_behavior():
     valid_behaviors = AUDITED_BEHAVIORS | {"none", "read"}
     assert all(policy.audit in valid_behaviors for policy in ROUTE_POLICIES.values())
-    for (method, _path), policy in ROUTE_POLICIES.items():
+    public_metadata = {("GET", "/api/v1/wechat/status")}
+    for (method, path), policy in ROUTE_POLICIES.items():
         if policy.authentication == "public":
-            assert policy.audit == "authentication"
+            # Preflight metadata neither authenticates nor creates a session.
+            if (method, path) in public_metadata:
+                assert policy.audit == "none"
+                assert policy.capability is None and policy.resource_resolver == "none"
+            else:
+                assert policy.audit == "authentication"
         if method in {"POST", "PUT", "PATCH", "DELETE"}:
             assert policy.audit in {"authentication", "administrative"}
         if policy.resource_resolver in {

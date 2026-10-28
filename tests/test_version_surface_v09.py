@@ -16,5 +16,7 @@ def test_v09_final_version_is_consistent_across_package_and_ui(client):
     assert __version__ == "0.9.0"
     assert health.json()["version"] == "0.9.0"
     assert "AI Examiner v0.9" in page.text
-    assert "AI Examiner v0.9 企业版" in page.text
+    assert "<title>AI Examiner v0.9</title>" in page.text
+    assert "AI Examiner v0.9 企业版" not in page.text
+    assert 'href="/enterprise">控制器</a>' in page.text
     assert "v0.8 开发版" not in page.text

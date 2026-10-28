@@ -218,4 +218,43 @@ DOCX 当前先遍历所有段落，再遍历全部表格。原始“段落 A →
 
 旧同步上传、个人答辩与考试接口继续保留，现有网页仍可使用，但不会自动获得小程序新异步流程。不能将新版小程序的异步改造说成网页同步请求也已全部解决。
 
-**交付状态：代码和文档仅更新本地仓库。尚未同步 D:\\wechat、未更新线上服务、未创建版本 tag、未提交或推送 GitHub。**
+**2026-10-27 交付状态（历史记录）：当时仅更新本地仓库，未推送。2026-10-28 已上传，见以下追加记录；仍未同步 D:\\wechat 或更新线上服务。**
+
+## 上传后测试记录（2026-10-28）
+
+### 源码保存
+
+- 用户要求先上传当前代码，再测试。已将累计源码及文档保存为 `df30fc3f51abd2af75c56c29d8d1a263eb97eecf`，提交标题 `fix(wechat): persist task receipts and harden exam workflows`。
+- 目标为 [feature/wechat-miniapp](https://github.com/lanhung/ai-examiner/tree/feature/wechat-miniapp)，未重写 main，未创建新版本 tag，应用版本仍为 0.9.0。
+- 本地直连 GitHub 失败后，通过 AutoDL 的独立发布工作目录执行标准 Git push。只传输一个 193,997 字节增量 Git bundle，远端校验 SHA-256 后快进合并；没有 Base64 分片、逐文件 API 提交或 Actions 拼包。
+- 提交前扫描分支差异及暂存源码：191 个不同文件对象，0 个规则命中；不输出密钥值。未上传 `.env`、数据库、论文、测试凭据或运行目录。此扫描不等于全面安全审计。
+- 已通过 GitHub refs API 独立确认分支 SHA 与本地快照一致。
+
+### 上传后本地验证
+
+| 检查 | 结果 | 边界 |
+| --- | --- | --- |
+| Python 3.12.12 / SQLite 全量 pytest | **567 passed，206 warnings，200.64 秒** | 隔离测试库，mock/测试替身，无真实供应商收费请求 |
+| 小程序客户端、语音、启动、实时模块逻辑 | **118 passed** | Node 模拟微信接口，不代表真机麦克风或开发工具验收 |
+| Ruff | **通过** | `src apps tests` |
+| 全量 JUnit | `.ui-review/post-push-final-20261028.xml` | 本地忽略目录，不含生产数据 |
+
+首次完整运行发现旧断言仍要求已移除的“企业版”文案，以及语音 POST 的审计类别与写操作门禁不符。已更新文案断言，将会计费/记录 usage 的语音 POST 归类为 administrative，保留 GET 的 read_sensitive。公开的小程序能力预检不创建会话，测试明确限定该 GET 路由并验证不写审计或登录会话。测试库文件名已按现有安全门禁改为 `_test` 结尾，未放宽门禁。
+
+### GitHub CI 发现与修复
+
+首个上传快照的 [CI 记录](https://github.com/lanhung/ai-examiner/actions/runs/40616790081)：
+
+- `enterprise-compose` **通过**：构建、启动、健康检查、PostgreSQL 重启持久化、备份及隔离恢复演练。
+- `postgres`：迁移、RLS 检查、运行时角色检查通过；全量 pytest 在测试准备时失败，原因是 `published_exams` 的 RLS 策略引用 `school_attempts`，ORM 逐表删除顺序不识别此依赖。
+- `test`：源码扫描与 Compose 配置检查通过；完整门禁报 2 项失败。原 artifact 通配符只上传 static 报告，未包含完整报告，不能仅凭摘要确认另一项失败的原因。
+
+本次追加修复仅改变测试库清理：把已知 ORM 表放在同一条 `DROP TABLE ... RESTRICT` 中，不使用 CASCADE、不删除额外对象、不关闭线上 RLS。PostgreSQL 对同一 DROP 列表内部依赖的处理见[官方说明](https://www.postgresql.org/docs/current/ddl-depend.html)。修复后的 PostgreSQL 全量与发布门禁须以新 CI 结果为准。
+
+CI artifact 的建议修复是把路径 `v09-*-release-gate.json` 改为 `v09-*release-gate.json`，同时涵盖 static 和完整报告。服务器 GitHub 凭据没有 workflow 权限，包含该工作流修改的推送被远端拒绝；因此只上传应用、测试和文档修复，工作流改动保留本地待授权。不自动扩大凭据权限，也不声称该项已发布。
+
+### 尚未覆盖
+
+- 本轮没有修改线上服务、迁移生产数据或同步 `D:\\wechat`，服务器发布目录与应用目录分开。
+- 没有执行真实 qwen-plus、手机录音/扬声器、安卓微信页面交互或 30 人集中交卷；不能用上述自动化通过替代这些验收。
+- GitHub 的容器演练使用合成配置与隔离数据，不代表 AutoDL 当前生产部署已完成同样验收。

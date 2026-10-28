@@ -204,6 +204,7 @@ def register_routes(app: FastAPI):
         ("POST", "/speech", speak),
     ):
         ROUTE_POLICIES[(method, root + suffix)] = RoutePolicy(
-            "required", None, "speech_owned_resource", "read_sensitive",
+            "required", None, "speech_owned_resource",
+            "read_sensitive" if method == "GET" else "administrative",
         )
         app.add_api_route(root + suffix, endpoint, methods=[method], tags=["wechat-voice"])

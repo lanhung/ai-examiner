@@ -274,6 +274,9 @@ def test_public_status_has_no_secrets_and_reports_configuration(client, settings
         'registration_mode': 'approval',
     }
     assert 'fake-test-secret' not in response.text
+    with SessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(BrowserAuthSession)) == 0
+        assert db.scalar(select(func.count()).select_from(AuditEvent)) == 0
     monkeypatch.setattr(settings, 'wechat_app_secret', None)
     assert client.get('/api/v1/wechat/status').json()['state'] == 'missing_credentials'
     monkeypatch.setattr(settings, 'wechat_enabled', False)

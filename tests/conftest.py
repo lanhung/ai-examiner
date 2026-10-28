@@ -46,15 +46,30 @@ from ai_examiner.main import app  # noqa: E402
 from ai_examiner.services.enterprise_identity import ensure_legacy_organization  # noqa: E402
 
 
+def _drop_test_tables():
+    if engine.dialect.name == "postgresql":
+        # Drop the known test tables as a group: RLS policies can reference
+        # another table without appearing in SQLAlchemy's foreign-key ordering.
+        # Keep RESTRICT; an external dependency must not be silently removed.
+        tables = ", ".join(
+            engine.dialect.identifier_preparer.format_table(table)
+            for table in Base.metadata.sorted_tables
+        )
+        with engine.begin() as connection:
+            connection.exec_driver_sql("DROP TABLE IF EXISTS " + tables + " RESTRICT")
+    else:
+        Base.metadata.drop_all(bind=engine)
+
+
 @pytest.fixture(autouse=True)
 def clean_database():
-    Base.metadata.drop_all(bind=engine)
+    _drop_test_tables()
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         ensure_legacy_organization(db)
         db.commit()
     yield
-    Base.metadata.drop_all(bind=engine)
+    _drop_test_tables()
 
 
 @pytest.fixture

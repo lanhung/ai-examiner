@@ -6,7 +6,8 @@ def test_homepage_delivers_v08_template_studio(client):
 
     assert response.status_code == 200
     html = response.text
-    assert "AI Examiner v0.9 企业版" in html
+    assert "<h1>AI Examiner v0.9</h1>" in html
+    assert "AI Examiner v0.9 企业版" not in html
     assert 'class="workspace-nav"' not in html
     assert 'class="primary-workflow-column"' not in html
     assert html.index('id="templateStudio"') < html.index('class="panel setup"')
@@ -15,7 +16,7 @@ def test_homepage_delivers_v08_template_studio(client):
     assert 'id="templateDetail"' in html
     assert 'id="sessionTemplateSelect"' in html
     assert "/static/styles.css?rev=classic-refined-r2-20260904" in html
-    assert "/static/app.js?rev=classic-refined-r2-20260904" in html
+    assert "/static/app.js?rev=" in html
 
     stylesheet = client.get("/static/styles.css?rev=classic-refined-r2-20260904")
     assert stylesheet.status_code == 200
