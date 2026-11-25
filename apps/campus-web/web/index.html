@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f6f8f7"><title>答辩学堂 · AI Examiner</title>
+<link rel="icon" href="/brand.svg"><link rel="stylesheet" href="/style.css?ui=report-page"><script defer src="/app.js?ui=report-page"></script></head>
+<body><a class="skip" href="#content">跳到主要内容</a><header><div class="bar">
+<a class="brand" href="#hall"><img src="/brand.svg" alt="" width="36" height="36"><span>答辩学堂<small>AI EXAMINER</small></span></a>
+<nav aria-label="工作区导航" id="nav"></nav><button id="identity" class="identity" type="button">账号</button></div></header>
+<main id="content" tabindex="-1"><p>正在打开工作台…</p></main>
+<template id="report-template">
+ <article class="report-page" aria-labelledby="report-heading">
+  <div class="report-toolbar">
+   <a id="report-back" class="linkbtn"><img class="ico" alt="" src="/icons/arrow-left.svg">返回答辩</a>
+   <button type="button" class="secondary" data-act="print-report" hidden>
+    <!-- @license lucide-static v0.468.0 - ISC (printer) -->
+    <svg class="ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>打印报告
+   </button>
+  </div>
+  <div class="report-head">
+   <div class="report-heading-row"><h1 id="report-heading" tabindex="-1">答辩报告</h1><span id="report-template-name" class="tag" hidden></span></div>
+   <p id="report-material" hidden></p>
+  </div>
+  <div id="report-body" aria-busy="true"><p class="task-status" data-kind="waiting" role="status">正在读取答辩报告…</p></div>
+ </article>
+</template>
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+</body></html>

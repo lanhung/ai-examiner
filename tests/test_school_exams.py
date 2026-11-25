@@ -1,4 +1,4 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -151,6 +151,37 @@ def test_auth_student_cannot_elevate_publish_or_read_other_grades(client, classr
     with SessionLocal() as db:
         assert db.scalar(select(func.count()).select_from(SchoolAttempt)) == 2
     assert join(client, c, exam["id"], "teacher").status_code == 409
+
+
+def test_isolated_preview_cannot_access_any_school_route(client, classroom, monkeypatch):
+    c = classroom
+    exam = publish(client, c).json()
+    monkeypatch.setattr(get_settings(), "school_restricted_principal_ids",
+                        frozenset({UUID(c["stranger"])}))
+    for method, pattern, _ in school_api.ROUTES:
+        path = pattern
+        for parameter in ("exam_id", "attempt_id", "preview_id"):
+            path = path.replace("{" + parameter + "}", exam["id"])
+        result = client.request(method, path, headers=headers(c, "stranger"), json={})
+        assert result.status_code == 403, (method, path, result.text)
+        assert "material_text" not in result.text
+    # The same deployment still admits regular students and teachers.
+    assert client.get(ROOT + "/exams", headers=headers(c, "student")).status_code == 200
+    assert join(client, c, exam["id"]).status_code == 200
+    assert client.get(ROOT + "/teacher/exams", headers=headers(c, "teacher")).status_code == 200
+    assert client.get(ROOT + "/exams").status_code == 401
+    with SessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(SchoolAttempt).where(
+            SchoolAttempt.student_id == c["stranger"])) == 0
+
+
+def test_school_restriction_configuration_rejects_invalid_identity():
+    from pydantic import ValidationError
+
+    from ai_examiner.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(school_restricted_principal_ids=["not-a-principal-id"])
 
 
 def test_admission_never_requests_student_update_lock(client, classroom, monkeypatch):

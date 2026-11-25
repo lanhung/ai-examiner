@@ -154,18 +154,31 @@ class OIDCDiscoveryCache:
         issuer = (self.settings.oidc_issuer_url or "").rstrip("/")
         return f"{issuer}/.well-known/openid-configuration"
 
+    def _backchannel_url(self, url: str) -> str:
+        base = self.settings.oidc_backchannel_base_url
+        if not base:
+            return url
+        if self.settings.oidc_backchannel_configuration_issues():
+            raise _dependency_error("oidc_backchannel_invalid_url")
+        issuer = (self.settings.oidc_issuer_url or "").rstrip("/")
+        # Rewrite only transport to this issuer; public metadata and JWT iss stay unchanged.
+        if issuer and url.startswith(issuer + "/"):
+            return base.rstrip("/") + url[len(issuer):]
+        return url
+
     def _get_json(self, url: str, *, max_bytes: int, reason: str) -> dict[str, Any]:
         if not _safe_https_url(
             url,
             allow_insecure_http=self.settings.oidc_allow_insecure_http,
         ):
             raise _dependency_error(reason)
+        request_url = self._backchannel_url(url)
         try:
             if self._client is not None:
-                response = self._client.get(url)
+                response = self._client.get(request_url)
             else:
                 response = httpx.get(
-                    url,
+                    request_url,
                     timeout=self.settings.oidc_http_timeout_seconds,
                     follow_redirects=False,
                     headers={"Accept": "application/json"},
@@ -324,12 +337,13 @@ class OIDCDiscoveryCache:
             form["client_secret"] = (
                 self.settings.oidc_client_secret.get_secret_value()
             )
+        request_url = self._backchannel_url(metadata.token_endpoint)
         try:
             if self._client is not None:
-                response = self._client.post(metadata.token_endpoint, data=form)
+                response = self._client.post(request_url, data=form)
             else:
                 response = httpx.post(
-                    metadata.token_endpoint,
+                    request_url,
                     data=form,
                     timeout=self.settings.oidc_http_timeout_seconds,
                     follow_redirects=False,

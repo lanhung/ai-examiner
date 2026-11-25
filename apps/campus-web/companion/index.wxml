@@ -1,0 +1,6 @@
+<view class="page"><view class="title">确认网页登录</view>
+<view class="section"><view class="heading">网站地址</view><text selectable>{{origin}}</text></view>
+<view class="section"><view class="heading">网页显示的 8 位配对码</view>
+<input class="field" value="{{code}}" bindinput="input" maxlength="12" placeholder="例如 ABCD 2345" />
+<button class="primary" disabled="{{busy || code.length !== 8}}" loading="{{busy}}" bindtap="approve">确认我的浏览器</button></view>
+<view class="muted">{{message}}</view></view>

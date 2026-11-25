@@ -2,6 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
+from uuid import UUID
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,6 +17,7 @@ class Settings(BaseSettings):
     allow_unsafe_auth_disabled_in_production: bool = False
 
     oidc_issuer_url: str | None = None
+    oidc_backchannel_base_url: str | None = None
     oidc_audience: str | None = None
     oidc_client_id: str | None = None
     oidc_client_secret: SecretStr | None = None
@@ -35,6 +37,8 @@ class Settings(BaseSettings):
     oidc_session_lifetime_policy: Literal["token_bound", "application"] = "token_bound"
     wechat_enabled: bool = False
     wechat_registration_mode: Literal["approval", "personal"] = "approval"
+    # Preview identities must not inherit the cross-organization exam catalog.
+    school_restricted_principal_ids: frozenset[UUID] = Field(default_factory=frozenset)
     wechat_login_limit_per_minute: int = Field(default=30, ge=1, le=10000)
     wechat_app_id: str = Field(default="", max_length=64)
     wechat_app_secret: SecretStr | None = None
@@ -309,6 +313,27 @@ class Settings(BaseSettings):
     def oidc_required_scope_set(self) -> frozenset[str]:
         return frozenset(self.oidc_required_scopes.split())
 
+    def oidc_backchannel_configuration_issues(self) -> list[str]:
+        if not self.oidc_backchannel_base_url:
+            return []
+        try:
+            parsed = urlparse(self.oidc_backchannel_base_url)
+            valid_port = parsed.port is None or 1 <= parsed.port <= 65535
+            secure = parsed.scheme == "https" and bool(parsed.hostname)
+            loopback = (
+                self.oidc_allow_insecure_http
+                and parsed.scheme == "http"
+                and parsed.hostname in {"127.0.0.1", "localhost"}
+            )
+            valid = (
+                valid_port and (secure or loopback)
+                and not parsed.username and not parsed.password
+                and not parsed.query and not parsed.fragment
+            )
+        except ValueError:
+            valid = False
+        return [] if valid else ["oidc_backchannel_invalid_url"]
+
     def auth_configuration_issues(self) -> list[str]:
         issues: list[str] = []
         if self.auth_mode == "disabled":
@@ -331,6 +356,7 @@ class Settings(BaseSettings):
         )
         if not self.oidc_algorithm_allowlist:
             issues.append("missing_oidc_algorithm_allowlist")
+        issues.extend(self.oidc_backchannel_configuration_issues())
         if not self.oidc_access_token_type_allowlist:
             issues.append("missing_oidc_access_token_type_allowlist")
         if "openid" not in self.oidc_scope_list:

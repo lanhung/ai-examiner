@@ -247,11 +247,40 @@ def test_judgment_and_bare_reason_become_one_reasoning_question(wording):
     "请选择方案，并解释原因？",
     "是否成立？如何验证？为什么？",
     "研究问题是‘是否成立？为什么？’",
-    "如果样本不足，这是否成立？为什么？",
+    "如果样本不足，测量有偏差，这是否成立？为什么？",
+    "如果样本是否充足尚未确定，这是否成立？为什么？",
+    "如果样本不足这是否成立？为什么？",
     "是否成立？",
 ])
 def test_normalization_does_not_drop_distinct_questions_or_quoted_context(wording):
     assert SessionPlanner._normalize_judgment_reason(wording) == wording
+
+
+@pytest.mark.parametrize("setup,judgment", [
+    ("如果样本不足，", "这是否成立"),
+    ("如果将测试期延长至60天（覆盖冬夏两季），", "当前结论是否仍成立"),
+    ("假如样本来自另一地区,", "当前模型能否迁移"),
+    ("若保留独立测试集，", "这可否支持外推"),
+])
+def test_conditional_reasoning_keeps_setup_and_judgment(setup, judgment):
+    wording = setup + judgment + "？为什么？"
+    normalized = SessionPlanner._normalize_judgment_reason(wording)
+    assert normalized == setup + f"针对{judgment}，你的判断依据是什么？"
+    assert not SessionPlanner._has_stacked_request(normalized)
+    assert SessionPlanner._normalize_judgment_reason(normalized) == normalized
+
+
+def test_conditional_reasoning_does_not_spend_paid_repair_calls():
+    contract, original = fixture_data()
+    question = original["questions"][2]
+    question["text"] = "如果将测试期延长至60天（覆盖冬夏两季），当前结论是否仍成立？为什么？"
+    question["followups"] = ["如果样本不足，这是否成立？为什么？"]
+    original["questions"] = [question]
+    provider = ScriptedProvider([original])
+    result = run_plan(provider, contract)
+    assert len(provider.requests) == 1
+    for key in set(question) - {"text", "followups"}:
+        assert result["questions"][0][key] == question[key]
 
 
 def test_reasoning_normalization_avoids_model_repair_preserves_evidence_and_points():
@@ -275,3 +304,67 @@ def test_patch_normalization_still_requires_reasoning_and_atomic_validation():
     result = run_plan(provider, contract)
     assert len(provider.requests) == 2
     assert result["questions"][0]["text"].endswith("你的判断依据是什么？")
+
+
+@pytest.mark.parametrize("wording,secondary", [
+    ("若保持40题规模但扩展至3个真实领域，您认为哪个局限得到缓解？哪个仍存？",
+     "若保持40题规模但扩展至3个真实领域，哪个仍存？"),
+    ("若某团队跳过幂等键直接调用邮件API，这违反了您框架中的哪一层级纪律？会引发何种具体故障形态？",
+     "若某团队跳过幂等键直接调用邮件API，会引发何种具体故障形态？"),
+])
+@pytest.mark.parametrize("slot", ["text", "followup"])
+def test_explicit_probes_are_preserved_without_paid_repair(wording, secondary, slot):
+    contract, original = fixture_data()
+    question = original["questions"][2]
+    if slot == "text":
+        question["text"] = wording
+    else:
+        question["followups"] = [wording]
+    original["questions"] = [question]
+    before = deepcopy(question)
+    provider = ScriptedProvider([original])
+    result = run_plan(provider, contract)
+    after = result["questions"][0]
+    assert len(provider.requests) == 1
+    assert secondary in after["followups"]
+    assert wording[:wording.index("？") + 1] in [after["text"], *after["followups"]]
+    assert not any(SessionPlanner._has_stacked_request(text)
+                   for text in [after["text"], *after["followups"]])
+    for key in set(before) - {"text", "followups"}:
+        assert after[key] == before[key]
+    normalized = deepcopy(after)
+    SessionPlanner._normalize_questions({"questions": [normalized]})
+    assert normalized == after
+
+
+@pytest.mark.parametrize("wording", [
+    "请说明证据，并解释局限？",
+    "1) 样本有多大？2) 样本从哪里抽取？",
+    "这一假设成立吗？为什么？",  # Too little context for an independent second probe.
+    "甲指的是谁？乙指的是谁？丙指的是谁？",
+    "研究问题为“是否成立？为什么？”",
+    "“样本从何而来？应如何验证？",  # Unclosed quote.
+    "背景（是否有偏差？）中哪些因素重要？",
+    "样本从何而来？应如何验证？最后给出标准答案。",
+    "样本从何而来？请说明证据，并解释局限？",
+])
+def test_ambiguous_boundaries_still_require_model_repair(wording):
+    assert SessionPlanner._split_explicit_questions(wording) == [wording]
+
+
+def test_question_splitting_keeps_quoted_punctuation_and_existing_followups():
+    question = {"text": "材料称‘如何降低误差？’。验证方法是什么？外推局限是什么？",
+                "followups": ["样本来自哪里？"]}
+    SessionPlanner._separate_explicit_questions(question)
+    assert question == {
+        "text": "材料称‘如何降低误差？’。验证方法是什么？",
+        "followups": ["外推局限是什么？", "样本来自哪里？"],
+    }
+
+
+def test_question_splitting_does_not_expand_without_bound():
+    question = {"text": "样本来自哪里？样本如何分配？",
+                "followups": ["样本来自哪里？样本如何分配？"] * 4}
+    before = deepcopy(question)
+    SessionPlanner._separate_explicit_questions(question)
+    assert question == before

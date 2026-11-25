@@ -95,16 +95,16 @@ function page(name, api, wx = {}, progress = {save:()=>{},read:()=>({}),reset:()
   return definition;
 }
 
-test('publication keys bind the current blueprint and model while exact retries reuse a key',async()=>{
+test('publication keys bind the current blueprint and instructions while exact retries reuse a key',async()=>{
   const requests=[];let key=0;
   const p=page('work',{id:()=>String(++key),request:async(path,method,body)=>{requests.push(body);return {id:'exam'};}},{navigateTo:()=>{}});
-  p.setData({teacherMode:true,shareConfirmed:true,blueprint:{id:'A'},providers:[{id:'qwen:qwen-plus'},{id:'qwen:other'}],examTitle:'Exam',teacherName:'Teacher',examInstructions:'',questionCount:'1'});
+  p.setData({teacherMode:true,shareConfirmed:true,blueprint:{id:'A'},modelReady:true,examTitle:'Exam',teacherName:'Teacher',examInstructions:'',questionCount:'1'});
   await p.publish();await p.publish();
   assert.equal(requests[0].request_id,requests[1].request_id);
   p.acceptJob({status:'completed',result:{blueprint:{id:'B'}}});
   await p.publish();assert.equal(requests[2].blueprint_id,'B');assert.notEqual(requests[2].request_id,requests[0].request_id);
-  p.provider({detail:{value:1}});await p.publish();
-  assert.equal(requests[3].profile,'qwen:other');assert.notEqual(requests[3].request_id,requests[2].request_id);
+  p.setData({examInstructions:'Revised directions'});await p.publish();
+  assert.equal(requests[3].profile,'qwen:qwen-plus');assert.notEqual(requests[3].request_id,requests[2].request_id);
 });
 
 test('personal answer recovers missing HTTP receipt without permanently locking the page',async()=>{
@@ -118,6 +118,43 @@ test('personal answer recovers missing HTTP receipt without permanently locking 
   await p.submit();assert.equal(p.data.uncertain,true);
   await p.refresh();assert.equal(p.data.uncertain,false);assert.equal(p.data.answer,'Answer');
   assert.equal(posts,1);assert.equal(saved.pending,false);
+});
+
+test('personal answer resumes after page recreation and a lost acknowledgement without a second POST',async()=>{
+  const turns=[{role:'assistant',content:'Question'}];
+  const saved={sessionId:'s'};const progress={read:()=>({...saved}),save:x=>Object.assign(saved,x)};
+  const posts=[],lookups=[];let jobStatus='running';
+  const api={request:async(path,method,body)=>{
+    if(method==='POST'){
+      posts.push(body);
+      assert.equal(saved.operationRequestId,body.request_id);
+      throw new Error('Response lost after acceptance');
+    }
+    if(path.includes('/operations/')){lookups.push(path);return {job:{status:jobStatus}};}
+    return {status:'active',turns:[...turns]};
+  }};
+  const initial=page('session',api,{},progress);
+  initial.setData({id:'s',turns:[...turns],answer:'Synthetic answer'});
+  await Promise.all([initial.submit(),initial.submit()]);
+  assert.equal(posts.length,1);
+  assert.equal(initial.data.uncertain,true);
+  initial.onUnload();
+
+  const restored=page('session',api,{},progress);
+  await restored.onLoad({id:'s'});
+  assert.equal(restored.data.operationStatus,'running');
+  restored.setData({answer:'Must not be resubmitted'});
+  await restored.submit();
+  jobStatus='completed';turns.push({role:'user',content:posts[0].answer},{role:'assistant',content:'Next question'});
+  await restored.refresh();
+  assert.equal(posts.length,1);
+  assert.equal(lookups.length,2);
+  assert(lookups.every(path=>path==='/api/sessions/s/operations/'+posts[0].request_id));
+  assert.equal(restored.data.turns.length,3);
+  assert.equal(restored.data.turns.filter(turn=>turn.role==='user').length,1);
+  assert.equal(restored.data.turns[2].content,'Next question');
+  assert.equal(restored.data.uncertain,false);assert.equal(saved.pending,false);
+  assert.equal(saved.operationRequestId,null);
 });
 
 test('personal accepted job remains locked until a terminal receipt, not a local timeout',async()=>{
@@ -178,60 +215,42 @@ test('grading polls resume on show and stop on hide without resubmitting answers
   p.onHide();assert.equal(p.visible,false);
 });
 
-for(const teacher of [false,true])test(`${teacher?'teacher':'personal'} model picker excludes OpenAI and restores only eligible profiles`,async()=>{
-  const providers=[
-    {id:'openai:gpt-test',provider:'openai',label:'OpenAI',ready:true},
-    {id:'qwen:qwen-plus',provider:'qwen',label:'Qwen Plus',ready:true},
-    {id:'gemini:test',provider:'gemini',label:'Gemini',ready:true},
-    {id:'mock:default',provider:'mock',label:'Mock',ready:true},
-    {id:'anthropic:test',provider:'anthropic',label:'Claude',ready:false},
-  ];
-  for(const [profile,expectedIndex] of [['openai:gpt-test',0],['qwen:qwen-plus',0],['gemini:test',1]]){
-    const saved={projectId:'p',profile,sessionId:'existing-session'};
-    const p=page('work',{ORG:'org-key',request:async(path,method='GET')=>{
-      assert.equal(method,'GET');
-      if(path==='/api/v1/me')return {organizations:[{id:'org',status:'active'}]};
-      if(path==='/me')return {teacher:true,teacher_organization_id:'org'};
-      if(path==='/api/projects')return [{id:'p'}];
-      if(path==='/api/providers')return providers;
-      if(path==='/api/projects/p/documents')return [];
-      throw new Error(`Unexpected request: ${path}`);
-    }},{getStorageSync:()=> 'org',setStorageSync:()=>{}},{read:()=>saved});
-    p.setData({providerIndex:4});
-    await p.onLoad(teacher?{teacher:'1'}:{});
-    assert.equal(p.data.error,'');
-    assert.deepEqual(Array.from(p.data.providers,x=>x.id),['qwen:qwen-plus','gemini:test']);
-    assert.equal(p.data.providerIndex,expectedIndex);
-    assert.equal(p.data.sessionId,'existing-session');
-    assert.equal(saved.profile,profile);
-    assert.equal(providers.length,5);
-  }
+for(const [options,role] of [[{},'student'],[{teacher:'1'},'teacher'],[{workspace:'teacher'},'teacher']])test('workbench selects role default '+JSON.stringify(options),async()=>{
+  let stored='stale-organization';
+  const saved={projectId:'p',profile:'gemini:test',sessionId:'existing-session'};
+  const p=page('work',{ORG:'org-key',request:async(path,method='GET')=>{
+    if(path==='/api/v1/me')return {principal:{id:'me'}};
+    if(path==='/workspace/'+role && method==='POST')return {organization_id:role,profile:'qwen:qwen-plus',model_ready:true};
+    assert.equal(stored,role);
+    if(path==='/api/projects')return [{id:'p'}];
+    if(path==='/api/projects/p/documents')return [];
+    throw new Error('Unexpected request: '+path);
+  }},{setStorageSync:(key,value)=>{assert.equal(key,'org-key');stored=value;}},{read:()=>saved});
+  await p.onLoad(options);
+  assert.equal(p.data.error,'');assert.equal(p.data.workspaceReady,true);assert.equal(p.data.modelReady,true);
+  assert.equal(p.data.sessionId,'existing-session');assert.equal(saved.profile,'gemini:test');
 });
 
-test('no eligible mini-program model blocks generation, sessions and teacher publishing',async()=>{
+test('no fallback for an unavailable fixed profile',async()=>{
   let writes=0;
   const p=page('work',{request:async(path,method='GET')=>{
-    if(method!=='GET'){writes++;return {};}
-    if(path==='/api/v1/me')return {organizations:[]};
-    if(path==='/api/providers')return [
-      {id:'openai:test',provider:'openai',ready:true},
-      {id:'mock:default',provider:'mock',ready:true},
-      {id:'qwen:qwen-plus',provider:'qwen',ready:false},
-    ];
-    throw new Error(`Unexpected request: ${path}`);
-  }},{getStorageSync:()=>''});
+    if(path==='/api/v1/me')return {principal:{id:'me'}};
+    if(path==='/workspace/student')return {organization_id:'s',profile:'qwen:qwen-plus',model_ready:false};
+    if(path==='/api/projects')return [];
+    if(method!=='GET')writes++;
+    throw new Error('Unexpected request: '+path);
+  }},{setStorageSync:()=>{}});
   await p.onLoad();
-  assert.equal(p.data.error,'');assert.equal(p.data.providers.length,0);
+  assert.equal(p.data.error,'');assert.equal(p.data.modelReady,false);
   p.setData({projects:[{id:'p'}],document:{id:'d'},blueprint:{id:'b'},
-    teacherMode:true,shareConfirmed:true,examTitle:'Test',teacherName:'Teacher',questionCount:'6'});
-  await p.generate();assert.match(p.data.error,/模型/);
-  await p.start();assert(p.data.error);
-  await p.publish();assert.match(p.data.error,/暂无可用模型/);
+    teacherMode:true,shareConfirmed:true,examTitle:'Test',teacherName:'Teacher',questionCount:'1'});
+  for(const action of ['generate','start','publish']){await p[action]();assert.match(p.data.error,/千问 Plus 暂不可用/);}
   assert.equal(writes,0);
   const wxml=fs.readFileSync(path.join(root,'pages/work/index.wxml'),'utf8');
+  assert.doesNotMatch(wxml,/bindchange="(?:organization|provider)"/);
   for(const action of ['generate','start','publish']){
-    const button=wxml.match(new RegExp(`<button[^>]*bindtap="${action}"[^>]*>`));
-    assert(button,action);assert.match(button[0],/disabled="\{\{[^}]*!providers.length/);
+    const button=wxml.match(new RegExp('<button[^>]*bindtap="'+action+'"[^>]*>'));
+    assert(button,action);assert.match(button[0],/!modelReady/);
   }
 });
 
@@ -242,7 +261,7 @@ test('eligible mini-program model is used for blueprint, session and published e
       ? {id:'created',status:'completed',result:{blueprint:{id:'b'}}}:{id:'created'};
   }},{navigateTo:()=>{}});
   p.setData({projects:[{id:'p'}],document:{id:'d'},blueprint:{id:'b'},
-    providers:[{id:'qwen:qwen-plus',provider:'qwen',ready:true}],
+    modelReady:true,
     teacherMode:true,shareConfirmed:true,examTitle:'Test',teacherName:'Teacher',
     examInstructions:'',questionCount:'6'});
   await p.generate();assert.equal(p.data.error,'');
@@ -444,7 +463,7 @@ test('lost blueprint receipt preserves idempotency before POST and recovers with
     }
     return {job:{id:'j',status:'completed',result:{blueprint:{id:'b',data:{questions:[]}}}}};
   }},{},{read:()=>saved,save:x=>Object.assign(saved,x)});
-  p.setData({projects:[{id:'p'}],document:{id:'d'},providers:[{id:'qwen:qwen-plus'}]});
+  p.setData({projects:[{id:'p'}],document:{id:'d'},modelReady:true});
   await p.generate();
   assert.equal(p.data.generationUncertain,true);
   await p.recoverBlueprint();
@@ -459,7 +478,7 @@ test('explicit uncertain resubmit uses the same receipt and restores original mo
   const p=page('work',{request:async(path,method,data,options)=>{
     keys.push(options.headers['Idempotency-Key']);throw new Error('timeout');
   }},{},{read:()=>saved,save:x=>Object.assign(saved,x)});
-  p.setData({projects:[{id:'p'}],document:{id:'d'},providers:[{id:'qwen:qwen-plus'}],generationUncertain:true});
+  p.setData({projects:[{id:'p'}],document:{id:'d'},modelReady:true,generationUncertain:true});
   await p.generate();await p.generate();
   assert.deepEqual(keys,['same-receipt','same-receipt']);
 });
@@ -609,8 +628,6 @@ test('all page routes and JSON configs exist; no mock listed as fallback',()=>{
     assert(pageConfig.usingComponents && !Array.isArray(pageConfig.usingComponents));
     assert.notEqual(pageConfig.component,true,route+' is a Page, not a custom Component');
   }
-  const source=fs.readFileSync(path.join(root,'pages/work/index.js'),'utf8');
-  assert(source.includes("p.provider!=='mock'"));
 });
 test('resume pointers are principal/org scoped and exclude answer content',()=>{
   const h=harness();h.storage.set(h.api.ORG,'org-a');

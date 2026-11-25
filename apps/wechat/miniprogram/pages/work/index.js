@@ -1,31 +1,30 @@
 const api = require('../../lib/api');
 const progress = require('../../lib/progress');
 const school = require('../../lib/school');
+const PROFILE='qwen:qwen-plus';
+const MODEL_UNAVAILABLE='千问 Plus 暂不可用，请联系管理员';
 Page({
-  data:{busy:false,error:'',organizations:[],orgIndex:0,providers:[],providerIndex:0,projects:[],projectIndex:0,name:'',document:null,documents:[],documentIndex:0,uploadProgress:-1,uploadMessage:'',uploadUncertain:false,blueprint:null,job:null,sessionId:'',generationUncertain:false,recoveringBlueprint:false,jobStage:'',jobElapsed:'',jobNotice:''},
+  data:{busy:false,error:'',workspaceReady:false,modelReady:false,projects:[],projectIndex:0,name:'',document:null,documents:[],documentIndex:0,uploadProgress:-1,uploadMessage:'',uploadUncertain:false,blueprint:null,job:null,sessionId:'',generationUncertain:false,recoveringBlueprint:false,jobStage:'',jobElapsed:'',jobNotice:''},
   async onLoad(options={}) {await this.run(async()=>{
     const me=await api.request('/api/v1/me'); getApp().globalData.me=me;
-    let organizations=me.organizations.filter(o=>o.status==='active');
-    if(options.teacher==='1'){
-      const identity=await school.request('/me');
-      if(!identity.teacher)throw new Error('教师身份未开通');
-      organizations=organizations.filter(o=>o.id===identity.teacher_organization_id);
-      this.setData({teacherMode:true,examTitle:'',teacherName:'',examInstructions:'',shareConfirmed:false,questionCount:'6'});
-    }
-    const old=wx.getStorageSync(api.ORG);
-    const orgIndex=Math.max(0,organizations.findIndex(o=>o.id===old));
-    this.setData({organizations,orgIndex});
-    if(organizations.length) {wx.setStorageSync(api.ORG,organizations[orgIndex].id); await this.loadProjects();}
-    const providers=(await api.request('/api/providers')).filter(p=>p.ready && p.provider!=='mock' && p.provider!=='openai');
-    this.setData({providers,providerIndex:0});
-    if(organizations.length) await this.restore();
+    const teacherMode=options.teacher==='1';
+    const role=teacherMode||options.workspace==='teacher'?'teacher':'student';
+    if(this.closed)return;
+    const workspace=await school.request('/workspace/'+role,'POST');
+    if(this.closed)return;
+    if(!workspace.organization_id)throw new Error('未能打开默认空间，请重新进入');
+    wx.setStorageSync(api.ORG,workspace.organization_id);
+    this.setData({workspaceReady:true,modelReady:workspace.profile===PROFILE&&workspace.model_ready===true,
+      teacherMode,examTitle:'',teacherName:'',examInstructions:'',shareConfirmed:false,questionCount:'6'});
+    await this.loadProjects();
+    if(!this.closed)await this.restore();
   });},
   onHide(){this.visible=false;clearTimeout(this.timer);},
-  onUnload(){this.visible=false;clearTimeout(this.timer);},
+  onUnload(){this.closed=true;this.visible=false;this.generation=(this.generation||0)+1;clearTimeout(this.timer);},
   onShow(){this.visible=true;this.pollErrors=0;if(this.data.job && !this.data.blueprint) this.poll();else if(this.data.uploadUncertain)this.recoverUpload();else if(this.data.generationUncertain)this.recoverBlueprint();},
   async restore(){
     const saved=progress.read(), index=this.data.projects.findIndex(p=>p.id===saved.projectId);
-    if(index>=0)this.setData({projectIndex:index,uploadUncertain:!!saved.uploadUncertain,sessionId:saved.sessionId||'',providerIndex:Math.max(0,this.data.providers.findIndex(p=>p.id===saved.profile)),document:saved.documentId?{id:saved.documentId,filename:'已上传的论文'}:null,job:saved.jobId?{id:saved.jobId,status:'待刷新'}:null,generationUncertain:!!saved.blueprintPending&&!saved.jobId});
+    if(index>=0)this.setData({projectIndex:index,uploadUncertain:!!saved.uploadUncertain,sessionId:saved.sessionId||'',document:saved.documentId?{id:saved.documentId,filename:'已上传的论文'}:null,job:saved.jobId?{id:saved.jobId,status:'待刷新'}:null,generationUncertain:!!saved.blueprintPending&&!saved.jobId});
     await this.loadDocuments();
     if(index>=0 && saved.jobId)this.poll();
     else if(index>=0 && saved.uploadRequestId)await this.recoverUpload();
@@ -61,14 +60,7 @@ Page({
     this.setData({generationUncertain:false,jobNotice:''});
     this.setData({document,documentIndex,blueprint:null,job:null,sessionId:'',error:'',uploadUncertain:false,uploadProgress:-1,uploadMessage:'材料已就绪'});
   },
-  async organization(e){await this.run(async()=>{
-    clearTimeout(this.timer);this.generation=(this.generation||0)+1;
-    const orgIndex=Number(e.detail.value);wx.setStorageSync(api.ORG,this.data.organizations[orgIndex].id);
-    this.setData({generationUncertain:false,jobNotice:''});this.pollErrors=0;
-    this.setData({orgIndex,document:null,documents:[],uploadUncertain:false,uploadMessage:'',uploadProgress:-1,blueprint:null,job:null,projects:[],sessionId:''});await this.loadProjects();await this.restore();
-  });},
   async project(e){await this.run(async()=>{clearTimeout(this.timer);this.generation=(this.generation||0)+1;progress.reset();this.setData({projectIndex:Number(e.detail.value),document:null,documents:[],uploadUncertain:false,uploadMessage:'',uploadProgress:-1,blueprint:null,job:null,sessionId:'',generationUncertain:false,jobNotice:''});await this.loadDocuments();});},
-  provider(e){if(!this.data.generationUncertain&&!this.data.job)this.setData({providerIndex:Number(e.detail.value)});},
   name(e){this.setData({name:e.detail.value});},
   async create(){await this.run(async()=>{
     const name=this.data.name.trim();if(name.length<2)throw new Error('项目名称至少两个字');
@@ -131,15 +123,17 @@ Page({
   async generate(){await this.run(async()=>{
     if(this.recovering)throw new Error('正在找回蓝图结果，请稍候');
     if(this.data.job)throw new Error('已有蓝图任务，请先刷新任务状态，不要重复提交');
-    const p=this.data.projects[this.data.projectIndex], model=this.data.providers[this.data.providerIndex];
-    if(!p || !model || !this.data.document || this.data.uploadUncertain)throw new Error('请先选择项目、模型并确认已上传材料');
+    if(!this.data.modelReady)throw new Error(MODEL_UNAVAILABLE);
+    const p=this.data.projects[this.data.projectIndex];
+    if(!p || !this.data.document || this.data.uploadUncertain)throw new Error('请先选择项目并确认已上传材料');
     const saved=progress.read();
+    if(this.data.generationUncertain && saved.profile && saved.profile!==PROFILE)throw new Error('旧模型任务请先找回结果，不会改用其他模型重复提交');
     const key=this.data.generationUncertain?saved.blueprintRequestId:school.id();
     if(!key)throw new Error('任务编号缺失，请先找回蓝图结果');
-    progress.save({projectId:p.id,documentId:this.data.document.id,jobId:null,profile:model.id,blueprintRequestId:key,blueprintPending:true});
+    progress.save({projectId:p.id,documentId:this.data.document.id,jobId:null,profile:PROFILE,blueprintRequestId:key,blueprintPending:true});
     this.setData({generationUncertain:true,blueprint:null,jobNotice:'正在提交任务'});
     try{
-      const job=await api.request(`/api/projects/${p.id}/blueprints/async`,'POST',{document_id:this.data.document.id,profile:model.id,mode:'defense'}, {headers:{'Idempotency-Key':key}});
+      const job=await api.request(`/api/projects/${p.id}/blueprints/async`,'POST',{document_id:this.data.document.id,profile:PROFILE,mode:'defense'}, {headers:{'Idempotency-Key':key}});
       if(!job.id)throw new Error('服务器未返回任务编号');
       progress.save({jobId:job.id,blueprintPending:false});this.pollErrors=0;
       this.setData({generationUncertain:false});this.acceptJob(job);this.poll();
@@ -231,12 +225,11 @@ Page({
   async publish(){await this.run(async()=>{
     if(!this.data.teacherMode||!this.data.blueprint)throw new Error('请先准备考试蓝图');
     if(!this.data.shareConfirmed)throw new Error('请确认材料可向学生公开');
-    const model=this.data.providers[this.data.providerIndex];
-    if(!model)throw new Error('暂无可用模型，请联系管理员配置');
+    if(!this.data.modelReady)throw new Error(MODEL_UNAVAILABLE);
     const question_count=Number(this.data.questionCount);
     if(!Number.isInteger(question_count)||question_count<1||question_count>20)throw new Error('题数应为 1 到 20');
     if(!this.data.examTitle.trim()||!this.data.teacherName.trim())throw new Error('请填写考试名称和教师署名');
-    const configuration={blueprint_id:this.data.blueprint.id,title:this.data.examTitle.trim(),teacher_name:this.data.teacherName.trim(),instructions:this.data.examInstructions.trim(),profile:model.id,question_count,share_material_confirmed:true};
+    const configuration={blueprint_id:this.data.blueprint.id,title:this.data.examTitle.trim(),teacher_name:this.data.teacherName.trim(),instructions:this.data.examInstructions.trim(),profile:PROFILE,question_count,share_material_confirmed:true};
     // Reuse an idempotency key only for the exact same publication snapshot.
     const signature=JSON.stringify(configuration);
     if(!this.publishRequest||this.publishSignature!==signature){
@@ -247,9 +240,10 @@ Page({
     wx.navigateTo({url:`/pages/exam/index?id=${exam.id}&teacher=1`});
   });},
   async start(){await this.run(async()=>{
-    const p=this.data.projects[this.data.projectIndex],model=this.data.providers[this.data.providerIndex];
-    if(!this.data.blueprint || !model)throw new Error('请先完成蓝图');
-    const session=await api.request('/api/sessions','POST',{project_id:p.id,blueprint_id:this.data.blueprint.id,profile:model.id,question_limit:6,question_strategy:'adaptive'});
+    const p=this.data.projects[this.data.projectIndex];
+    if(!this.data.modelReady)throw new Error(MODEL_UNAVAILABLE);
+    if(!this.data.blueprint)throw new Error('请先完成蓝图');
+    const session=await api.request('/api/sessions','POST',{project_id:p.id,blueprint_id:this.data.blueprint.id,profile:PROFILE,question_limit:6,question_strategy:'adaptive'});
     progress.save({sessionId:session.id,pending:false,beforeSend:0});this.setData({sessionId:session.id});
     wx.navigateTo({url:`/pages/session/index?id=${encodeURIComponent(session.id)}`});
   });},

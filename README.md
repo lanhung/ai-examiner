@@ -1,5 +1,10 @@
 # AI Examiner v0.9
 
+## Campus clients
+
+- [Campus web application](apps/campus-web/README.md): a separate student and teacher site with password login, exams and printable defense reports. It does not replace the original workbench.
+- [WeChat mini-program](apps/wechat/README.md): the native client for the shared exam service. The client AppID and approved API origin are configured for each deployment; private settings do not belong in Git.
+
 Current stable release: `main` / `v0.9.0`. The accepted v0.9.0 source remains
 available at immutable tag `v0.9.0`; the accepted research source also remains
 available at `research/v0.9.0`, and the immutable release candidates remain at

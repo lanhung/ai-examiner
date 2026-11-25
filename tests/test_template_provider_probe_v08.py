@@ -93,7 +93,7 @@ def test_planner_retries_stacked_questions_until_single_issue():
             result = super().complete_json(**kwargs)
             if self.calls < 3:
                 result.data["questions"][0]["text"] = (
-                    "请说明核心概念是什么？它为什么重要？"
+                    "请说明核心概念，并解释它为什么重要？"
                 )
             return result
 

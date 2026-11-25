@@ -1,5 +1,42 @@
 # Changelog
 
+## Unreleased - Campus clients snapshot (2026-11-25)
+
+- Preserve the independent campus web gateway, student and teacher views, and standalone printable defense reports under `apps/campus-web/`. See its [change history](apps/campus-web/CHANGELOG.md) for the deployed frontend and local-only backend changes.
+- Include the mini-program's automatic role workspace and fixed Qwen profile, and the shared API's saved-report read path. This source snapshot does not deploy services or change product version `0.9.0`.
+
+## Unreleased - Container Preview Deployment (2026-11-10)
+
+- Preserve two explicit question-boundary probes as a main question and a follow-up
+  before paid Planner repair. Retain conditional context, source evidence, expected
+  points and difficulty; leave ambiguous wording, lists and compound single-sentence
+  requests subject to validation. Bound expansion and cover both live failure shapes.
+- Deploy the planner-only fix to Casdao after backup and an idle-queue check.
+  Pass 101 focused planner/template/async/recovery/job tests, Ruff and diff checks.
+  In WeChat DevTools, generate both previously failing documents with real qwen-plus:
+  six Chinese questions each, 124.8 seconds for the one-page test text and 79.0
+  seconds for the 23-page PDF. Verify result recovery without a new generation.
+  Both outputs still contain exact-quote/page grounding warnings; this is functional
+  recovery, not full question-quality acceptance or a general latency guarantee.
+- Isolate the restored Casdao web-preview identity in its own empty organization.
+  Add a UUID-validated, deployment-configured school API restriction so preview
+  identities do not inherit the cross-organization published exam catalog.
+  Preserve ordinary teacher/student access and cover all school routes with tests.
+- Verify public OIDC login/logout and denial of migrated tenant resources, exam
+  materials and grades. Keep original WeChat memberships and teaching grants;
+  see the [sanitized migration and client handoff](docs/deployment/CASDAO_CAMPUS_HANDOFF.md).
+- Add an opt-in OIDC backchannel base URL for platforms that cannot reach their
+  own public port mapping. Preserve public issuer validation and browser HTTPS;
+  permit cleartext transport only to explicitly enabled loopback endpoints.
+- Cover internal discovery, JWKS, token exchange, unsafe configuration rejection
+  and public issuer mismatch with focused tests. See
+  `docs/deployment/OIDC_BACKCHANNEL.md` for configuration and preview limitations.
+- Preserve simple conditional setups when merging a yes/no judgment plus a bare
+  reason probe into one reasoning question. Avoid repeated paid wording repairs
+  for this form; keep ambiguous multi-clause questions subject to normal validation.
+- Keep the product version at 0.9.0. This is deployment compatibility work, not
+  a new feature release or completion of the outstanding production release gate.
+
 ## Unreleased - Upload Verification (2026-10-28)
 
 - Preserve the complete source snapshot at `df30fc3` on

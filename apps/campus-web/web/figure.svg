@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="184" viewBox="0 0 390 184" role="img" aria-labelledby="t d"><title id="t">两种插补方法的平均绝对误差</title><desc id="d">缺测率从百分之十升到三十时，线性插补的误差从0.32升到0.71摄氏度，季节基线从0.45升到0.60。</desc>
+<rect width="390" height="184" fill="#f2f6f3"/><g fill="none" stroke="#d2dfd9" stroke-dasharray="3 4"><path d="M48 40H360M48 74H360M48 108H360M48 142H360"/></g>
+<g font-family="Arial,sans-serif" font-size="12" fill="#536e64"><text x="13" y="44">0.8</text><text x="13" y="78">0.6</text><text x="13" y="112">0.4</text><text x="13" y="146">0.2</text><text x="53" y="165">10%</text><text x="187" y="165">20%</text><text x="320" y="165">30%</text><text x="15" y="21">℃</text></g>
+<path d="M65 122L200 93L335 55" fill="none" stroke="#19775d" stroke-width="3"/><path d="M65 100L200 88L335 74" fill="none" stroke="#af6629" stroke-width="2.5" stroke-dasharray="6 4"/>
+<g fill="#19775d"><circle cx="65" cy="122" r="4"/><circle cx="200" cy="93" r="4"/><circle cx="335" cy="55" r="4"/></g><g fill="#af6629"><path d="M61 96h8v8h-8zm135-12h8v8h-8zm135-14h8v8h-8z"/></g></svg>

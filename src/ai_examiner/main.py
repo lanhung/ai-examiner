@@ -37,6 +37,7 @@ from sqlalchemy.orm import Session
 
 from . import __version__
 from .agents.orchestrator import ExamOrchestrator
+from .agents.reporter import ReportGenerator
 from .config import get_settings
 from .db import SessionLocal, engine, get_db, init_db
 from .enterprise_constants import (
@@ -2576,7 +2577,7 @@ def get_report(session_id: str, db: Annotated[Session, Depends(get_db)]):
         }
         for unit_id, state in cognitive.states(session.id).items()
     ]
-    report = ExamOrchestrator(db, provider_or_503()).reporter.generate(
+    report = ReportGenerator().generate(
         blueprint=blueprint.data,
         turns=turns,
         mastery_state=session.mastery_state,

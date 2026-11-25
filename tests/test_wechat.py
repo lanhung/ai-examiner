@@ -18,6 +18,7 @@ from ai_examiner.models import (
     Organization,
     OrganizationMembership,
     Principal,
+    TeachingGrant,
     utcnow,
 )
 from ai_examiner.services import wechat
@@ -380,6 +381,58 @@ def test_personal_space_collision_is_not_adopted(personal_settings):
         assert db.get(Principal, p.id).status == 'pending'
         assert db.scalar(select(func.count()).select_from(OrganizationMembership)) == 0
         assert db.scalar(select(func.count()).select_from(BrowserAuthSession)) == 0
+
+
+@pytest.mark.parametrize("teacher_uses_original_personal_space", [False, True])
+def test_role_workspace_keeps_existing_teacher_data_separate(
+    client, personal_settings, monkeypatch, teacher_uses_original_personal_space
+):
+    monkeypatch.setattr(wechat_api, "check_login_capacity", lambda *_: None)
+    with SessionLocal() as db:
+        teacher = Principal(issuer=wechat.wechat_issuer(personal_settings),
+                            subject="personal-openid", status="active")
+        db.add(teacher)
+        db.flush()
+        personal = wechat.personal_space_id(teacher)
+        teacher_id = teacher.id
+        org = Organization(slug=f"wx-personal-{teacher.id}" if teacher_uses_original_personal_space
+                           else "old-teaching", display_name="Existing")
+        if teacher_uses_original_personal_space:
+            org.id = personal
+        db.add(org)
+        db.flush()
+        teaching_id = org.id
+        db.add(OrganizationMembership(organization_id=org.id, principal_id=teacher.id,
+                                      status="active", role="examiner"))
+        db.add(TeachingGrant(organization_id=org.id, principal_id=teacher.id, active=True))
+        db.commit()
+    token = client.post("/api/v1/wechat/login", json={"code":"test"}).json()["access_token"]
+    headers = {"Authorization":"Bearer "+token, "X-AI-Examiner-Organization":teaching_id}
+    base = "/api/v1/school/workspace/"
+    assert client.post(base+"teacher", headers=headers).json()["organization_id"] == teaching_id
+    first = client.post(base+"student", headers=headers)
+    assert first.status_code == 200, first.text
+    student_id = first.json()["organization_id"]
+    assert first.json()["profile"] == "qwen:qwen-plus"
+    assert student_id != teaching_id
+    assert client.post(base+"student", headers=headers).json()["organization_id"] == student_id
+    with SessionLocal() as db:
+        membership = db.scalar(select(OrganizationMembership).where(
+            OrganizationMembership.principal_id == teacher_id, OrganizationMembership.organization_id == student_id))
+        assert membership.role == "examiner"
+        membership.status = "revoked"
+        db.commit()
+    assert client.post(base+"student", headers=headers).status_code == 403
+    assert client.post(base+"teacher", headers=headers).json()["organization_id"] == teaching_id
+
+
+def test_wechat_student_workspace_uses_first_login_space(client, personal_settings, monkeypatch):
+    monkeypatch.setattr(wechat_api, "check_login_capacity", lambda *_: None)
+    token = client.post("/api/v1/wechat/login", json={"code":"test"}).json()["access_token"]
+    headers = {"Authorization":"Bearer "+token}
+    org = client.get("/api/v1/me", headers=headers).json()["organizations"][0]["id"]
+    assert client.post("/api/v1/school/workspace/student", headers=headers).json()["organization_id"] == org
+    assert client.post("/api/v1/school/workspace/teacher", headers=headers).status_code == 403
 
 
 def test_personal_registration_rolls_back_on_audit_failure(personal_settings, monkeypatch):

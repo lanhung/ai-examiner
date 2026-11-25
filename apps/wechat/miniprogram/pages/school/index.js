@@ -21,7 +21,7 @@ Page({
   refresh(){this.load(false);},
   more(){this.load(true);},
   open(e){wx.navigateTo({url:`/pages/exam/index?id=${encodeURIComponent(e.currentTarget.dataset.id)}&teacher=${this.data.mode==='teacher'?1:0}`});},
-  prepare(){if(!this.data.teacher)return;wx.setStorageSync(api.ORG,this.teacherOrg);wx.navigateTo({url:'/pages/work/index?teacher=1'});},
-  personal(){wx.navigateTo({url:'/pages/work/index'});},
+  prepare(){if(!this.data.teacher||this.data.mode!=='teacher')return;wx.navigateTo({url:'/pages/work/index?teacher=1'});},
+  personal(){if(!this.data.busy)wx.navigateTo({url:this.data.mode==='teacher'?'/pages/work/index?workspace=teacher':'/pages/work/index'});},
   async logout(){try{await api.request('/api/v1/wechat/logout','POST');api.clear();wx.reLaunch({url:'/pages/login/index'});}catch(e){this.setData({error:e.message});}}
 });

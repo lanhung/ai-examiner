@@ -7,9 +7,9 @@ import hashlib
 import json
 from datetime import UTC, timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import quote
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
@@ -44,15 +44,28 @@ from .models import (
 )
 from .providers.factory import parse_profile, profile_ready
 from .services.audit import append_audit_event
+from .services.authentication import CurrentAuthentication
 from .services.authorization import effective_capabilities, require_authenticated_principal
 from .services.budget import assert_budget
+from .services.membership_admin import MembershipAdministrationService
 from .services.model_governance import governed_provider
 from .services.prompts import prompt_contents
 from .services.storage import StorageError, StorageService
 from .services.tenancy import set_tenant_context
+from .services.wechat import personal_space_id, wechat_issuer
 
 Db = Annotated[Session, Depends(get_db)]
-User = Annotated[Principal, Depends(require_authenticated_principal)]
+
+
+def require_school_principal(
+    principal: Annotated[Principal, Depends(require_authenticated_principal)],
+) -> Principal:
+    if UUID(principal.id) in get_settings().school_restricted_principal_ids:
+        raise HTTPException(403, "此预览账号仅限独立工作空间，不能访问考试大厅")
+    return principal
+
+
+User = Annotated[Principal, Depends(require_school_principal)]
 
 
 class SchoolInput(BaseModel):
@@ -221,6 +234,54 @@ def school_me(user: User, db: Db):
             raise
         teacher, organization_id = False, None
     return {"principal_id": user.id, "teacher": teacher, "teacher_organization_id": organization_id}
+
+
+def wechat_workspace(mode: Literal["student", "teacher"], user: User, db: Db,
+                     authentication: CurrentAuthentication):
+    """Resolve a role default. Never accept an organization ID or grant teaching access."""
+    settings = get_settings()
+    if authentication.method != "wechat_session" or user.issuer != wechat_issuer(settings):
+        raise HTTPException(403, "请使用当前小程序账号登录")
+    if mode == "teacher":
+        org_id = teacher_scope(db, user).organization_id
+    else:
+        bind_user(db, user)
+        # Serialize first entry, including on legacy accounts that already have a grant.
+        db.execute(select(Principal.id).where(Principal.id == user.id).with_for_update())
+        grant = db.get(TeachingGrant, user.id)
+        org_id = personal_space_id(user)
+        slug = f"wx-personal-{user.id}"
+        if grant and grant.organization_id == org_id:
+            # A pre-existing teacher grant may already own the original personal tenant.
+            org_id = str(uuid5(NAMESPACE_URL, f"ai-examiner:wechat-student:{user.issuer}:{user.id}"))
+            slug = f"wx-student-{user.id}"
+        eligible_roles = db.scalars(select(OrganizationMembership.role).join(Organization).where(
+            OrganizationMembership.principal_id == user.id,
+            OrganizationMembership.status == "active", Organization.status == "active",
+        )).all()
+        set_tenant_context(db, organization_id=org_id, principal_id=user.id)
+        org = db.get(Organization, org_id)
+        membership = db.scalar(select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == org_id,
+            OrganizationMembership.principal_id == user.id,
+        ))
+        if org is not None or membership is not None:
+            if not (org and org.slug == slug and org.status == "active" and membership
+                    and membership.status == "active"):
+                raise HTTPException(403, "个人空间不可用，请联系管理员")
+        else:
+            if settings.wechat_registration_mode != "personal" or not any(
+                "blueprint.create" in effective_capabilities(role) for role in eligible_roles
+            ):
+                raise HTTPException(403, "个人空间未开通，请联系管理员")
+            db.add(Organization(id=org_id, slug=slug, display_name="我的个人空间", status="active"))
+            db.flush()
+            MembershipAdministrationService(db).create(organization_id=org_id, principal_id=user.id,
+                                                       role="examiner", status="active", commit=False)
+            audit(db, user, org_id, "school.student_workspace.create", org_id)
+            db.commit()
+    profile = "qwen:qwen-plus"
+    return {"organization_id": org_id, "profile": profile, "model_ready": profile_ready(settings, profile)}
 
 
 def list_exams(user: User, db: Db, offset: int = 0):
@@ -740,6 +801,7 @@ def recover_answer(attempt: SchoolAttempt | TeacherExamPreview, payload: ReviewA
 
 
 ROUTES = (
+    ("POST", "/api/v1/school/workspace/{mode}", wechat_workspace),
     ("POST", "/api/v1/school/attempts/{attempt_id}/answers/async", submit_answer_async),
     ("POST", "/api/v1/school/teacher/previews/{preview_id}/answers/async", submit_preview_async),
     ("GET", "/api/v1/school/me", school_me),

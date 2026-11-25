@@ -1,10 +1,9 @@
 <view class="page">
   <view class="title">{{teacherMode ? '考试准备' : '答辩工作台'}}</view>
   <view wx:if="{{error}}" class="error">{{error}}</view>
-  <view wx:if="{{!organizations.length}}" class="section muted">暂无可用空间，请重新登录或联系管理员。</view>
+  <view wx:if="{{!workspaceReady}}" class="section muted">{{busy ? '正在打开工作台…' : '默认空间未就绪，请重新进入或联系管理员。'}}</view>
   <block wx:else>
     <button wx:if="{{sessionId}}" class="primary" bindtap="resume" disabled="{{busy}}">继续上次答辩</button>
-    <picker disabled="{{busy}}" range="{{organizations}}" range-key="display_name" value="{{orgIndex}}" bindchange="organization"><view class="field">空间：{{organizations[orgIndex].display_name}} ▾</view></picker>
     <view class="section">
       <view class="heading">01 · 论文材料</view>
       <picker disabled="{{busy}}" range="{{projects}}" range-key="name" value="{{projectIndex}}" bindchange="project"><view class="field">{{projects.length ? projects[projectIndex].name : '暂无项目'}} ▾</view></picker>
@@ -24,8 +23,8 @@
     </view>
     <view class="section">
       <view class="heading">02 · 答辩蓝图</view>
-      <picker disabled="{{busy || job || generationUncertain || !providers.length}}" range="{{providers}}" range-key="label" value="{{providerIndex}}" bindchange="provider"><view class="field">{{providers.length ? providers[providerIndex].label : '暂无可用模型'}} ▾</view></picker>
-      <button class="primary" bindtap="generate" loading="{{busy}}" disabled="{{busy || recoveringBlueprint || !document || !providers.length || job || uploadUncertain}}">{{generationUncertain ? '用原编号确认提交' : '生成答辩蓝图'}}</button>
+      <view wx:if="{{!modelReady}}" class="error">千问 Plus 暂不可用，请联系管理员。</view>
+      <button class="primary" bindtap="generate" loading="{{busy}}" disabled="{{busy || recoveringBlueprint || !document || !modelReady || job || uploadUncertain}}">{{generationUncertain ? '用原编号确认提交' : '生成答辩蓝图'}}</button>
       <view wx:if="{{job}}" class="muted">{{jobStage}} · 已等待 {{jobElapsed || '片刻'}}</view>
       <view wx:if="{{jobNotice}}" class="muted">{{jobNotice}}</view>
       <button wx:if="{{job && !blueprint}}" bindtap="refreshJob">刷新任务状态</button>
@@ -34,7 +33,7 @@
         <view wx:if="{{blueprint.grounding.passed === false}}" class="error">部分题目的材料引用未通过精确匹配检查，使用前请核对原文。</view>
         <view class="body">{{blueprint.data.summary}}</view>
         <view wx:for="{{blueprint.data.questions}}" wx:key="id" class="item body">{{index + 1}}. {{item.text}}</view>
-        <button wx:if="{{!teacherMode}}" class="primary" bindtap="start" disabled="{{busy || !providers.length}}">开始文字答辩</button>
+        <button wx:if="{{!teacherMode}}" class="primary" bindtap="start" disabled="{{busy || !modelReady}}">开始文字答辩</button>
         <view wx:if="{{teacherMode}}" class="section">
           <view class="heading">03 · 发布考试</view>
           <input class="field" placeholder="考试名称" maxlength="200" value="{{examTitle}}" data-field="examTitle" bindinput="examField" disabled="{{busy}}"/>
@@ -42,7 +41,7 @@
           <input class="field" placeholder="题数（1–20，不超过蓝图题数）" type="number" value="{{questionCount}}" data-field="questionCount" bindinput="examField" disabled="{{busy}}"/>
           <textarea class="field" placeholder="考试要求" maxlength="3000" value="{{examInstructions}}" data-field="examInstructions" bindinput="examField" disabled="{{busy}}"/>
           <checkbox-group bindchange="share"><label class="muted"><checkbox value="yes" checked="{{shareConfirmed}}" disabled="{{busy}}"/>确认材料可供所有已登录学生查看，且不含未授权公开内容</label></checkbox-group>
-          <button class="primary" bindtap="publish" disabled="{{busy || !shareConfirmed || !providers.length}}" loading="{{busy}}">发布考试</button>
+          <button class="primary" bindtap="publish" disabled="{{busy || !shareConfirmed || !modelReady}}" loading="{{busy}}">发布考试</button>
         </view>
       </block>
     </view>

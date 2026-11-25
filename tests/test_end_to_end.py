@@ -1,4 +1,4 @@
-def test_complete_text_exam_flow(client):
+def test_complete_text_exam_flow(client, monkeypatch):
     project = client.post("/api/projects", json={"name": "测试答辩"})
     assert project.status_code == 201
     project_id = project.json()["id"]
@@ -67,6 +67,11 @@ def test_complete_text_exam_flow(client):
     assert answer2.status_code == 200
     assert answer2.json()["completed"] is True
 
+    # Reading stored evidence must still work if model access has since been disabled.
+    def no_provider(*args, **kwargs):
+        raise AssertionError("Reading an existing report must not initialize a model")
+
+    monkeypatch.setattr("ai_examiner.main.provider_or_503", no_provider)
     report = client.get(f"/api/sessions/{session_id}/report")
     assert report.status_code == 200
     report_data = report.json()
@@ -90,3 +95,38 @@ def test_complete_text_exam_flow(client):
     assert metrics["latency_ms"]["p50"] >= 1
     costs = client.get(f"/api/costs?project_id={project_id}").json()
     assert costs["by_model"]["mock:heuristic-v2"]["latency_ms"]["samples"] >= 3
+
+
+def test_async_final_answer_replay_and_read_only_report(client):
+    from uuid import uuid4
+
+    project = client.post("/api/projects", json={"name": "回执验收"}).json()["id"]
+    material = "本研究比较两种客流预测方法，以留出的测试周计算平均绝对误差；结果不能外推至节假日。" * 10
+    doc = client.post(f"/api/projects/{project}/documents", files={
+        "file": ("case.txt", material.encode(), "text/plain"),
+    }).json()["id"]
+    blueprint = client.post(f"/api/projects/{project}/blueprints", params={"document_id": doc}).json()["id"]
+    session = client.post("/api/sessions", json={
+        "project_id": project, "blueprint_id": blueprint, "question_limit": 1,
+        "max_followups_per_question": 0, "allow_hints": False,
+    }).json()["id"]
+    path = f"/api/sessions/{session}"
+    key = str(uuid4())
+    started = client.post(path+"/operations", json={"operation": "start", "expected_turn_count": 0, "request_id": key})
+    assert started.status_code == 202
+    assert client.get(path+"/operations/"+key).json()["job"]["status"] == "completed"
+    count = len(client.get(path).json()["turns"])
+    answer = {"operation": "answer", "answer": "我们按时间留出相同的测试周，再比较两种方法的平均绝对误差，避免混用训练数据。结论仅适用于普通周，不能推断节假日同样有效。", "expected_turn_count": count, "request_id": str(uuid4())}
+    ack = client.post(path+"/operations", json=answer)
+    assert ack.status_code == 202
+    receipt = client.get(path+"/operations/"+answer["request_id"]).json()["job"]
+    assert receipt["id"] == ack.json()["id"] and receipt["status"] == "completed"
+    assert client.post(path+"/operations", json=answer).json()["id"] == receipt["id"]
+    assert client.get(path+"/operations/"+str(uuid4())).json() == {"job": None}
+    completed = client.get(path).json()
+    assert completed["status"] == "completed"
+    assert sum(t["role"] == "user" for t in completed["turns"]) == 1
+    report = client.get(path+"/report")
+    assert report.status_code == 200 and report.json()["evaluated_turns"] == 1
+    assert client.get(path+"/report").json() == report.json()
+    assert client.get(path).json()["turns"] == completed["turns"]
